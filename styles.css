@@ -33,7 +33,14 @@ img{max-width:100%;display:block}
 .hero p{max-width:620px;color:#d0d0d0;font-size:18px}
 .hero-actions{display:flex;gap:12px;margin-top:28px}
 .hero-logo-wrap{display:flex;justify-content:center}
-.hero-logo{width:min(100%,500px);border-radius:24px;box-shadow:0 0 70px rgba(255,85,20,.18)}
+.hero-logo{
+    width:760px;
+    max-width:120%;
+    height:auto;
+    border-radius:0;
+    box-shadow:none;
+    background:transparent;
+}
 .section{padding:95px 0}
 .section-heading{text-align:center;max-width:720px;margin:0 auto 45px}
 .section-heading span{color:var(--red);font-size:12px;font-weight:800;letter-spacing:2px}
