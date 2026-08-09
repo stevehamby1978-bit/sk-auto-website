@@ -34,7 +34,7 @@ img{max-width:100%;display:block}
 .eyebrow{font-size:12px;font-weight:800;letter-spacing:2.1px;color:#bbb}
 .eyebrow.dark{color:var(--red)}
 .hero h1,.section h2,.cta-strip h2{font-family:Oswald;text-transform:uppercase;line-height:1.02;margin:14px 0}
-.hero h1{font-size:clamp(54px,7vw,90px)}
+.hero h1{font-size:clamp(44px,6vw,82px)}
 .hero h1 span{display:block;color:var(--orange)}
 .hero p{max-width:620px;color:#d0d0d0;font-size:18px}
 .hero-actions{display:flex;gap:12px;margin-top:28px}
