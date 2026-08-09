@@ -44,7 +44,7 @@ img{max-width:100%;display:block}
 .card p{margin:0;color:var(--muted);font-size:14px}
 .split{background:#111;color:#fff}
 .split-grid{display:grid;grid-template-columns:1fr 1fr;gap:65px;align-items:center}
-.logo-panel{background:#000;padding:25px;border:1px solid #2b2b2b;border-radius:20px}
+.logo-panel{background:transparent;border:none;box-shadow:none;overflow:visible}
 .about-copy h2{font-size:49px}
 .about-copy p{color:#c9c9c9}
 .checklist{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:25px;font-weight:700}
