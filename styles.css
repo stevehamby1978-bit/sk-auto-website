@@ -30,7 +30,12 @@ img{max-width:100%;display:block}
 .full{width:100%}
 .menu-btn{display:none;background:none;border:0;color:white;font-size:28px}
 .hero{background:radial-gradient(circle at 75% 50%,rgba(255,74,0,.25),transparent 33%),#050505;color:white;padding:90px 0}
-.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:50px}
+.hero-grid{
+display:grid;
+grid-template-columns:1fr 1fr;
+align-items:center;
+gap:20px;
+}
 .eyebrow{font-size:12px;font-weight:800;letter-spacing:2.1px;color:#bbb}
 .eyebrow.dark{color:var(--red)}
 .hero h1,.section h2,.cta-strip h2{font-family:Oswald;text-transform:uppercase;line-height:1.02;margin:14px 0}
