@@ -48,7 +48,7 @@ gap:20px;
 display:flex;
 justify-content:center;
 align-items:center;
-transform:translateX(80px);
+transform:translateX(120px);
 }
 .hero-logo{
     width:760px;
