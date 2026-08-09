@@ -45,10 +45,10 @@ gap:20px;
 .hero-actions{display:flex;gap:12px;margin-top:28px}
 .hero-actions .btn{padding:14px 22px;font-size:15px}
 .hero-logo-wrap{
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100%;
+display:flex;
+justify-content:center;
+align-items:center;
+transform:translateX(40px);
 }
 .hero-logo{
     width:760px;
