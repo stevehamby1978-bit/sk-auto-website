@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="S&K Auto - The Art of Automotive Repair." />
+  <title>S&K Auto | The Art of Automotive Repair</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="container nav">
+    <a class="brand" href="#home">
+      <img src="assets/sk-auto-logo.jpg" alt="S&K Auto logo" class="brand-logo"/>
+      <div class="brand-copy">
+        <strong>S&K AUTO</strong>
+        <small>The Art of Automotive Repair</small>
+      </div>
+    </a>
+    <button class="menu-btn" aria-label="Open menu" aria-expanded="false">☰</button>
+    <nav class="navlinks">
+      <a href="#services">Services</a>
+      <a href="#about">About</a>
+      <a href="#schedule">Schedule</a>
+      <a href="#reviews">Reviews</a>
+      <a href="#contact">Contact</a>
+      <a class="btn btn-small" href="#schedule">Book Now</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="home">
+  <div class="container hero-grid">
+    <div class="hero-copy">
+      <div class="eyebrow">DEPENDABLE • PROFESSIONAL • LOCAL</div>
+      <h1>Auto repair done <span>the right way.</span></h1>
+      <p>Diagnostics, maintenance, and repair with clear communication and quality workmanship.</p>
+      <div class="hero-actions">
+        <a class="btn" href="#schedule">Schedule Service</a>
+        <a class="btn btn-ghost" href="tel:+16208990425">Call Us</a>
+      </div>
+    </div>
+    <div class="hero-logo-wrap">
+      <img src="assets/sk-auto-logo.jpg" alt="S&K Auto logo" class="hero-logo"/>
+    </div>
+  </div>
+</section>
+
+<section class="section services" id="services">
+  <div class="container">
+    <div class="section-heading">
+      <span>WHAT WE DO</span>
+      <h2>Complete automotive service</h2>
+    </div>
+    <div class="cards">
+      <article class="card"><h3>Diagnostics</h3><p>Check-engine lights, drivability, electrical issues, and accurate troubleshooting.</p></article>
+      <article class="card"><h3>Brakes</h3><p>Pads, rotors, calipers, hydraulic repairs, and complete inspections.</p></article>
+      <article class="card"><h3>Engine Repair</h3><p>Cooling systems, leaks, timing components, performance issues, and repairs.</p></article>
+      <article class="card"><h3>A/C & Heating</h3><p>Air-conditioning diagnosis, refrigerant service, heat, and climate-control repairs.</p></article>
+      <article class="card"><h3>Steering & Suspension</h3><p>Shocks, struts, ball joints, wheel bearings, tie rods, and suspension diagnosis.</p></article>
+      <article class="card"><h3>Maintenance</h3><p>Oil changes, fluids, filters, belts, hoses, tune-ups, and preventive service.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="section split" id="about">
+  <div class="container split-grid">
+    <div class="logo-panel">
+      <img src="assets/sk-auto-logo.jpg" alt="S&K Auto company logo"/>
+    </div>
+    <div class="about-copy">
+      <span class="eyebrow dark">WHY S&K AUTO</span>
+      <h2>The Art of Automotive Repair.</h2>
+      <p>We focus on correct diagnosis, clear communication, and dependable repairs. Our goal is to make taking care of your vehicle straightforward from the moment you call until the job is finished.</p>
+      <div class="checklist">
+        <div>✓ Straightforward recommendations</div>
+        <div>✓ Quality parts and workmanship</div>
+        <div>✓ Thorough vehicle inspections</div>
+        <div>✓ Customer-first service</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="section schedule" id="schedule">
+  <div class="container schedule-grid">
+    <div>
+      <span class="eyebrow dark">LIVE ONLINE SCHEDULING</span>
+      <h2>Book your appointment online</h2>
+      <p>Choose a service and date to see available appointment times. Reserved times are removed automatically so customers cannot double-book the same slot.</p>
+      <div class="schedule-features">
+        <div>✓ Live availability</div>
+        <div>✓ Prevents double-booking</div>
+        <div>✓ Monday–Friday scheduling</div>
+        <div>✓ Instant booking confirmation</div>
+      </div>
+      <div class="booking-note">
+        <strong>Shop hours:</strong> Monday–Friday, 8:00 AM–5:00 PM.<br>
+        Appointments are scheduled as one-hour arrival/drop-off windows.
+      </div>
+    </div>
+
+    <div class="scheduler-card">
+      <div id="schedulerStatus" class="scheduler-status" aria-live="polite"></div>
+
+      <label>Service
+        <select id="service" required>
+          <option value="">Select a service</option>
+          <option>Diagnostic / Check Engine Light</option>
+          <option>Oil Change / Maintenance</option>
+          <option>Brake Service</option>
+          <option>A/C or Heating</option>
+          <option>Steering / Suspension</option>
+          <option>Engine Repair</option>
+          <option>Other / Inspection</option>
+        </select>
+      </label>
+
+      <div class="field-row">
+        <label>Vehicle
+          <input id="vehicle" required placeholder="Year, make, model">
+        </label>
+        <label>Date
+          <span class="date-wrap"><input id="date" type="date" required></span>
+        </label>
+      </div>
+
+      <div class="time-section">
+        <div class="time-label">Available times</div>
+        <div id="timeSlots" class="time-slots">
+          <p class="slot-help">Choose a service and date to load available times.</p>
+        </div>
+        <input id="time" type="hidden">
+      </div>
+
+      <div class="field-row">
+        <label>Name
+          <input id="name" required placeholder="Your name">
+        </label>
+        <label>Phone
+          <input id="phone" required type="tel" placeholder="Your phone number">
+        </label>
+      </div>
+
+      <label>Email
+        <input id="email" type="email" placeholder="you@example.com">
+      </label>
+
+      <label>Notes
+        <textarea id="notes" rows="4" placeholder="Describe the issue or anything we should know"></textarea>
+      </label>
+
+      <button class="btn full" id="bookButton" type="button">Book Appointment</button>
+      <div id="confirmation" class="confirmation" hidden></div>
+    </div>
+  </div>
+</section>
+
+
+<section class="section reviews" id="reviews">
+  <div class="container">
+    <div class="section-heading review-heading">
+      <span>CUSTOMER REVIEWS</span>
+      <h2>What our customers say</h2>
+      <p>Real feedback from customers who trust S&K Auto with their vehicles.</p>
+    </div>
+
+    <div class="review-summary">
+      <div class="rating-big">5.0</div>
+      <div>
+        <div class="stars">★★★★★</div>
+        <strong>S&K Auto Customer Reviews</strong>
+        <p>Replace the sample reviews below with your actual Google or Facebook reviews.</p>
+      </div>
+    </div>
+
+    <div class="review-grid">
+      <article class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>“Great service, honest communication, and they got my vehicle back on the road quickly.”</p>
+        <strong>Customer Name</strong>
+        <span>Verified Customer</span>
+      </article>
+      <article class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>“They explained what was wrong, what needed to be repaired, and didn’t try to sell me anything I didn’t need.”</p>
+        <strong>Customer Name</strong>
+        <span>Verified Customer</span>
+      </article>
+      <article class="review-card">
+        <div class="stars">★★★★★</div>
+        <p>“Professional work and friendly service. S&K Auto is the shop I’ll be using from now on.”</p>
+        <strong>Customer Name</strong>
+        <span>Verified Customer</span>
+      </article>
+    </div>
+
+    <div class="review-actions">
+      <a class="btn" href="#" aria-label="Read more S&K Auto reviews">Read More Reviews</a>
+      <a class="btn btn-dark-outline" href="#" aria-label="Leave S&K Auto a review">Leave Us a Review</a>
+    </div>
+  </div>
+</section>
+
+<section class="cta-strip">
+  <div class="container cta-inner">
+    <div><span>NEED YOUR VEHICLE LOOKED AT?</span><h2>Reserve a time in minutes.</h2></div>
+    <a class="btn btn-light" href="#schedule">Schedule Now</a>
+  </div>
+</section>
+
+<section class="section contact" id="contact">
+  <div class="container contact-grid">
+    <div>
+      <span class="eyebrow dark">CONTACT S&K AUTO</span>
+      <h2>Questions before you book?</h2>
+      <p>Call or send a message and we’ll help you figure out the next step.</p>
+      <div class="contact-info">
+        <p><strong>Phone</strong><br><a href="tel:+16208990425">(620) 899-0425</a></p>
+        <p><strong>Address</strong><br>3107 Homestead<br>Hutchinson, KS 67502</p>
+        <a class="directions-btn" href="https://www.google.com/maps/dir/?api=1&destination=3107+Homestead,+Hutchinson,+KS+67502" target="_blank" rel="noopener">Get Directions</a>
+        <p><strong>Hours</strong><br>Monday–Friday: 8:00 AM–5:00 PM<br>Saturday–Sunday: Closed</p>
+      </div>
+    </div>
+    <div class="contact-card">
+      <h3>Find S&K Auto</h3>
+      <p>3107 Homestead<br>Hutchinson, KS 67502</p>
+      <div class="map-wrap">
+        <iframe
+          title="Google Map showing S&K Auto at 3107 Homestead, Hutchinson, Kansas"
+          src="https://www.google.com/maps?q=3107+Homestead,+Hutchinson,+KS+67502&output=embed"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+          allowfullscreen>
+        </iframe>
+      </div>
+      <a class="btn full" href="https://www.google.com/maps/dir/?api=1&destination=3107+Homestead,+Hutchinson,+KS+67502" target="_blank" rel="noopener">Open Google Maps / Directions</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <img src="assets/sk-auto-logo.jpg" alt="S&K Auto logo"/>
+      <div><strong>S&K AUTO</strong><small>The Art of Automotive Repair</small></div>
+    </div>
+    <p>© <span id="year"></span> S&K Auto. All rights reserved.</p>
+  </div>
+</footer>
+<script src="script.js"></script>
+</body>
+</html>
