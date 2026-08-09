@@ -12,7 +12,7 @@ img{max-width:100%;display:block}
 .topbar{position:sticky;top:0;z-index:100;background:rgba(0,0,0,.95);border-bottom:1px solid rgba(255,255,255,.08)}
 .nav{height:82px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:12px;color:white}
-.brand-logo{width:58px;height:58px;object-fit:cover;border-radius:8px}
+.brand-logo{width:85px;height:85px;object-fit:cover;border-radius:8px}
 .brand-copy{display:flex;flex-direction:column;line-height:1.05}
 .brand-copy strong{font-family:Oswald;font-size:20px;letter-spacing:1px}
 .brand-copy small{font-size:9px;color:#aaa;margin-top:5px}
