@@ -39,7 +39,12 @@ img{max-width:100%;display:block}
 .hero p{max-width:620px;color:#d0d0d0;font-size:18px}
 .hero-actions{display:flex;gap:12px;margin-top:28px}
 .hero-actions .btn{padding:14px 22px;font-size:15px}
-.hero-logo-wrap{display:flex;justify-content:center}
+.hero-logo-wrap{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100%;
+}
 .hero-logo{
     width:760px;
     max-width:120%;
