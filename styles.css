@@ -10,19 +10,19 @@ a{text-decoration:none;color:inherit}
 img{max-width:100%;display:block}
 .container{width:min(var(--max),calc(100% - 38px));margin:auto}
 .topbar{position:sticky;top:0;z-index:100;background:rgba(0,0,0,.95);border-bottom:1px solid rgba(255,255,255,.08)}
-.nav{height:82px;display:flex;align-items:center;justify-content:space-between}
-.brand{display:flex;align-items:center;gap:12px;color:white}
+.nav{height:106px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:16px;color:white}
 .brand-logo{
-    width:125px;
+    width:145px;
     height:auto;
     object-fit:contain;
     border-radius:0;
     display:block;
 }
 .brand-copy{display:flex;flex-direction:column;line-height:1.05}
-.brand-copy strong{font-family:Oswald;font-size:26px;letter-spacing:1.5px}
-.brand-copy small{font-size:9px;color:#aaa;margin-top:5px}
-.navlinks{display:flex;align-items:center;gap:27px;color:#ddd;font-size:16px;font-weight:700}
+.brand-copy strong{font-family:Oswald;font-size:30px;letter-spacing:1.5px}
+.brand-copy small{font-size:11px;color:#aaa;margin-top:4px}
+.navlinks{display:flex;align-items:center;gap:30px;color:#ddd;font-size:17px;font-weight:700}
 .btn{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--orange),var(--red));color:#fff;border:0;padding:14px 21px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;cursor:pointer}
 .btn-small{padding:10px 15px}
 .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.45)}
