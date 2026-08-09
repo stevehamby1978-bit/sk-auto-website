@@ -46,8 +46,8 @@ img{max-width:100%;display:block}
     height:100%;
 }
 .hero-logo{
-    width:620px;
-    max-width:100%;
+    width:760px;
+    max-width:120%;
     height:auto;
     border-radius:0;
     box-shadow:none;
