@@ -39,6 +39,26 @@ img{max-width:100%;display:block}
   flex-wrap:wrap;
   margin-top:20px;
 }
+#reviews{
+  padding:45px 0 35px;
+}
+
+#reviews .section-heading{
+  margin-bottom:25px;
+}
+
+#reviews .review-box{
+  margin-top:0;
+  text-align:center;
+}
+
+#reviews .review-box p{
+  margin:10px 0 15px;
+}
+
+#reviews .review-actions{
+  margin-top:15px;
+}
 .btn-light{background:#fff;color:#111}
 .full{width:100%}
 .menu-btn{display:none;background:none;border:0;color:white;font-size:28px}
