@@ -26,6 +26,19 @@ img{max-width:100%;display:block}
 .btn{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--orange),var(--red));color:#fff;border:0;padding:14px 21px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;cursor:pointer}
 .btn-small{padding:10px 15px}
 .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.45)}
+.review-actions .btn-ghost{
+  background:#1877f2;
+  border:1px solid #1877f2;
+  color:#fff;
+}
+.review-actions{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+  margin-top:20px;
+}
 .btn-light{background:#fff;color:#111}
 .full{width:100%}
 .menu-btn{display:none;background:none;border:0;color:white;font-size:28px}
