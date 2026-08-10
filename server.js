@@ -102,7 +102,31 @@ app.post('/api/book', (req, res) => {
       String(email).trim(),
       String(notes).trim()
     );
+transporter.sendMail({
+  from: process.env.EMAIL_USER,
+  to: 'skauto986@gmail.com',
+  subject: `New Appointment - ${date} at ${time}`,
+  text: `
+New appointment booked on the S&K Auto website.
 
+Customer: ${name.trim()}
+Phone: ${phone.trim()}
+Email: ${String(email).trim() || 'Not provided'}
+
+Vehicle: ${vehicle.trim()}
+Service: ${service.trim()}
+
+Date: ${date}
+Time: ${time}
+
+Notes:
+${String(notes).trim() || 'None'}
+
+Confirmation Number: ${confirmation}
+  `
+}).catch(err => {
+  console.error('Booking email failed:', err);
+});
     res.status(201).json({ok: true, confirmation});
   } catch (err) {
     if (String(err.message).includes('UNIQUE constraint failed: bookings.date, bookings.time')) {
