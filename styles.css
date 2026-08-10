@@ -59,6 +59,16 @@ img{max-width:100%;display:block}
 #reviews .review-actions{
   margin-top:15px;
 }
+#reviews{
+  min-height:auto;
+  padding-top:30px !important;
+  padding-bottom:30px !important;
+}
+
+#reviews .container{
+  padding-top:0;
+  padding-bottom:0;
+}
 .btn-light{background:#fff;color:#111}
 .full{width:100%}
 .menu-btn{display:none;background:none;border:0;color:white;font-size:28px}
