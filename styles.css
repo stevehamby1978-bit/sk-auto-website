@@ -195,3 +195,48 @@ footer{background:#050505;color:#aaa;padding:34px 0}
   .time-slots{grid-template-columns:repeat(2,1fr)}
   .map-wrap iframe{height:300px}
 }
+
+.featured-reviews{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:18px;
+  margin-top:28px;
+}
+
+.featured-reviews .review-card{
+  background:#111;
+  color:#fff;
+  padding:24px;
+  border-radius:10px;
+  text-align:left;
+}
+
+.featured-reviews .review-card .stars{
+  color:#f5c400;
+  font-size:20px;
+  margin-bottom:12px;
+}
+
+.featured-reviews .review-card p{
+  color:#ddd;
+  line-height:1.6;
+  margin-bottom:16px;
+}
+
+.featured-reviews .review-card strong{
+  display:block;
+  color:#fff;
+}
+
+.featured-reviews .review-card span{
+  display:block;
+  color:#1877f2;
+  font-size:13px;
+  margin-top:4px;
+}
+
+@media(max-width:800px){
+  .featured-reviews{
+    grid-template-columns:1fr;
+  }
+}
