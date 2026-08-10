@@ -3,20 +3,8 @@ const express = require('express');
 const Database = require('better-sqlite3');
 const path = require('path');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD
-  },
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 20000
-});
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const fs = require('fs');
@@ -107,9 +95,9 @@ app.post('/api/book', (req, res) => {
       String(email).trim(),
       String(notes).trim()
     );
-transporter.sendMail({
-  from: process.env.EMAIL_USER,
-  to: 'skauto986@gmail.com',
+resend.emails.send({
+  from: 'S&K Auto <appointments@skautohutch.com>',
+  to: ['skauto986@gmail.com'],
   subject: `New Appointment - ${date} at ${time}`,
   text: `
 New appointment booked on the S&K Auto website.
@@ -129,6 +117,10 @@ ${String(notes).trim() || 'None'}
 
 Confirmation Number: ${confirmation}
   `
+}).then(({ error }) => {
+  if (error) {
+    console.error('Booking email failed:', error);
+  }
 }).catch(err => {
   console.error('Booking email failed:', err);
 });
