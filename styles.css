@@ -477,3 +477,8 @@ footer{background:#050505;color:#aaa;padding:34px 0}
   }
 
 }
+@media(max-width:768px){
+  .hero-logo-wrap{
+    transform:none !important;
+  }
+}
