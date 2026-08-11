@@ -194,6 +194,99 @@ Confirmation Number: ${confirmation}
 }).catch(err => {
   console.error('Booking email failed:', err);
 });
+    if (String(email).trim()) {
+  resend.emails.send({
+    from: 'S&K Auto <appointments@skautohutch.com>',
+    to: [String(email).trim()],
+    subject: `Your S&K Auto Appointment - ${date} at ${time}`,
+
+    html: `
+      <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
+        <div style="max-width:600px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
+
+          <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
+            <h1 style="margin:0;font-size:26px;">S&K AUTO</h1>
+            <p style="margin:5px 0 0;color:#cccccc;">The Art of Automotive Repair</p>
+          </div>
+
+          <div style="padding:25px;">
+            <h2 style="margin-top:0;">Appointment Confirmed</h2>
+
+            <p>Hi ${name.trim()},</p>
+
+            <p>Your appointment with S&K Auto has been scheduled successfully.</p>
+
+            <table style="width:100%;border-collapse:collapse;font-size:16px;">
+              <tr>
+                <td style="padding:8px 0;font-weight:bold;">Vehicle</td>
+                <td style="padding:8px 0;">${vehicle.trim()}</td>
+              </tr>
+
+              <tr>
+                <td style="padding:8px 0;font-weight:bold;">Service</td>
+                <td style="padding:8px 0;">${service.trim()}</td>
+              </tr>
+
+              <tr>
+                <td style="padding:8px 0;font-weight:bold;">Date</td>
+                <td style="padding:8px 0;">${date}</td>
+              </tr>
+
+              <tr>
+                <td style="padding:8px 0;font-weight:bold;">Time</td>
+                <td style="padding:8px 0;">${time}</td>
+              </tr>
+            </table>
+
+            <div style="margin-top:20px;padding:15px;background:#f7f7f7;border-left:4px solid #d9271c;">
+              <strong>Confirmation Number:</strong> ${confirmation}
+            </div>
+
+            <p style="margin-top:22px;">
+              S&K Auto<br>
+              3107 Homestead<br>
+              Hutchinson, KS 67502<br>
+              Phone: (620) 899-0425
+            </p>
+
+            <p>Please call us if you need to make any changes to your appointment.</p>
+          </div>
+
+          <div style="background:#151515;color:#bbbbbb;padding:15px;text-align:center;font-size:13px;">
+            S&K Auto • The Art of Automotive Repair
+          </div>
+
+        </div>
+      </div>
+    `,
+
+    text: `
+Hi ${name.trim()},
+
+Your appointment with S&K Auto has been confirmed.
+
+Vehicle: ${vehicle.trim()}
+Service: ${service.trim()}
+Date: ${date}
+Time: ${time}
+
+Confirmation Number: ${confirmation}
+
+S&K Auto
+3107 Homestead
+Hutchinson, KS 67502
+(620) 899-0425
+
+Please call us if you need to make any changes to your appointment.
+    `
+  }).then(({ error }) => {
+    if (error) {
+      console.error('Customer confirmation email failed:', error);
+    }
+  }).catch(err => {
+    console.error('Customer confirmation email failed:', err);
+  });
+}
     res.status(201).json({ok: true, confirmation});
   } catch (err) {
     if (String(err.message).includes('UNIQUE constraint failed: bookings.date, bookings.time')) {
