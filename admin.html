@@ -1,1 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S&K Auto Admin - Block Dates</title>
 
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #111;
+      color: #fff;
+    }
+
+    .wrap {
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    .card {
+      background: #1c1c1c;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+    }
+
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      margin-top: 6px;
+      border-radius: 6px;
+      border: 1px solid #555;
+      font-size: 16px;
+    }
+
+    button {
+      margin-top: 18px;
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #d9271c;
+      color: white;
+      font-weight: bold;
+    }
+
+    button.unblock {
+      margin: 0;
+      background: #444;
+    }
+
+    .blocked-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .blocked-row:last-child {
+      border-bottom: 0;
+    }
+
+    .reason {
+      color: #bbb;
+      margin-top: 4px;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+
+    .empty {
+      color: #aaa;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>S&K Auto Scheduling Admin</h1>
+      <p>Block dates customers should not be able to schedule.</p>
+
+      <label for="date">Date</label>
+      <input id="date" type="date">
+
+      <label for="reason">Reason (optional)</label>
+      <input id="reason" type="text" placeholder="Vacation, holiday, shop closed, etc.">
+
+      <button id="blockButton">Block Date</button>
+
+      <div id="status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Blocked Dates</h2>
+      <div id="blockedList">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    const dateInput = document.getElementById('date');
+    const reasonInput = document.getElementById('reason');
+    const blockButton = document.getElementById('blockButton');
+    const blockedList = document.getElementById('blockedList');
+    const statusBox = document.getElementById('status');
+
+    async function loadBlockedDates() {
+      try {
+        const response = await fetch('/api/admin/blocked-dates');
+        const data = await response.json();
+
+        blockedList.innerHTML = '';
+
+        if (!data.blockedDates || data.blockedDates.length === 0) {
+          blockedList.innerHTML = '<div class="empty">No dates are currently blocked.</div>';
+          return;
+        }
+
+        data.blockedDates.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'blocked-row';
+
+          const info = document.createElement('div');
+
+          const dateText = document.createElement('strong');
+          dateText.textContent = item.date;
+
+          const reasonText = document.createElement('div');
+          reasonText.className = 'reason';
+          reasonText.textContent = item.reason || 'No reason entered';
+
+          info.appendChild(dateText);
+          info.appendChild(reasonText);
+
+          const button = document.createElement('button');
+          button.className = 'unblock';
+          button.textContent = 'Unblock';
+          button.addEventListener('click', () => unblockDate(item.date));
+
+          row.appendChild(info);
+          row.appendChild(button);
+
+          blockedList.appendChild(row);
+        });
+      } catch (error) {
+        blockedList.textContent = 'Unable to load blocked dates.';
+      }
+    }
+
+    async function blockDate() {
+      const date = dateInput.value;
+      const reason = reasonInput.value.trim();
+
+      if (!date) {
+        statusBox.textContent = 'Choose a date first.';
+        return;
+      }
+
+      statusBox.textContent = 'Saving...';
+
+      try {
+        const response = await fetch('/api/admin/blocked-dates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ date, reason })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          statusBox.textContent = data.error || 'Unable to block date.';
+          return;
+        }
+
+        statusBox.textContent = 'Date blocked successfully.';
+        dateInput.value = '';
+        reasonInput.value = '';
+
+        await loadBlockedDates();
+      } catch (error) {
+        statusBox.textContent = 'Unable to block date.';
+      }
+    }
+
+    async function unblockDate(date) {
+      const confirmed = confirm(`Unblock ${date}?`);
+
+      if (!confirmed) return;
+
+      try {
+        const response = await fetch(
+          '/api/admin/blocked-dates/' + encodeURIComponent(date),
+          { method: 'DELETE' }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Unable to unblock date.');
+          return;
+        }
+
+        await loadBlockedDates();
+      } catch (error) {
+        alert('Unable to unblock date.');
+      }
+    }
+
+    blockButton.addEventListener('click', blockDate);
+
+    loadBlockedDates();
+  </script>
+</body>
+</html>
