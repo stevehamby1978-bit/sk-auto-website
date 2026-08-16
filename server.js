@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Resend } = require('resend');
 const twilio = require('twilio');
+const multer = require('multer');
 
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -18,6 +19,42 @@ const fs = require('fs');
 
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
+const uploadsDir = path.join(dataDir, 'uploads');
+fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    files: 3,
+    fileSize: 8 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif'
+    ];
+
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed.'));
+    }
+  }
+});
 const dbPath = path.join(dataDir, 'bookings.db');
 const db = new Database(dbPath);
 
@@ -51,6 +88,16 @@ if (!bookingColumns.some(column => column.name === 'reminder_sent')) {
     ADD COLUMN reminder_sent INTEGER NOT NULL DEFAULT 0
   `);
 }
+db.exec(`
+  CREATE TABLE IF NOT EXISTS booking_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  )
+`);
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS blocked_dates (
     date TEXT PRIMARY KEY,
@@ -116,7 +163,7 @@ const available = SHOP_SLOTS.filter(
   res.json({date, available});
 });
 
-app.post('/api/book', (req, res) => {
+app.post('/api/book', upload.array('photos', 3), (req, res) => {
   const {service, vehicle, date, time, name, phone, email = '', notes = ''} = req.body || {};
 
   if (![service, vehicle, date, time, name, phone].every(v => typeof v === 'string' && v.trim())) {
@@ -146,11 +193,12 @@ if (blockedTime) {
   const confirmation = crypto.randomBytes(4).toString('hex').toUpperCase();
 
   try {
-    db.prepare(`
-      INSERT INTO bookings
-      (confirmation, service, vehicle, date, time, name, phone, email, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+  
+     const bookingResult = db.prepare(`
+  INSERT INTO bookings
+  (confirmation, service, vehicle, date, time, name, phone, email, notes)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`).run(
       confirmation,
       service.trim(),
       vehicle.trim(),
@@ -161,7 +209,25 @@ if (blockedTime) {
       String(email).trim(),
       String(notes).trim()
     );
-resend.emails.send({
+const bookingId = bookingResult.lastInsertRowid;
+
+if (req.files && req.files.length > 0) {
+  const insertPhoto = db.prepare(`
+    INSERT INTO booking_photos
+    (booking_id, filename, original_name)
+    VALUES (?, ?, ?)
+  `);
+
+  for (const file of req.files) {
+    insertPhoto.run(
+      bookingId,
+      file.filename,
+      file.originalname
+    );
+  }
+}
+    
+    resend.emails.send({
   from: 'S&K Auto <appointments@skautohutch.com>',
   to: ['skauto986@gmail.com'],
   subject: `New Appointment - ${date} at ${time}`,
