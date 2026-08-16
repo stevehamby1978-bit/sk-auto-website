@@ -110,7 +110,40 @@
       <div id="status"></div>
     </div>
 
-    <div class="card">
+   <div class="card">
+    <h2>Block a Specific Time</h2>
+    <p>Block one appointment time without closing the entire day.</p>
+
+    <label for="timeDate">Date</label>
+    <input id="timeDate" type="date">
+
+    <label for="timeSlot">Time</label>
+    <select id="timeSlot">
+        <option value="">Choose a time</option>
+        <option value="8:00 AM">8:00 AM</option>
+        <option value="9:00 AM">9:00 AM</option>
+        <option value="10:00 AM">10:00 AM</option>
+        <option value="11:00 AM">11:00 AM</option>
+        <option value="12:00 PM">12:00 PM</option>
+        <option value="1:00 PM">1:00 PM</option>
+        <option value="2:00 PM">2:00 PM</option>
+        <option value="3:00 PM">3:00 PM</option>
+        <option value="4:00 PM">4:00 PM</option>
+    </select>
+
+    <label for="timeReason">Reason (optional)</label>
+    <input id="timeReason" type="text"
+           placeholder="Lunch, personal appointment, etc.">
+
+    <button id="blockTimeButton">Block Time</button>
+
+    <div id="timeStatus"></div>
+</div>
+
+<div class="card">
+    <h2>Blocked Times</h2>
+    <div id="blockedTimesList">Loading...</div>
+</div> <div class="card">
       <h2>Blocked Dates</h2>
       <div id="blockedList">Loading...</div>
     </div>
@@ -122,7 +155,12 @@
     const blockButton = document.getElementById('blockButton');
     const blockedList = document.getElementById('blockedList');
     const statusBox = document.getElementById('status');
-
+const timeDateInput = document.getElementById('timeDate');
+const timeSlotInput = document.getElementById('timeSlot');
+const timeReasonInput = document.getElementById('timeReason');
+const blockTimeButton = document.getElementById('blockTimeButton');
+const blockedTimesList = document.getElementById('blockedTimesList');
+const timeStatus = document.getElementById('timeStatus');
     async function loadBlockedDates() {
       try {
         const response = await fetch('/api/admin/blocked-dates');
@@ -230,6 +268,127 @@
     blockButton.addEventListener('click', blockDate);
 
     loadBlockedDates();
-  </script>
+ async function loadBlockedTimes() {
+  try {
+    const response = await fetch('/api/admin/blocked-times');
+    const data = await response.json();
+
+    blockedTimesList.innerHTML = '';
+
+    if (!data.blockedTimes || data.blockedTimes.length === 0) {
+      blockedTimesList.innerHTML =
+        '<div class="empty">No times are currently blocked.</div>';
+      return;
+    }
+
+    data.blockedTimes.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'blocked-row';
+
+      const info = document.createElement('div');
+
+      const mainText = document.createElement('strong');
+      mainText.textContent = `${item.date} - ${item.time}`;
+
+      const reasonText = document.createElement('div');
+      reasonText.className = 'reason';
+      reasonText.textContent = item.reason || 'No reason entered';
+
+      info.appendChild(mainText);
+      info.appendChild(reasonText);
+
+      const button = document.createElement('button');
+      button.className = 'unblock';
+      button.textContent = 'Unblock';
+      button.addEventListener('click', () =>
+        unblockTime(item.date, item.time)
+      );
+
+      row.appendChild(info);
+      row.appendChild(button);
+
+      blockedTimesList.appendChild(row);
+    });
+  } catch (error) {
+    blockedTimesList.textContent = 'Unable to load blocked times.';
+  }
+}
+
+async function blockTime() {
+  const date = timeDateInput.value;
+  const time = timeSlotInput.value;
+  const reason = timeReasonInput.value.trim();
+
+  if (!date) {
+    timeStatus.textContent = 'Choose a date first.';
+    return;
+  }
+
+  if (!time) {
+    timeStatus.textContent = 'Choose a time first.';
+    return;
+  }
+
+  timeStatus.textContent = 'Saving...';
+
+  try {
+    const response = await fetch('/api/admin/blocked-times', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ date, time, reason })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      timeStatus.textContent = data.error || 'Unable to block time.';
+      return;
+    }
+
+    timeStatus.textContent = 'Time blocked successfully.';
+    timeDateInput.value = '';
+    timeSlotInput.value = '';
+    timeReasonInput.value = '';
+
+    await loadBlockedTimes();
+  } catch (error) {
+    timeStatus.textContent = 'Unable to block time.';
+  }
+}
+
+async function unblockTime(date, time) {
+  const confirmed = confirm(`Unblock ${date} at ${time}?`);
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(
+      '/api/admin/blocked-times/' +
+        encodeURIComponent(date) +
+        '/' +
+        encodeURIComponent(time),
+      { method: 'DELETE' }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || 'Unable to unblock time.');
+      return;
+    }
+
+    await loadBlockedTimes();
+  } catch (error) {
+    alert('Unable to unblock time.');
+  }
+}
+
+blockTimeButton.addEventListener('click', blockTime);
+
+loadBlockedDates();
+loadBlockedTimes();
+</script>
 </body>
 </html>
