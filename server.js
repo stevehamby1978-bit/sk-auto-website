@@ -4,6 +4,13 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const crypto = require('crypto');
 const { Resend } = require('resend');
+const twilio = require('twilio');
+
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -337,6 +344,26 @@ Please call us if you need to make any changes to your appointment.
     console.error('Customer confirmation email failed:', err);
   });
 }
+twilioClient.messages.create({
+  body: `New S&K Auto appointment
+
+Customer: ${name.trim()}
+Phone: ${phone.trim()}
+Vehicle: ${vehicle.trim()}
+Service: ${service.trim()}
+Date: ${date}
+Time: ${time}
+Confirmation: ${confirmation}`,
+  from: process.env.TWILIO_PHONE_NUMBER,
+  to: process.env.SMS_TO_NUMBER
+})
+.then(message => {
+  console.log('Appointment SMS sent:', message.sid);
+})
+.catch(err => {
+  console.error('Appointment SMS failed:', err);
+});    
+    
     res.status(201).json({ok: true, confirmation});
   } catch (err) {
     if (String(err.message).includes('UNIQUE constraint failed: bookings.date, bookings.time')) {
