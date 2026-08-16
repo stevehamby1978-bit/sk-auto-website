@@ -41,6 +41,15 @@ db.exec(`
     reason TEXT DEFAULT ''
   );
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS blocked_times (
+    date TEXT NOT NULL,
+    time TEXT NOT NULL,
+    reason TEXT DEFAULT '',
+    PRIMARY KEY (date, time)
+  );
+`);
+
 const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
@@ -74,9 +83,20 @@ if (isBlockedDate(date)) {
     message: 'S&K Auto is closed on this date.'
   });
 }
-  const rows = db.prepare('SELECT time FROM bookings WHERE date = ?').all(date);
-  const booked = new Set(rows.map(r => r.time));
-  const available = SHOP_SLOTS.filter(t => !booked.has(t));
+const rows = db
+  .prepare('SELECT time FROM bookings WHERE date = ?')
+  .all(date);
+
+const blockedRows = db
+  .prepare('SELECT time FROM blocked_times WHERE date = ?')
+  .all(date);
+
+const booked = new Set(rows.map(r => r.time));
+const blocked = new Set(blockedRows.map(r => r.time));
+
+const available = SHOP_SLOTS.filter(
+  t => !booked.has(t) && !blocked.has(t)
+);
   res.json({date, available});
 });
 
@@ -92,6 +112,15 @@ app.post('/api/book', (req, res) => {
   if (isBlockedDate(date)) {
   return res.status(400).json({
     error: 'S&K Auto is closed on this date. Please choose another day.'
+  });
+}
+  const blockedTime = db
+  .prepare('SELECT 1 FROM blocked_times WHERE date = ? AND time = ?')
+  .get(date, time);
+
+if (blockedTime) {
+  return res.status(400).json({
+    error: 'That appointment time is unavailable. Please choose another time.'
   });
 }
   if (!SHOP_SLOTS.includes(time)) {
@@ -352,6 +381,50 @@ app.delete('/api/admin/blocked-dates/:date', (req, res) => {
   db.prepare('DELETE FROM blocked_dates WHERE date = ?').run(date);
 
   res.json({ ok: true, date });
+});
+app.get('/api/admin/blocked-times', (req, res) => {
+  const rows = db
+    .prepare('SELECT date, time, reason FROM blocked_times ORDER BY date, time')
+    .all();
+
+  res.json({ blockedTimes: rows });
+});
+
+app.post('/api/admin/blocked-times', (req, res) => {
+  const date = String(req.body.date || '');
+  const time = String(req.body.time || '');
+  const reason = String(req.body.reason || '').trim();
+
+  if (!isValidDateString(date)) {
+    return res.status(400).json({ error: 'Invalid date.' });
+  }
+
+  if (!SHOP_SLOTS.includes(time)) {
+    return res.status(400).json({ error: 'Invalid time.' });
+  }
+
+  db.prepare(`
+    INSERT INTO blocked_times (date, time, reason)
+    VALUES (?, ?, ?)
+    ON CONFLICT(date, time) DO UPDATE SET reason = excluded.reason
+  `).run(date, time, reason);
+
+  res.json({ ok: true, date, time, reason });
+});
+
+app.delete('/api/admin/blocked-times/:date/:time', (req, res) => {
+  const date = String(req.params.date || '');
+  const time = String(req.params.time || '');
+
+  if (!isValidDateString(date)) {
+    return res.status(400).json({ error: 'Invalid date.' });
+  }
+
+  db.prepare(
+    'DELETE FROM blocked_times WHERE date = ? AND time = ?'
+  ).run(date, time);
+
+  res.json({ ok: true, date, time });
 });
 app.get('/api/health', (req, res) => {
   res.json({ok: true});
