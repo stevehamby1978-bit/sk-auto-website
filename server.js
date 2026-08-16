@@ -38,10 +38,19 @@ db.exec(`
     phone TEXT NOT NULL,
     email TEXT,
     notes TEXT,
+    reminder_sent INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(date, time)
   )
 `);
+const bookingColumns = db.prepare("PRAGMA table_info(bookings)").all();
+
+if (!bookingColumns.some(column => column.name === 'reminder_sent')) {
+  db.exec(`
+    ALTER TABLE bookings
+    ADD COLUMN reminder_sent INTEGER NOT NULL DEFAULT 0
+  `);
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS blocked_dates (
     date TEXT PRIMARY KEY,
@@ -456,7 +465,96 @@ app.delete('/api/admin/blocked-times/:date/:time', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ok: true});
 });
+function normalizePhoneNumber(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
 
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+${digits}`;
+  }
+
+  return phone;
+}
+function timeToMinutes(timeString) {
+  const match = String(timeString).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const period = match[3].toUpperCase();
+
+  if (period === 'PM' && hour !== 12) hour += 12;
+  if (period === 'AM' && hour === 12) hour = 0;
+
+  return hour * 60 + minute;
+}
+async function sendAppointmentReminders() {
+  try {
+    const now = new Date();
+    const reminderTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const chicagoDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Chicago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(reminderTime);
+
+    const chicagoTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).format(reminderTime);
+
+     const appointments = db.prepare(`
+  SELECT *
+  FROM bookings
+  WHERE date = ?
+    AND reminder_sent = 0
+`).all(chicagoDate);
+
+    for (const appointment of appointments) {
+      const appointmentMinutes = timeToMinutes(appointment.time);
+const reminderMinutes = timeToMinutes(chicagoTime);
+
+if (
+  appointmentMinutes === null ||
+  reminderMinutes === null ||
+  appointmentMinutes > reminderMinutes ||
+  appointmentMinutes <= reminderMinutes - 60
+) {
+  continue;
+}
+      try {
+        await twilioClient.messages.create({
+          body: `S&K Auto reminder: You have an appointment tomorrow at ${appointment.time} for ${appointment.service}. Confirmation: ${appointment.confirmation}. Please call us if you need to make changes. Reply STOP to opt out.`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: normalizePhoneNumber(appointment.phone)
+        });
+
+        db.prepare(`
+          UPDATE bookings
+          SET reminder_sent = 1
+          WHERE id = ?
+        `).run(appointment.id);
+
+        console.log(`Reminder SMS sent for booking ${appointment.confirmation}`);
+      } catch (err) {
+        console.error(`Reminder SMS failed for booking ${appointment.confirmation}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('Reminder checker failed:', err);
+  }
+}
+
+sendAppointmentReminders();
+
+setInterval(sendAppointmentReminders, 15 * 60 * 1000);
 app.listen(PORT, () => {
   console.log(`S&K Auto website running on http://localhost:${PORT}`);
 });
