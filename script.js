@@ -100,16 +100,31 @@ bookButton.addEventListener('click', async () => {
     setStatus('Please complete the service, vehicle, date, time, name, and phone fields.');
     return;
   }
+const photoInput = document.getElementById('photos');
+const photos = photoInput ? Array.from(photoInput.files) : [];
 
+if (photos.length > 3) {
+  setStatus('Please select no more than 3 photos.');
+  return;
+}
+
+const formData = new FormData();
+
+Object.entries(booking).forEach(([key, value]) => {
+  formData.append(key, value);
+});
+
+photos.forEach(photo => {
+  formData.append('photos', photo);
+});
   bookButton.disabled = true;
   setStatus('Reserving your appointment…');
 
   try {
     const res = await fetch('/api/book', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(booking)
-    });
+  method: 'POST',
+  body: formData
+});
     const data = await res.json();
 
     if (!res.ok) {
