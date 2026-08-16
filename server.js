@@ -231,7 +231,10 @@ if (req.files && req.files.length > 0) {
   from: 'S&K Auto <appointments@skautohutch.com>',
   to: ['skauto986@gmail.com'],
   subject: `New Appointment - ${date} at ${time}`,
-
+attachments: (req.files || []).map(file => ({
+  filename: file.originalname,
+  content: fs.readFileSync(file.path)
+})),
   html: `
     <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
       <div style="max-width:600px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
