@@ -113,6 +113,52 @@ db.exec(`
   );
 `);
 
+// ===== S&K AUTO ESTIMATE SYSTEM =====
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS vehicles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    year TEXT,
+    make TEXT,
+    model TEXT,
+    vin TEXT,
+    mileage TEXT,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS estimates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    vehicle_id INTEGER,
+    token TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    responded_at TEXT,
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS estimate_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    estimate_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    parts REAL NOT NULL DEFAULT 0,
+    labor REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    FOREIGN KEY (estimate_id) REFERENCES estimates(id) ON DELETE CASCADE
+  );
+`);
+
 const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
