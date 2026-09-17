@@ -444,7 +444,7 @@ async function loadSavedEstimates() {
         <p><strong>Vehicle:</strong> ${estimate.vehicle_year || ""} ${estimate.vehicle_make || ""} ${estimate.vehicle_model || ""}</p>
         <p><strong>Estimate #:</strong> ${estimate.id || ""}</p>
         <p><strong>Status:</strong> ${estimate.status || "pending"}</p>
-        <button type="button" onclick="window.open('/api/estimates/${estimate.token}', '_blank')">
+        <button type="button" onclick="window.open('/estimate.html?token=${estimate.token}', '_blank')">
           View Estimate
         </button>
       `;
