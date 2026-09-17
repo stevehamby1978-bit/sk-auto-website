@@ -246,6 +246,12 @@
     <p>Loading saved estimates...</p>
   </div>
 </div>
+<div class="section">
+  <h2>Approved Estimates</h2>
+  <div id="approvedEstimates">
+    <p>Loading approved estimates...</p>
+  </div>
+</div>
 </div>
 
 <script>
@@ -418,7 +424,8 @@ addItem();
 
 async function loadSavedEstimates() {
   const savedEstimates = document.getElementById("savedEstimates");
-
+const approvedEstimates = document.getElementById("approvedEstimates");
+approvedEstimates.innerHTML = "";
   try {
     const response = await fetch("/api/estimates");
     const estimates = await response.json();
@@ -449,7 +456,11 @@ async function loadSavedEstimates() {
         </button>
       `;
 
-      savedEstimates.appendChild(card);
+if ((estimate.status || "pending").toLowerCase() === "approved") {
+    approvedEstimates.appendChild(card);
+} else {
+    savedEstimates.appendChild(card);
+}
     });
 
   } catch (error) {
