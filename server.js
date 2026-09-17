@@ -670,6 +670,110 @@ if (
 sendAppointmentReminders();
 
 setInterval(sendAppointmentReminders, 15 * 60 * 1000);
+// ===== S&K AUTO - CREATE ESTIMATE =====
+
+app.post("/api/estimates", async (req, res) => {
+  try {
+    const { customer, vehicle, notes, items } = req.body;
+
+    if (!customer || !customer.name || !customer.phone) {
+      return res.status(400).json({
+        error: "Customer name and phone number are required."
+      });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        error: "At least one estimate item is required."
+      });
+    }
+
+    const token = crypto.randomBytes(24).toString("hex");
+
+    await db.exec("BEGIN TRANSACTION");
+
+    try {
+      const customerResult = await db.run(
+        `INSERT INTO customers (name, phone, email)
+         VALUES (?, ?, ?)`,
+        customer.name.trim(),
+        customer.phone.trim(),
+        customer.email ? customer.email.trim() : null
+      );
+
+      const customerId = customerResult.lastID;
+
+      const vehicleResult = await db.run(
+        `INSERT INTO vehicles
+         (customer_id, year, make, model, vin, mileage)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        customerId,
+        vehicle?.year || null,
+        vehicle?.make || null,
+        vehicle?.model || null,
+        vehicle?.vin || null,
+        vehicle?.mileage || null
+      );
+
+      const vehicleId = vehicleResult.lastID;
+
+      const estimateResult = await db.run(
+        `INSERT INTO estimates
+         (customer_id, vehicle_id, token, notes)
+         VALUES (?, ?, ?, ?)`,
+        customerId,
+        vehicleId,
+        token,
+        notes || null
+      );
+
+      const estimateId = estimateResult.lastID;
+
+      for (const item of items) {
+        if (!item.description || !item.description.trim()) {
+          throw new Error("Every estimate item needs a description.");
+        }
+
+        const parts = Number(item.parts) || 0;
+        const labor = Number(item.labor) || 0;
+
+        if (parts < 0 || labor < 0) {
+          throw new Error("Parts and labor cannot be negative.");
+        }
+
+        await db.run(
+          `INSERT INTO estimate_items
+           (estimate_id, description, parts, labor)
+           VALUES (?, ?, ?, ?)`,
+          estimateId,
+          item.description.trim(),
+          parts,
+          labor
+        );
+      }
+
+      await db.exec("COMMIT");
+
+      res.status(201).json({
+        success: true,
+        id: estimateId,
+        token: token
+      });
+
+    } catch (err) {
+      await db.exec("ROLLBACK");
+      throw err;
+    }
+
+  } catch (err) {
+    console.error("Create estimate error:", err);
+
+    res.status(500).json({
+      error: "Unable to create estimate."
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`S&K Auto website running on http://localhost:${PORT}`);
 });
