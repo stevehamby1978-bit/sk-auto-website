@@ -717,7 +717,18 @@ app.get('/api/estimates/:token', (req, res) => {
       LEFT JOIN vehicles v ON e.vehicle_id = v.id
       WHERE e.token = ?
     `).get(req.params.token);
+const items = estimate
+  ? db.prepare(`
+      SELECT description, parts, labor
+      FROM estimate_items
+      WHERE estimate_id = ?
+      ORDER BY id ASC
+    `).all(estimate.id)
+  : [];
 
+if (estimate) {
+  estimate.items = items;
+}
     if (!estimate) {
       return res.status(404).send('Estimate not found');
     }
