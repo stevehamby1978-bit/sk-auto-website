@@ -411,5 +411,20 @@ addItem();
 
 </script>
 
+  <script>
+async function loadSavedEstimates() {
+  try {
+    const response = await fetch('/api/estimates');
+    const estimates = await response.json();
+
+    console.log('Saved estimates:', estimates);
+  } catch (error) {
+    console.error('Unable to load saved estimates:', error);
+  }
+}
+
+loadSavedEstimates();
+</script>
+
 </body>
 </html>
