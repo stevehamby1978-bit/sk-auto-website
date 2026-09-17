@@ -264,10 +264,10 @@
     <table>
       <thead>
         <tr>
-          <th>Description</th>
-          <th>Qty/Hrs</th>
-          <th class="money">Rate</th>
-          <th class="money">Total</th>
+         <th>Description</th>
+<th class="money">Parts</th>
+<th class="money">Labor</th>
+<th class="money">Total</th>
         </tr>
       </thead>
 
@@ -375,10 +375,10 @@ if (Array.isArray(estimate.items)) {
         const row = document.createElement('tr');
 
         row.innerHTML = `
-            <td>${item.description || ''}</td>
-            <td>1</td>
-            <td>${money(itemTotal)}</td>
-            <td>${money(itemTotal)}</td>
+           <td>${item.description || ''}</td>
+<td>${money(parts)}</td>
+<td>${money(labor)}</td>
+<td>${money(itemTotal)}</td>
         `;
 
         itemsBody.appendChild(row);
