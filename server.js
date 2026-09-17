@@ -672,7 +672,7 @@ sendAppointmentReminders();
 setInterval(sendAppointmentReminders, 15 * 60 * 1000);
 // ===== S&K AUTO - CREATE ESTIMATE =====
 
-app.post("/api/estimates", async (req, res) => {
+app.post("/api/estimates", (req, res) => {
   try {
     const { customer, vehicle, notes, items } = req.body;
 
@@ -690,23 +690,24 @@ app.post("/api/estimates", async (req, res) => {
 
     const token = crypto.randomBytes(24).toString("hex");
 
-    await db.exec("BEGIN TRANSACTION");
+    const createEstimate = db.transaction(() => {
 
-    try {
-      const customerResult = await db.run(
-        `INSERT INTO customers (name, phone, email)
-         VALUES (?, ?, ?)`,
+      const customerResult = db.prepare(`
+        INSERT INTO customers (name, phone, email)
+        VALUES (?, ?, ?)
+      `).run(
         customer.name.trim(),
         customer.phone.trim(),
         customer.email ? customer.email.trim() : null
       );
 
-      const customerId = customerResult.lastID;
+      const customerId = Number(customerResult.lastInsertRowid);
 
-      const vehicleResult = await db.run(
-        `INSERT INTO vehicles
-         (customer_id, year, make, model, vin, mileage)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+      const vehicleResult = db.prepare(`
+        INSERT INTO vehicles
+        (customer_id, year, make, model, vin, mileage)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
         customerId,
         vehicle?.year || null,
         vehicle?.make || null,
@@ -715,19 +716,26 @@ app.post("/api/estimates", async (req, res) => {
         vehicle?.mileage || null
       );
 
-      const vehicleId = vehicleResult.lastID;
+      const vehicleId = Number(vehicleResult.lastInsertRowid);
 
-      const estimateResult = await db.run(
-        `INSERT INTO estimates
-         (customer_id, vehicle_id, token, notes)
-         VALUES (?, ?, ?, ?)`,
+      const estimateResult = db.prepare(`
+        INSERT INTO estimates
+        (customer_id, vehicle_id, token, notes)
+        VALUES (?, ?, ?, ?)
+      `).run(
         customerId,
         vehicleId,
         token,
         notes || null
       );
 
-      const estimateId = estimateResult.lastID;
+      const estimateId = Number(estimateResult.lastInsertRowid);
+
+      const insertItem = db.prepare(`
+        INSERT INTO estimate_items
+        (estimate_id, description, parts, labor)
+        VALUES (?, ?, ?, ?)
+      `);
 
       for (const item of items) {
         if (!item.description || !item.description.trim()) {
@@ -741,10 +749,7 @@ app.post("/api/estimates", async (req, res) => {
           throw new Error("Parts and labor cannot be negative.");
         }
 
-        await db.run(
-          `INSERT INTO estimate_items
-           (estimate_id, description, parts, labor)
-           VALUES (?, ?, ?, ?)`,
+        insertItem.run(
           estimateId,
           item.description.trim(),
           parts,
@@ -752,18 +757,16 @@ app.post("/api/estimates", async (req, res) => {
         );
       }
 
-      await db.exec("COMMIT");
+      return estimateId;
+    });
 
-      res.status(201).json({
-        success: true,
-        id: estimateId,
-        token: token
-      });
+    const estimateId = createEstimate();
 
-    } catch (err) {
-      await db.exec("ROLLBACK");
-      throw err;
-    }
+    res.status(201).json({
+      success: true,
+      id: estimateId,
+      token: token
+    });
 
   } catch (err) {
     console.error("Create estimate error:", err);
