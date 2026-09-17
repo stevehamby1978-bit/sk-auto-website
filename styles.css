@@ -482,3 +482,31 @@ footer{background:#050505;color:#aaa;padding:34px 0}
     transform:none !important;
   }
 }
+.service-pricing {
+  margin-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  padding-top: 12px;
+}
+
+.service-pricing summary {
+  cursor: pointer;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #e44b2e;
+  letter-spacing: 0.5px;
+}
+
+.price-list {
+  margin-top: 14px;
+}
+
+.price-list p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.service-pricing small {
+  display: block;
+  margin-top: 12px;
+  line-height: 1.4;
+}
