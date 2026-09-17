@@ -295,7 +295,17 @@
       <h3>Notes</h3>
       <div id="notes"></div>
     </div>
+<div id="responseButtons" class="buttons">
+  <button type="button" id="approveButton" onclick="respondToEstimate('approved')">
+    Approve Estimate
+  </button>
 
+  <button type="button" id="declineButton" onclick="respondToEstimate('declined')">
+    Decline Estimate
+  </button>
+</div>
+
+<div id="responseMessage"></div>
     <div class="buttons">
       <button class="print-button" onclick="window.print()">
         Print / Save PDF
@@ -407,7 +417,61 @@ if (Array.isArray(estimate.items)) {
       document.getElementById('error').style.display = 'block';
     }
   }
+async function respondToEstimate(status) {
+  const action = status === 'approved' ? 'approve' : 'decline';
 
+  const confirmed = confirm(
+    `Are you sure you want to ${action} this estimate?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+
+    if (!token) {
+      throw new Error('Missing estimate token');
+    }
+
+    const response = await fetch(
+      '/api/estimates/' + encodeURIComponent(token) + '/respond',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: status
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Unable to update estimate.');
+    }
+
+    document.getElementById('status').textContent = status;
+
+    document.getElementById('responseButtons').style.display = 'none';
+
+    const message = document.getElementById('responseMessage');
+
+    if (status === 'approved') {
+      message.textContent = 'Thank you. This estimate has been approved.';
+    } else {
+      message.textContent = 'This estimate has been declined.';
+    }
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Unable to update estimate.');
+  }
+}
   loadEstimate();
 </script>
 
