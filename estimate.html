@@ -1,1 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S&K Auto | Estimate</title>
 
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 30px 15px;
+      background: #20252b;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #222;
+    }
+
+    .estimate {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 35px;
+      border-radius: 8px;
+      box-shadow: 0 10px 35px rgba(0,0,0,.35);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 4px solid #e44b2e;
+      padding-bottom: 20px;
+      margin-bottom: 25px;
+    }
+
+    .logo {
+      max-width: 210px;
+      max-height: 110px;
+    }
+
+    .business-info {
+      text-align: right;
+      line-height: 1.5;
+    }
+
+    .business-info h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .estimate-title {
+      color: #e44b2e;
+      font-size: 30px;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+
+    .info-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 15px;
+    }
+
+    .info-box h3 {
+      margin-top: 0;
+      color: #e44b2e;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 8px;
+    }
+
+    .info-box p {
+      margin: 7px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th {
+      background: #252a30;
+      color: white;
+      padding: 12px;
+      text-align: left;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .money {
+      text-align: right;
+    }
+
+    .totals {
+      width: 350px;
+      max-width: 100%;
+      margin-left: auto;
+      margin-top: 25px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .grand-total {
+      font-size: 22px;
+      font-weight: bold;
+      border-top: 3px solid #e44b2e;
+      margin-top: 5px;
+      padding-top: 12px;
+    }
+
+    .notes {
+      margin-top: 30px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 15px;
+    }
+
+    .notes h3 {
+      color: #e44b2e;
+      margin-top: 0;
+    }
+
+    .buttons {
+      margin-top: 30px;
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      padding: 12px 20px;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    .print-button {
+      background: #e44b2e;
+      color: white;
+    }
+
+    .back-button {
+      background: #333;
+      color: white;
+    }
+
+    #loading {
+      text-align: center;
+      padding: 50px;
+      font-size: 20px;
+    }
+
+    #error {
+      display: none;
+      color: #b00020;
+      text-align: center;
+      padding: 30px;
+      font-weight: bold;
+    }
+
+    @media (max-width: 650px) {
+      .header {
+        display: block;
+      }
+
+      .business-info {
+        text-align: left;
+        margin-top: 15px;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .estimate {
+        box-shadow: none;
+        max-width: none;
+        padding: 15px;
+      }
+
+      .buttons {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="estimate">
+
+  <div id="loading">Loading estimate...</div>
+  <div id="error">Unable to load this estimate.</div>
+
+  <div id="estimateContent" style="display:none;">
+
+    <div class="header">
+      <img
+        src="ChatGPT Image Aug 9, 2026, 02_51_46 PM.png"
+        alt="S&K Auto"
+        class="logo"
+      >
+
+      <div class="business-info">
+        <h1>S&amp;K Auto</h1>
+        <strong>The Art of Automotive Repair</strong><br>
+        3107 Homestead<br>
+        Hutchinson, KS 67502<br>
+        (620) 899-0425
+      </div>
+    </div>
+
+    <div class="estimate-title">VEHICLE REPAIR ESTIMATE</div>
+
+    <div class="info-grid">
+
+      <div class="info-box">
+        <h3>Customer</h3>
+        <p><strong>Name:</strong> <span id="customerName"></span></p>
+        <p><strong>Phone:</strong> <span id="customerPhone"></span></p>
+        <p><strong>Email:</strong> <span id="customerEmail"></span></p>
+      </div>
+
+      <div class="info-box">
+        <h3>Vehicle</h3>
+        <p><strong>Vehicle:</strong> <span id="vehicle"></span></p>
+        <p><strong>Mileage:</strong> <span id="mileage"></span></p>
+        <p><strong>VIN:</strong> <span id="vin"></span></p>
+      </div>
+
+    </div>
+
+    <div class="info-box">
+      <p><strong>Estimate #:</strong> <span id="estimateNumber"></span></p>
+      <p><strong>Status:</strong> <span id="status"></span></p>
+      <p><strong>Date:</strong> <span id="estimateDate"></span></p>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Qty/Hrs</th>
+          <th class="money">Rate</th>
+          <th class="money">Total</th>
+        </tr>
+      </thead>
+
+      <tbody id="items"></tbody>
+    </table>
+
+    <div class="totals">
+      <div class="total-row">
+        <span>Subtotal:</span>
+        <strong id="subtotal">$0.00</strong>
+      </div>
+
+      <div class="total-row">
+        <span>Tax:</span>
+        <strong id="tax">$0.00</strong>
+      </div>
+
+      <div class="total-row grand-total">
+        <span>ESTIMATE TOTAL:</span>
+        <span id="total">$0.00</span>
+      </div>
+    </div>
+
+    <div class="notes">
+      <h3>Notes</h3>
+      <div id="notes"></div>
+    </div>
+
+    <div class="buttons">
+      <button class="print-button" onclick="window.print()">
+        Print / Save PDF
+      </button>
+
+      <button class="back-button" onclick="window.close()">
+        Close
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const money = value =>
+    '$' + Number(value || 0).toFixed(2);
+
+  async function loadEstimate() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+
+      if (!token) {
+        throw new Error('Missing estimate token');
+      }
+
+      const response = await fetch('/api/estimates/' + encodeURIComponent(token));
+
+      if (!response.ok) {
+        throw new Error('Estimate not found');
+      }
+
+      const estimate = await response.json();
+
+      document.getElementById('customerName').textContent =
+        estimate.customer_name || '';
+
+      document.getElementById('customerPhone').textContent =
+        estimate.customer_phone || '';
+
+      document.getElementById('customerEmail').textContent =
+        estimate.customer_email || '';
+
+      document.getElementById('vehicle').textContent =
+        [
+          estimate.vehicle_year,
+          estimate.vehicle_make,
+          estimate.vehicle_model
+        ].filter(Boolean).join(' ');
+
+      document.getElementById('mileage').textContent =
+        estimate.vehicle_mileage || '';
+
+      document.getElementById('vin').textContent =
+        estimate.vehicle_vin || '';
+
+      document.getElementById('estimateNumber').textContent =
+        estimate.estimate_id || estimate.id || '';
+
+      document.getElementById('status').textContent =
+        estimate.status || 'Pending';
+
+      document.getElementById('estimateDate').textContent =
+        estimate.created_at
+          ? new Date(estimate.created_at).toLocaleDateString()
+          : '';
+
+      document.getElementById('subtotal').textContent =
+        money(estimate.subtotal);
+
+      document.getElementById('tax').textContent =
+        money(estimate.tax);
+
+      document.getElementById('total').textContent =
+        money(estimate.total);
+
+      document.getElementById('notes').textContent =
+        estimate.notes || 'No additional notes.';
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('estimateContent').style.display = 'block';
+
+    } catch (error) {
+      console.error(error);
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+    }
+  }
+
+  loadEstimate();
+</script>
+
+</body>
+</html>
