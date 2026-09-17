@@ -755,7 +755,55 @@ estimate.total =
   }
 });
 
-// ===== S&K AUTO - CREATE ESTIMATE =====
+// ===== S&K AUTO - RESPOND TO ESTIMATE =====
+
+app.post("/api/estimates/:token/respond", (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!["approved", "declined"].includes(status)) {
+      return res.status(400).json({
+        error: "Status must be approved or declined."
+      });
+    }
+
+    const estimate = db.prepare(`
+      SELECT id, status
+      FROM estimates
+      WHERE token = ?
+    `).get(req.params.token);
+
+    if (!estimate) {
+      return res.status(404).json({
+        error: "Estimate not found."
+      });
+    }
+
+    if (estimate.status !== "pending") {
+      return res.status(400).json({
+        error: "This estimate has already been responded to."
+      });
+    }
+
+    db.prepare(`
+      UPDATE estimates
+      SET status = ?, responded_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(status, estimate.id);
+
+    res.json({
+      success: true,
+      status: status
+    });
+
+  } catch (err) {
+    console.error("Estimate response error:", err);
+
+    res.status(500).json({
+      error: "Unable to update estimate."
+    });
+  }
+});// ===== S&K AUTO - CREATE ESTIMATE =====
 
 app.post("/api/estimates", (req, res) => {
   try {
