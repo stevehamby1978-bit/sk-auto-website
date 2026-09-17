@@ -728,6 +728,14 @@ const items = estimate
 
 if (estimate) {
   estimate.items = items;
+
+  const subtotal = items.reduce((sum, item) => {
+    return sum + Number(item.parts || 0) + Number(item.labor || 0);
+  }, 0);
+
+  estimate.subtotal = subtotal;
+  estimate.tax = 0;
+  estimate.total = subtotal;
 }
     if (!estimate) {
       return res.status(404).send('Estimate not found');
