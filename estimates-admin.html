@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S&K Auto | Estimate Creator</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+    }
+
+    .container {
+      width: min(1000px, 92%);
+      margin: 40px auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      margin-bottom: 5px;
+    }
+
+    .header span {
+      color: #e44b2e;
+      font-weight: bold;
+    }
+
+    .panel {
+      background: #1b1b1b;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 25px;
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #e44b2e;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #555;
+      background: #0d0d0d;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .field {
+      margin-bottom: 15px;
+    }
+
+    .item {
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+
+    .item-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 13px 18px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .add-button {
+      background: #333;
+      color: #fff;
+    }
+
+    .create-button {
+      background: #e44b2e;
+      color: #fff;
+      width: 100%;
+      margin-top: 15px;
+    }
+
+    .remove-button {
+      background: #661c1c;
+      color: #fff;
+      margin-top: 10px;
+    }
+
+    .total {
+      text-align: right;
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+
+    .total span {
+      color: #e44b2e;
+    }
+
+    #message {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    @media (max-width: 700px) {
+      .grid,
+      .item-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>S&amp;K Auto</h1>
+    <span>Estimate Creator</span>
+  </div>
+
+  <form id="estimateForm">
+
+    <div class="panel">
+      <h2>Customer Information</h2>
+
+      <div class="grid">
+        <div class="field">
+          <label>Customer Name</label>
+          <input type="text" id="customerName" required>
+        </div>
+
+        <div class="field">
+          <label>Phone Number</label>
+          <input type="tel" id="customerPhone" required>
+        </div>
+
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="customerEmail">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Vehicle Information</h2>
+
+      <div class="grid">
+        <div class="field">
+          <label>Year</label>
+          <input type="text" id="vehicleYear">
+        </div>
+
+        <div class="field">
+          <label>Make</label>
+          <input type="text" id="vehicleMake">
+        </div>
+
+        <div class="field">
+          <label>Model</label>
+          <input type="text" id="vehicleModel">
+        </div>
+
+        <div class="field">
+          <label>Mileage</label>
+          <input type="text" id="vehicleMileage">
+        </div>
+
+        <div class="field">
+          <label>VIN</label>
+          <input type="text" id="vehicleVin">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Estimate Items</h2>
+
+      <div id="items"></div>
+
+      <button type="button" class="add-button" onclick="addItem()">
+        + Add Repair Item
+      </button>
+
+      <div class="total">
+        Estimate Total: $<span id="total">0.00</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Notes</h2>
+
+      <textarea id="estimateNotes"
+        placeholder="Additional recommendations, warranty information, or notes for the customer..."></textarea>
+    </div>
+
+    <button type="submit" class="create-button">
+      Create Estimate
+    </button>
+
+    <div id="message"></div>
+
+  </form>
+</div>
+
+<script>
+
+function addItem() {
+  const items = document.getElementById("items");
+
+  const item = document.createElement("div");
+  item.className = "item";
+
+  item.innerHTML = `
+    <div class="item-grid">
+
+      <div>
+        <label>Repair / Service</label>
+        <input type="text" class="description"
+          placeholder="Example: Replace front brake pads and rotors" required>
+      </div>
+
+      <div>
+        <label>Parts $</label>
+        <input type="number" class="parts"
+          min="0" step="0.01" value="0">
+      </div>
+
+      <div>
+        <label>Labor $</label>
+        <input type="number" class="labor"
+          min="0" step="0.01" value="0">
+      </div>
+
+    </div>
+
+    <button type="button"
+      class="remove-button"
+      onclick="this.parentElement.remove(); calculateTotal();">
+      Remove Item
+    </button>
+  `;
+
+  items.appendChild(item);
+
+  item.querySelectorAll("input").forEach(input => {
+    input.addEventListener("input", calculateTotal);
+  });
+
+  calculateTotal();
+}
+
+function calculateTotal() {
+
+  let total = 0;
+
+  document.querySelectorAll(".item").forEach(item => {
+
+    const parts =
+      parseFloat(item.querySelector(".parts").value) || 0;
+
+    const labor =
+      parseFloat(item.querySelector(".labor").value) || 0;
+
+    total += parts + labor;
+  });
+
+  document.getElementById("total").textContent =
+    total.toFixed(2);
+}
+
+document.getElementById("estimateForm")
+  .addEventListener("submit", async function(event) {
+
+    event.preventDefault();
+
+    const items = [];
+
+    document.querySelectorAll(".item").forEach(item => {
+
+      items.push({
+        description:
+          item.querySelector(".description").value,
+
+        parts:
+          parseFloat(item.querySelector(".parts").value) || 0,
+
+        labor:
+          parseFloat(item.querySelector(".labor").value) || 0
+      });
+
+    });
+
+    if (items.length === 0) {
+      alert("Please add at least one repair item.");
+      return;
+    }
+
+    const data = {
+
+      customer: {
+        name:
+          document.getElementById("customerName").value,
+
+        phone:
+          document.getElementById("customerPhone").value,
+
+        email:
+          document.getElementById("customerEmail").value
+      },
+
+      vehicle: {
+        year:
+          document.getElementById("vehicleYear").value,
+
+        make:
+          document.getElementById("vehicleMake").value,
+
+        model:
+          document.getElementById("vehicleModel").value,
+
+        mileage:
+          document.getElementById("vehicleMileage").value,
+
+        vin:
+          document.getElementById("vehicleVin").value
+      },
+
+      notes:
+        document.getElementById("estimateNotes").value,
+
+      items: items
+    };
+
+    const message = document.getElementById("message");
+
+    try {
+
+      const response = await fetch("/api/estimates", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Unable to create estimate"
+        );
+      }
+
+      message.style.display = "block";
+      message.style.background = "#173b22";
+
+      message.innerHTML =
+        "<strong>Estimate created successfully.</strong><br>" +
+        "Estimate #" + result.id;
+
+    } catch (error) {
+
+      message.style.display = "block";
+      message.style.background = "#551c1c";
+
+      message.textContent = error.message;
+    }
+
+  });
+
+addItem();
+
+</script>
+
+</body>
+</html>
