@@ -239,6 +239,13 @@
     <div id="message"></div>
 
   </form>
+  <div class="section">
+  <h2>Saved Estimates</h2>
+  <button type="button" onclick="loadSavedEstimates()">Refresh Estimates</button>
+  <div id="savedEstimates">
+    <p>Loading saved estimates...</p>
+  </div>
+</div>
 </div>
 
 <script>
@@ -410,16 +417,45 @@ document.getElementById("estimateForm")
 addItem();
 
 </script>
-
-  <script>
 async function loadSavedEstimates() {
+  const savedEstimates = document.getElementById("savedEstimates");
+
   try {
-    const response = await fetch('/api/estimates');
+    const response = await fetch("/api/estimates");
     const estimates = await response.json();
 
-    console.log('Saved estimates:', estimates);
+    if (!response.ok) {
+      throw new Error("Unable to load saved estimates.");
+    }
+
+    if (!estimates.length) {
+      savedEstimates.innerHTML = "<p>No saved estimates yet.</p>";
+      return;
+    }
+
+    savedEstimates.innerHTML = "";
+
+    estimates.forEach(estimate => {
+      const card = document.createElement("div");
+      card.className = "saved-estimate";
+
+      card.innerHTML = `
+        <h3>${estimate.customer_name || "Customer"}</h3>
+        <p><strong>Phone:</strong> ${estimate.customer_phone || ""}</p>
+        <p><strong>Vehicle:</strong> ${estimate.vehicle_year || ""} ${estimate.vehicle_make || ""} ${estimate.vehicle_model || ""}</p>
+        <p><strong>Estimate #:</strong> ${estimate.id || ""}</p>
+        <p><strong>Status:</strong> ${estimate.status || "pending"}</p>
+        <button type="button" onclick="window.open('/api/estimates/${estimate.token}', '_blank')">
+          View Estimate
+        </button>
+      `;
+
+      savedEstimates.appendChild(card);
+    });
+
   } catch (error) {
-    console.error('Unable to load saved estimates:', error);
+    console.error("Unable to load saved estimates:", error);
+    savedEstimates.innerHTML = "<p>Unable to load saved estimates.</p>";
   }
 }
 
