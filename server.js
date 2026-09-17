@@ -942,6 +942,31 @@ twilioClient.messages.create({
 .catch(err => {
   console.error("Customer estimate SMS failed:", err);
 });
+  
+    // Text S&K Auto when a new estimate is created
+const shopMessage =
+  `S&K Auto - NEW ESTIMATE\n\n` +
+  `Customer: ${customer.name.trim()}\n` +
+  `Phone: ${customer.phone.trim()}\n` +
+  `Vehicle: ${[
+    vehicle?.year,
+    vehicle?.make,
+    vehicle?.model
+  ].filter(Boolean).join(" ")}\n` +
+  `Estimate #: ${estimateId}\n` +
+  `View: ${estimateUrl}`;
+
+twilioClient.messages.create({
+  body: shopMessage,
+  from: process.env.TWILIO_PHONE_NUMBER,
+  to: process.env.SMS_TO_NUMBER
+})
+.then(message => {
+  console.log("New estimate notification SMS sent:", message.sid);
+})
+.catch(err => {
+  console.error("New estimate notification SMS failed:", err);
+});
     res.status(201).json({
       success: true,
       id: estimateId,
