@@ -698,7 +698,39 @@ app.get("/api/estimates", (req, res) => {
     });
   }
 });
+// ----- S&K AUTO - GET ONE ESTIMATE -----
+app.get('/api/estimates/:token', (req, res) => {
+  try {
+    const estimate = db.prepare(`
+      SELECT
+        e.*,
+        c.name AS customer_name,
+        c.phone AS customer_phone,
+        c.email AS customer_email,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM estimates e
+      LEFT JOIN customers c ON e.customer_id = c.id
+      LEFT JOIN vehicles v ON e.vehicle_id = v.id
+      WHERE e.token = ?
+    `).get(req.params.token);
 
+    if (!estimate) {
+      return res.status(404).send('Estimate not found');
+    }
+
+    res.json(estimate);
+
+  } catch (err) {
+    console.error('Get estimate error:', err);
+    res.status(500).json({
+      error: 'Unable to retrieve estimate.'
+    });
+  }
+});
 
 // ===== S&K AUTO - CREATE ESTIMATE =====
 
