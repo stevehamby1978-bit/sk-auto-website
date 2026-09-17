@@ -733,9 +733,13 @@ if (estimate) {
     return sum + Number(item.parts || 0) + Number(item.labor || 0);
   }, 0);
 
-  estimate.subtotal = subtotal;
-  estimate.tax = 0;
-  estimate.total = subtotal;
+ estimate.subtotal = subtotal;
+
+const taxRate = 0.075;
+estimate.tax = Math.round(subtotal * taxRate * 100) / 100;
+
+estimate.total =
+  Math.round((subtotal + estimate.tax) * 100) / 100;
 }
     if (!estimate) {
       return res.status(404).send('Estimate not found');
