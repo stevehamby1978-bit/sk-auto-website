@@ -363,6 +363,28 @@
           ? new Date(estimate.created_at).toLocaleDateString()
           : '';
 
+     const itemsBody = document.getElementById('items');
+itemsBody.innerHTML = '';
+
+if (Array.isArray(estimate.items)) {
+    estimate.items.forEach(item => {
+        const parts = Number(item.parts) || 0;
+        const labor = Number(item.labor) || 0;
+        const itemTotal = parts + labor;
+
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+            <td>${item.description || ''}</td>
+            <td>1</td>
+            <td>${money(itemTotal)}</td>
+            <td>${money(itemTotal)}</td>
+        `;
+
+        itemsBody.appendChild(row);
+    });
+} 
+
       document.getElementById('subtotal').textContent =
         money(estimate.subtotal);
 
