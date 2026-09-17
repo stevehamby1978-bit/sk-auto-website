@@ -767,11 +767,19 @@ app.post("/api/estimates/:token/respond", (req, res) => {
       });
     }
 
-    const estimate = db.prepare(`
-      SELECT id, status
-      FROM estimates
-      WHERE token = ?
-    `).get(req.params.token);
+   const estimate = db.prepare(`
+  SELECT
+    e.id,
+    e.status,
+    c.name AS customer_name,
+    v.year AS vehicle_year,
+    v.make AS vehicle_make,
+    v.model AS vehicle_model
+  FROM estimates e
+  LEFT JOIN customers c ON e.customer_id = c.id
+  LEFT JOIN vehicles v ON e.vehicle_id = v.id
+  WHERE e.token = ?
+`).get(req.params.token);
 
     if (!estimate) {
       return res.status(404).json({
@@ -790,7 +798,28 @@ app.post("/api/estimates/:token/respond", (req, res) => {
       SET status = ?, responded_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(status, estimate.id);
+const vehicleText = [
+  estimate.vehicle_year,
+  estimate.vehicle_make,
+  estimate.vehicle_model
+].filter(Boolean).join(" ");
 
+const responseText =
+  `S&K Auto Estimate Update\n\n` +
+  `${estimate.customer_name} has ${status.toUpperCase()} Estimate #${estimate.id}\n` +
+  `Vehicle: ${vehicleText}`;
+
+twilioClient.messages.create({
+  body: responseText,
+  from: process.env.TWILIO_PHONE_NUMBER,
+  to: process.env.SMS_TO_NUMBER
+})
+.then(message => {
+  console.log("Estimate response SMS sent:", message.sid);
+})
+.catch(err => {
+  console.error("Estimate response SMS failed:", err);
+});
     res.json({
       success: true,
       status: status
