@@ -670,6 +670,36 @@ if (
 sendAppointmentReminders();
 
 setInterval(sendAppointmentReminders, 15 * 60 * 1000);
+// ===== S&K AUTO - GET ALL ESTIMATES =====
+app.get("/api/estimates", (req, res) => {
+  try {
+    const estimates = db.prepare(`
+      SELECT
+        e.*,
+        c.name AS customer_name,
+        c.phone AS customer_phone,
+        c.email AS customer_email,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM estimates e
+      LEFT JOIN customers c ON e.customer_id = c.id
+      LEFT JOIN vehicles v ON e.vehicle_id = v.id
+      ORDER BY e.id DESC
+    `).all();
+
+    res.json(estimates);
+  } catch (err) {
+    console.error("Get estimates error:", err);
+    res.status(500).json({
+      error: "Unable to retrieve estimates."
+    });
+  }
+});
+
+
 // ===== S&K AUTO - CREATE ESTIMATE =====
 
 app.post("/api/estimates", (req, res) => {
