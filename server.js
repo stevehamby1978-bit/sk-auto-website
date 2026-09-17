@@ -923,7 +923,25 @@ app.post("/api/estimates", (req, res) => {
     });
 
     const estimateId = createEstimate();
+// Text the customer their estimate link
+const estimateUrl =
+  `https://skautohutch.com/estimate.html?token=${encodeURIComponent(token)}`;
 
+const customerMessage =
+  `S&K Auto: Hi ${customer.name.trim()}, your vehicle repair estimate is ready. ` +
+  `View and approve or decline it here: ${estimateUrl}`;
+
+twilioClient.messages.create({
+  body: customerMessage,
+  from: process.env.TWILIO_PHONE_NUMBER,
+  to: customer.phone.trim()
+})
+.then(message => {
+  console.log("Customer estimate SMS sent:", message.sid);
+})
+.catch(err => {
+  console.error("Customer estimate SMS failed:", err);
+});
     res.status(201).json({
       success: true,
       id: estimateId,
