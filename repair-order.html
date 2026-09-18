@@ -499,10 +499,11 @@ document.getElementById('updateStatusBtn').addEventListener('click', async () =>
       );
     }
 
-    document.getElementById('status').textContent =
-      result.status;
-document.getElementById('status').className =
-  'status ' + result.status;
+   const statusBadge =
+  document.getElementById('status');
+
+statusBadge.textContent = status;
+statusBadge.className = 'status ' + status;
     alert('Repair order status updated.');
 
   } catch (error) {
