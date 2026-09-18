@@ -288,10 +288,16 @@ function money(value) {
 
 async function loadRepairOrder() {
 
+async function loadRepairOrder() {
+
   const params =
     new URLSearchParams(window.location.search);
 
   const id = params.get('id');
+
+  alert('Repair Order ID = ' + id);
+
+  if (!id) {
 
   if (!id) {
     document.getElementById('loading').style.display = 'none';
