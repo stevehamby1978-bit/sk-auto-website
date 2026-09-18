@@ -554,6 +554,74 @@ statusBadge.className = 'status ' + status;
 
   }
 });
+
+  document.getElementById('addItemBtn').addEventListener('click', async () => {
+
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  const description =
+    document.getElementById('newItemDescription').value.trim();
+
+  const parts =
+    Number(document.getElementById('newItemParts').value) || 0;
+
+  const labor =
+    Number(document.getElementById('newItemLabor').value) || 0;
+
+  const button =
+    document.getElementById('addItemBtn');
+
+  if (!description) {
+    alert('Please enter a repair description.');
+    return;
+  }
+
+  try {
+
+    button.disabled = true;
+    button.textContent = 'Adding...';
+
+    const response = await fetch(
+      '/api/repair-orders/' + encodeURIComponent(id) + '/items',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          description: description,
+          parts: parts,
+          labor: labor
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to add repair item'
+      );
+    }
+
+    alert('Repair item added.');
+
+    window.location.reload();
+
+  } catch (error) {
+
+    alert(error.message);
+
+  } finally {
+
+    button.disabled = false;
+    button.textContent = '+ Add Repair Item';
+
+  }
+});
 loadRepairOrder();
 
 </script>
