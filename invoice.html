@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Invoice</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 30px 15px;
+      background: #10245c;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #222;
+    }
+
+    .invoice {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 35px;
+      border-radius: 8px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 25px;
+      border-bottom: 3px solid #ef3e23;
+      padding-bottom: 20px;
+      margin-bottom: 25px;
+    }
+
+    .business h1 {
+      margin: 0;
+      font-size: 32px;
+    }
+
+    .business p {
+      margin: 4px 0;
+    }
+
+    .invoice-title {
+      text-align: right;
+    }
+
+    .invoice-title h2 {
+      margin: 0;
+      font-size: 30px;
+      color: #ef3e23;
+    }
+
+    .invoice-title p {
+      margin: 6px 0;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 25px;
+    }
+
+    .info-box h3 {
+      color: #ef3e23;
+      margin-bottom: 8px;
+    }
+
+    .info-box p {
+      margin: 4px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th {
+      background: #0b4dbb;
+      color: white;
+      text-align: left;
+      padding: 12px;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th:nth-child(n+2),
+    td:nth-child(n+2) {
+      text-align: right;
+    }
+
+    .totals {
+      width: 360px;
+      max-width: 100%;
+      margin-left: auto;
+      margin-top: 25px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+    }
+
+    .grand-total {
+      border-top: 2px solid #ef3e23;
+      margin-top: 5px;
+      padding-top: 12px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .authorization {
+      margin-top: 30px;
+      padding: 16px;
+      background: #e8f5e9;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .authorization h3 {
+      margin-top: 0;
+      color: #218838;
+    }
+
+    .authorization p {
+      margin: 5px 0;
+    }
+
+    .completion {
+      margin-top: 20px;
+      font-weight: bold;
+      color: #218838;
+      display: none;
+    }
+
+    .actions {
+      margin-top: 30px;
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      padding: 11px 18px;
+      border-radius: 5px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .print-btn {
+      background: #ef3e23;
+    }
+
+    .back-btn {
+      background: #0b4dbb;
+    }
+
+    #loading {
+      text-align: center;
+      font-weight: bold;
+    }
+
+    #error {
+      display: none;
+      color: #dc3545;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    @media(max-width: 650px) {
+
+      .header,
+      .info-grid {
+        display: block;
+      }
+
+      .invoice-title {
+        text-align: left;
+        margin-top: 20px;
+      }
+
+      .invoice {
+        padding: 20px;
+      }
+
+      table {
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 8px 5px;
+      }
+    }
+
+    @media print {
+
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .invoice {
+        max-width: none;
+        padding: 15px;
+        border-radius: 0;
+      }
+
+      .actions {
+        display: none !important;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+
+<div class="invoice">
+
+  <div id="loading">
+    Loading invoice...
+  </div>
+
+  <div id="error">
+    Unable to load invoice.
+  </div>
+
+  <div id="invoiceContent" style="display:none;">
+
+    <div class="header">
+
+      <div class="business">
+
+        <h1>S&K Auto</h1>
+
+        <p><strong>The Art of Automotive Repair</strong></p>
+
+        <p>3107 Homestead</p>
+        <p>Hutchinson, KS 67502</p>
+        <p>(620) 899-0425</p>
+
+      </div>
+
+      <div class="invoice-title">
+
+        <h2>INVOICE</h2>
+
+        <p>
+          <strong>Invoice #:</strong>
+          <span id="invoiceNumber"></span>
+        </p>
+
+        <p>
+          <strong>Repair Order #:</strong>
+          <span id="repairOrderNumber"></span>
+        </p>
+
+        <p id="completedDate"></p>
+
+      </div>
+
+    </div>
+
+
+    <div class="info-grid">
+
+      <div class="info-box">
+
+        <h3>Customer</h3>
+
+        <p id="customerName"></p>
+        <p id="customerPhone"></p>
+        <p id="customerEmail"></p>
+
+      </div>
+
+
+      <div class="info-box">
+
+        <h3>Vehicle</h3>
+
+        <p id="vehicle"></p>
+
+        <p>
+          <strong>Mileage:</strong>
+          <span id="mileage"></span>
+        </p>
+
+        <p>
+          <strong>VIN:</strong>
+          <span id="vin"></span>
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <table>
+
+      <thead>
+
+        <tr>
+          <th>Description</th>
+          <th>Parts</th>
+          <th>Labor</th>
+          <th>Total</th>
+        </tr>
+
+      </thead>
+
+      <tbody id="itemsBody"></tbody>
+
+    </table>
+
+
+    <div class="totals">
+
+      <div class="total-row">
+        <span>Subtotal:</span>
+        <strong id="subtotal">$0.00</strong>
+      </div>
+
+      <div class="total-row">
+        <span>Tax:</span>
+        <strong id="tax">$0.00</strong>
+      </div>
+
+      <div class="total-row grand-total">
+        <span>TOTAL:</span>
+        <span id="total">$0.00</span>
+      </div>
+
+    </div>
+
+
+    <div
+      id="completionInfo"
+      class="completion">
+    </div>
+
+
+    <div
+      id="authorizationInfo"
+      class="authorization">
+
+      <h3>✓ CUSTOMER AUTHORIZED</h3>
+
+      <p>
+        <strong>Authorized By:</strong>
+        <span id="authorizedBy"></span>
+      </p>
+
+      <p>
+        <strong>Method:</strong>
+        <span id="authorizationMethod"></span>
+      </p>
+
+      <p>
+        <strong>Date / Time:</strong>
+        <span id="authorizationDate"></span>
+      </p>
+
+      <p id="authorizationNotesRow">
+        <strong>Notes:</strong>
+        <span id="authorizationNotes"></span>
+      </p>
+
+    </div>
+
+
+    <div class="actions">
+
+      <button
+        class="print-btn"
+        type="button"
+        onclick="window.print()">
+        Print / Save PDF
+      </button>
+
+      <button
+        class="back-btn"
+        type="button"
+        id="backBtn">
+        Back to Repair Order
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function formatAuthorizationMethod(method) {
+
+  if (method === 'in_person') {
+    return 'In Person';
+  }
+
+  if (method === 'phone') {
+    return 'Phone';
+  }
+
+  if (method === 'text') {
+    return 'Text Message';
+  }
+
+  if (method === 'email') {
+    return 'Email';
+  }
+
+  return method || '';
+}
+
+
+async function loadInvoice() {
+
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id =
+    params.get('id');
+
+
+  if (!id) {
+
+    document.getElementById('loading').style.display =
+      'none';
+
+    document.getElementById('error').style.display =
+      'block';
+
+    return;
+  }
+
+
+  document.getElementById('backBtn').onclick = () => {
+
+    window.location.href =
+      '/repair-order.html?id=' +
+      encodeURIComponent(id);
+
+  };
+
+
+  try {
+
+    const response =
+      await fetch(
+        '/api/repair-orders/' +
+        encodeURIComponent(id)
+      );
+
+
+    if (!response.ok) {
+      throw new Error(
+        'Unable to retrieve repair order'
+      );
+    }
+
+
+    const order =
+      await response.json();
+
+
+    document.getElementById('invoiceNumber').textContent =
+      'SK-' + String(order.id).padStart(5, '0');
+
+
+    document.getElementById('repairOrderNumber').textContent =
+      order.id;
+
+
+    document.getElementById('customerName').textContent =
+      order.customer_name || '';
+
+
+    document.getElementById('customerPhone').textContent =
+      order.customer_phone || '';
+
+
+    document.getElementById('customerEmail').textContent =
+      order.customer_email || '';
+
+
+    document.getElementById('vehicle').textContent =
+      [
+        order.vehicle_year,
+        order.vehicle_make,
+        order.vehicle_model
+      ]
+      .filter(Boolean)
+      .join(' ');
+
+
+    document.getElementById('mileage').textContent =
+      order.vehicle_mileage || '';
+
+
+    document.getElementById('vin').textContent =
+      order.vehicle_vin || '';
+
+
+    const itemsBody =
+      document.getElementById('itemsBody');
+
+
+    itemsBody.innerHTML = '';
+
+
+    let subtotal = 0;
+
+
+    if (Array.isArray(order.items)) {
+
+      order.items.forEach(item => {
+
+        const parts =
+          Number(item.parts) || 0;
+
+        const labor =
+          Number(item.labor) || 0;
+
+        const itemTotal =
+          parts + labor;
+
+        subtotal += itemTotal;
+
+
+        const row =
+          document.createElement('tr');
+
+
+        row.innerHTML = `
+          <td>${item.description || ''}</td>
+          <td>${money(parts)}</td>
+          <td>${money(labor)}</td>
+          <td>${money(itemTotal)}</td>
+        `;
+
+
+        itemsBody.appendChild(row);
+
+      });
+
+    }
+
+
+    const tax =
+      Math.round(subtotal * 0.075 * 100) / 100;
+
+
+    const total =
+      Math.round((subtotal + tax) * 100) / 100;
+
+
+    document.getElementById('subtotal').textContent =
+      money(subtotal);
+
+
+    document.getElementById('tax').textContent =
+      money(tax);
+
+
+    document.getElementById('total').textContent =
+      money(total);
+
+
+    if (order.completed_at) {
+
+      const completedDate =
+        new Date(order.completed_at);
+
+
+      document.getElementById('completedDate').innerHTML =
+        '<strong>Completed:</strong> ' +
+        completedDate.toLocaleString();
+
+
+      const completionInfo =
+        document.getElementById('completionInfo');
+
+
+      completionInfo.style.display =
+        'block';
+
+
+      completionInfo.textContent =
+        '✓ Repair completed: ' +
+        completedDate.toLocaleString();
+
+    }
+
+
+    if (order.authorized_at) {
+
+      const authorizationInfo =
+        document.getElementById('authorizationInfo');
+
+
+      authorizationInfo.style.display =
+        'block';
+
+
+      document.getElementById('authorizedBy').textContent =
+        order.authorized_by || '';
+
+
+      document.getElementById('authorizationMethod').textContent =
+        formatAuthorizationMethod(
+          order.authorization_method
+        );
+
+
+      document.getElementById('authorizationDate').textContent =
+        new Date(
+          order.authorized_at
+        ).toLocaleString();
+
+
+      const notesRow =
+        document.getElementById(
+          'authorizationNotesRow'
+        );
+
+
+      if (order.authorization_notes) {
+
+        document.getElementById(
+          'authorizationNotes'
+        ).textContent =
+          order.authorization_notes;
+
+      } else {
+
+        notesRow.style.display =
+          'none';
+
+      }
+
+    }
+
+
+    document.getElementById('loading').style.display =
+      'none';
+
+
+    document.getElementById('invoiceContent').style.display =
+      'block';
+
+
+  } catch (error) {
+
+    console.error(error);
+
+
+    document.getElementById('loading').style.display =
+      'none';
+
+
+    document.getElementById('error').style.display =
+      'block';
+
+  }
+
+}
+
+
+loadInvoice();
+
+</script>
+
+</body>
+</html>
