@@ -941,11 +941,21 @@ app.patch("/api/repair-orders/:id/status", (req, res) => {
       });
     }
 
-    db.prepare(`
-      UPDATE repair_orders
-      SET status = ?
-      WHERE id = ?
-    `).run(status, req.params.id);
+    const completedAt =
+  status === "completed"
+    ? new Date().toISOString()
+    : null;
+
+db.prepare(`
+  UPDATE repair_orders
+  SET status = ?,
+      completed_at = ?
+  WHERE id = ?
+`).run(
+  status,
+  completedAt,
+  req.params.id
+);
 
     res.json({
       success: true,
