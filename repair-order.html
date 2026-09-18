@@ -198,7 +198,26 @@ button {
 
     <p>
       Status:
-      <span id="status" class="status"></span>
+     <span id="status" class="status"></span>
+
+<div style="margin-top:12px;">
+  <label for="statusSelect"><strong>Change Status:</strong></label>
+
+  <select id="statusSelect"
+    style="padding:8px 12px; margin-left:8px; border-radius:5px;">
+    <option value="waiting">Waiting</option>
+    <option value="in_progress">In Progress</option>
+    <option value="completed">Completed</option>
+    <option value="cancelled">Cancelled</option>
+  </select>
+
+  <button
+    id="updateStatusBtn"
+    type="button"
+    style="margin-left:8px; padding:9px 16px; border:none; border-radius:5px; background:#ef3e23; color:white; font-weight:bold; cursor:pointer;">
+    Update Status
+  </button>
+</div>
     </p>
 
     <div class="top-row">
