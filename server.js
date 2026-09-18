@@ -927,6 +927,66 @@ app.patch("/api/repair-orders/:id/status", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
+app.post("/api/repair-orders/:id/items", (req, res) => {
+  try {
+    const { description, parts, labor } = req.body;
+
+    if (!description || !description.trim()) {
+      return res.status(400).json({
+        error: "Repair description is required."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    const partsAmount = Number(parts) || 0;
+    const laborAmount = Number(labor) || 0;
+
+    if (partsAmount < 0 || laborAmount < 0) {
+      return res.status(400).json({
+        error: "Parts and labor cannot be negative."
+      });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO repair_order_items
+      (repair_order_id, description, parts, labor)
+      VALUES (?, ?, ?, ?)
+    `).run(
+      req.params.id,
+      description.trim(),
+      partsAmount,
+      laborAmount
+    );
+
+    res.status(201).json({
+      success: true,
+      id: Number(result.lastInsertRowid),
+      description: description.trim(),
+      parts: partsAmount,
+      labor: laborAmount
+    });
+
+  } catch (err) {
+    console.error("Add repair order item error:", err);
+
+    res.status(500).json({
+      error: "Unable to add repair item."
+    });
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
