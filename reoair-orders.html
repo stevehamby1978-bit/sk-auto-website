@@ -307,7 +307,13 @@ async function loadRepairOrders() {
                         Repair Order Total:
                         ${money(order.subtotal)}
                     </div>
-
+<div style="margin-top:15px; text-align:right;">
+  <button
+    onclick="window.location.href='/repair-order.html?id=${order.id}'"
+    style="background:#ef3e23;color:white;border:none;padding:10px 18px;border-radius:5px;font-weight:bold;cursor:pointer;">
+    Open Repair Order
+  </button>
+</div>
                 </div>
             `;
 
