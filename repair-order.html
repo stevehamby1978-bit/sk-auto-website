@@ -480,6 +480,94 @@ statusSelect.value =
 </td>
 `;
         itemsBody.appendChild(row);
+        const editButton =
+  row.querySelector('.editItemBtn');
+
+editButton.addEventListener('click', async () => {
+
+  const newDescription =
+    prompt('Repair description:', item.description || '');
+
+  if (newDescription === null) {
+    return;
+  }
+
+  if (!newDescription.trim()) {
+    alert('Repair description is required.');
+    return;
+  }
+
+  const newParts =
+    prompt('Parts amount:', parts.toFixed(2));
+
+  if (newParts === null) {
+    return;
+  }
+
+  const newLabor =
+    prompt('Labor amount:', labor.toFixed(2));
+
+  if (newLabor === null) {
+    return;
+  }
+
+  const partsAmount = Number(newParts);
+  const laborAmount = Number(newLabor);
+
+  if (
+    !Number.isFinite(partsAmount) ||
+    !Number.isFinite(laborAmount) ||
+    partsAmount < 0 ||
+    laborAmount < 0
+  ) {
+    alert('Please enter valid parts and labor amounts.');
+    return;
+  }
+
+  try {
+
+    editButton.disabled = true;
+    editButton.textContent = 'Saving...';
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(id) +
+      '/items/' +
+      encodeURIComponent(item.id),
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          description: newDescription.trim(),
+          parts: partsAmount,
+          labor: laborAmount
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to edit repair item'
+      );
+    }
+
+    alert('Repair item updated.');
+
+    window.location.reload();
+
+  } catch (error) {
+
+    alert(error.message);
+
+    editButton.disabled = false;
+    editButton.textContent = 'Edit';
+
+  }
+});
 const deleteButton =
   row.querySelector('.deleteItemBtn');
 
