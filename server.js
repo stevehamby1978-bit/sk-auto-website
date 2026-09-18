@@ -1031,6 +1031,72 @@ app.delete("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
 
   }
 });
+
+// ===== S&K AUTO - EDIT REPAIR ORDER ITEM =====
+app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
+  try {
+    const { description, parts, labor } = req.body;
+
+    if (!description || !description.trim()) {
+      return res.status(400).json({
+        error: "Repair description is required."
+      });
+    }
+
+    const item = db.prepare(`
+      SELECT id
+      FROM repair_order_items
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).get(
+      req.params.itemId,
+      req.params.repairOrderId
+    );
+
+    if (!item) {
+      return res.status(404).json({
+        error: "Repair item not found."
+      });
+    }
+
+    const partsAmount = Number(parts) || 0;
+    const laborAmount = Number(labor) || 0;
+
+    if (partsAmount < 0 || laborAmount < 0) {
+      return res.status(400).json({
+        error: "Parts and labor cannot be negative."
+      });
+    }
+
+    db.prepare(`
+      UPDATE repair_order_items
+      SET description = ?, parts = ?, labor = ?
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).run(
+      description.trim(),
+      partsAmount,
+      laborAmount,
+      req.params.itemId,
+      req.params.repairOrderId
+    );
+
+    res.json({
+      success: true,
+      id: Number(req.params.itemId),
+      description: description.trim(),
+      parts: partsAmount,
+      labor: laborAmount
+    });
+
+  } catch (err) {
+    console.error("Edit repair order item error:", err);
+
+    res.status(500).json({
+      error: "Unable to edit repair item."
+    });
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
