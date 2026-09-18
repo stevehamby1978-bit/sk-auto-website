@@ -288,8 +288,6 @@ function money(value) {
 
 async function loadRepairOrder() {
 
-async function loadRepairOrder() {
-
   const params =
     new URLSearchParams(window.location.search);
 
@@ -298,13 +296,10 @@ async function loadRepairOrder() {
   alert('Repair Order ID = ' + id);
 
   if (!id) {
-
-  if (!id) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('error').style.display = 'block';
     return;
   }
-
   try {
 const response =
   await fetch('/api/repair-orders/' + encodeURIComponent(id));
