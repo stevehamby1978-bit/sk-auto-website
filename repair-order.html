@@ -429,7 +429,12 @@ button {
         Print / Save PDF
       </button>
 
-      <button
+     <button
+  id="viewInvoiceBtn"
+  type="button"
+  style="display:none; background:#28a745; color:white; border:none; padding:11px 18px; border-radius:5px; font-weight:bold; cursor:pointer;">
+  View Invoice
+</button> <button
         class="back-btn"
         onclick="window.location.href='/repair-orders.html'">
         Back to Repair Orders
@@ -487,6 +492,9 @@ const statusSelect =
 const completedInfo =
   document.getElementById('completedInfo');
 
+const viewInvoiceBtn =
+  document.getElementById('viewInvoiceBtn');
+
 if (order.status === 'completed' && order.completed_at) {
 
   completedInfo.style.display = 'block';
@@ -495,10 +503,20 @@ if (order.status === 'completed' && order.completed_at) {
     '✓ Completed: ' +
     new Date(order.completed_at).toLocaleString();
 
+  viewInvoiceBtn.style.display = 'inline-block';
+
+  viewInvoiceBtn.onclick = () => {
+    window.location.href =
+      '/invoice.html?id=' +
+      encodeURIComponent(order.id);
+  };
+
 } else {
 
   completedInfo.style.display = 'none';
   completedInfo.textContent = '';
+
+  viewInvoiceBtn.style.display = 'none';
 
 }
 statusSelect.value =
