@@ -217,7 +217,10 @@ button {
     <p>
       Status:
      <span id="status" class="status"></span>
-
+<div
+  id="completedInfo"
+  style="display:none; margin-top:8px; font-size:14px; font-weight:bold; color:#28a745;">
+</div>
 <div style="margin-top:12px;">
   <label for="statusSelect"><strong>Change Status:</strong></label>
 
@@ -481,7 +484,23 @@ const order = await response.json();
   'status ' + (order.status || 'waiting');
 const statusSelect =
   document.getElementById('statusSelect');
+const completedInfo =
+  document.getElementById('completedInfo');
 
+if (order.status === 'completed' && order.completed_at) {
+
+  completedInfo.style.display = 'block';
+
+  completedInfo.textContent =
+    '✓ Completed: ' +
+    new Date(order.completed_at).toLocaleString();
+
+} else {
+
+  completedInfo.style.display = 'none';
+  completedInfo.textContent = '';
+
+}
 statusSelect.value =
   order.status || 'waiting';
     document.getElementById('technicianNotes').value =
