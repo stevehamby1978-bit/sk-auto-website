@@ -825,7 +825,57 @@ app.get("/api/repair-orders", (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - GET ONE REPAIR ORDER =====
+app.get("/api/repair-orders/:id", (req, res) => {
+  try {
+    const repairOrder = db.prepare(`
+      SELECT
+        r.*,
+        c.name AS customer_name,
+        c.phone AS customer_phone,
+        c.email AS customer_email,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM repair_orders r
+      LEFT JOIN customers c ON r.customer_id = c.id
+      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      WHERE r.id = ?
+    `).get(req.params.id);
 
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    repairOrder.items = db.prepare(`
+      SELECT id, description, parts, labor
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+      ORDER BY id ASC
+    `).all(repairOrder.id);
+
+    repairOrder.subtotal = repairOrder.items.reduce(
+      (sum, item) =>
+        sum +
+        (Number(item.parts) || 0) +
+        (Number(item.labor) || 0),
+      0
+    );
+
+    res.json(repairOrder);
+
+  } catch (err) {
+    console.error("Get repair order error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve repair order."
+    });
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
