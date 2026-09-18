@@ -441,7 +441,60 @@ statusSelect.value =
 
   }
 }
+document.getElementById('updateStatusBtn').addEventListener('click', async () => {
 
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  const status =
+    document.getElementById('statusSelect').value;
+
+  const button =
+    document.getElementById('updateStatusBtn');
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Updating...';
+
+    const response = await fetch(
+      '/api/repair-orders/' + encodeURIComponent(id) + '/status',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: status
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to update status'
+      );
+    }
+
+    document.getElementById('status').textContent =
+      result.status;
+
+    alert('Repair order status updated.');
+
+  } catch (error) {
+
+    alert(error.message);
+
+  } finally {
+
+    button.disabled = false;
+    button.textContent = 'Update Status';
+
+  }
+});
 loadRepairOrder();
 
 </script>
