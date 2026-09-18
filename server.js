@@ -778,6 +778,52 @@ estimate.total =
   }
 });
 
+// ===== S&K AUTO - GET ALL REPAIR ORDERS =====
+app.get("/api/repair-orders", (req, res) => {
+  try {
+    const repairOrders = db.prepare(`
+      SELECT
+        r.*,
+        c.name AS customer_name,
+        c.phone AS customer_phone,
+        c.email AS customer_email,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM repair_orders r
+      LEFT JOIN customers c ON r.customer_id = c.id
+      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      ORDER BY r.id DESC
+    `).all();
+
+    for (const repairOrder of repairOrders) {
+      repairOrder.items = db.prepare(`
+        SELECT id, description, parts, labor
+        FROM repair_order_items
+        WHERE repair_order_id = ?
+        ORDER BY id ASC
+      `).all(repairOrder.id);
+
+      repairOrder.subtotal = repairOrder.items.reduce(
+        (sum, item) =>
+          sum + (Number(item.parts) || 0) + (Number(item.labor) || 0),
+        0
+      );
+    }
+
+    res.json(repairOrders);
+
+  } catch (err) {
+    console.error("Get repair orders error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve repair orders."
+    });
+  }
+});
+
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
