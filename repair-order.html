@@ -486,8 +486,33 @@ statusSelect.value =
   order.status || 'waiting';
     document.getElementById('technicianNotes').value =
   order.technician_notes || '';
-    document.getElementById('customerName').textContent =
-      order.customer_name || '';
+  document.getElementById('authorizedBy').value =
+  order.authorized_by || '';
+
+document.getElementById('authorizationMethod').value =
+  order.authorization_method || '';
+
+document.getElementById('authorizationNotes').value =
+  order.authorization_notes || '';
+
+const authorizationSavedInfo =
+  document.getElementById('authorizationSavedInfo');
+
+if (order.authorized_at) {
+
+  const authorizedDate =
+    new Date(order.authorized_at);
+
+  authorizationSavedInfo.style.display = 'block';
+
+  authorizationSavedInfo.textContent =
+    'Authorization recorded: ' +
+    authorizedDate.toLocaleString();
+}
+  document.getElementById('customerName').textContent =
+    
+      
+    order.customer_name || '';
 
     document.getElementById('customerPhone').textContent =
       order.customer_phone || '';
@@ -919,7 +944,90 @@ document.getElementById('saveNotesBtn').addEventListener('click', async () => {
     button.textContent = 'Save Notes';
 
   }
-});  
+}); 
+
+  document.getElementById('saveAuthorizationBtn').addEventListener('click', async () => {
+
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  const authorizedBy =
+    document.getElementById('authorizedBy').value.trim();
+
+  const authorizationMethod =
+    document.getElementById('authorizationMethod').value;
+
+  const authorizationNotes =
+    document.getElementById('authorizationNotes').value;
+
+  const button =
+    document.getElementById('saveAuthorizationBtn');
+
+  if (!authorizedBy) {
+    alert('Please enter who authorized the repair.');
+    return;
+  }
+
+  if (!authorizationMethod) {
+    alert('Please select an authorization method.');
+    return;
+  }
+
+  try {
+
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(id) +
+      '/authorization',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          authorized_by: authorizedBy,
+          authorization_method: authorizationMethod,
+          authorization_notes: authorizationNotes
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to save customer authorization'
+      );
+    }
+
+    const authorizationSavedInfo =
+      document.getElementById('authorizationSavedInfo');
+
+    authorizationSavedInfo.style.display = 'block';
+
+    authorizationSavedInfo.textContent =
+      'Authorization recorded: ' +
+      new Date(result.authorized_at).toLocaleString();
+
+    alert('Customer authorization saved.');
+
+  } catch (error) {
+
+    alert(error.message);
+
+  } finally {
+
+    button.disabled = false;
+    button.textContent = 'Save Customer Authorization';
+
+  }
+
+});
 loadRepairOrder();
 
 </script>
