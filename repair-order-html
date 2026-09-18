@@ -300,18 +300,14 @@ async function loadRepairOrder() {
   }
 
   try {
+const response =
+  await fetch('/api/repair-orders/' + encodeURIComponent(id));
 
-    const response =
-      await fetch('/api/repair-orders');
+if (!response.ok) {
+  throw new Error('Unable to retrieve repair order');
+}
 
-    if (!response.ok) {
-      throw new Error('Unable to retrieve repair orders');
-    }
-
-    const orders = await response.json();
-
-    const order =
-      orders.find(item => String(item.id) === String(id));
+const order = await response.json();
 
     if (!order) {
       throw new Error('Repair order not found');
