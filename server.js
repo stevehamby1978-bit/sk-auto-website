@@ -1097,6 +1097,53 @@ app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - UPDATE TECHNICIAN NOTES =====
+app.patch("/api/repair-orders/:id/notes", (req, res) => {
+  try {
+    const { technician_notes } = req.body;
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    const notes =
+      typeof technician_notes === "string"
+        ? technician_notes.trim()
+        : "";
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET technician_notes = ?
+      WHERE id = ?
+    `).run(
+      notes,
+      req.params.id
+    );
+
+    res.json({
+      success: true,
+      technician_notes: notes
+    });
+
+  } catch (err) {
+
+    console.error("Update technician notes error:", err);
+
+    res.status(500).json({
+      error: "Unable to update technician notes."
+    });
+
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
