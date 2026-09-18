@@ -356,6 +356,8 @@ const order = await response.json();
 
     document.getElementById('status').textContent =
       order.status || 'waiting';
+    document.getElementById('status').className =
+  'status ' + (order.status || 'waiting');
 const statusSelect =
   document.getElementById('statusSelect');
 
