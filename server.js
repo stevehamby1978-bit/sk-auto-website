@@ -62,7 +62,9 @@ console.log(`Using booking database: ${dbPath}`);
 
 app.use(express.json());
 app.use(express.static(__dirname));
-
+app.get('/repair-order.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'repair-order.html'));
+});
 db.exec(`
   CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
