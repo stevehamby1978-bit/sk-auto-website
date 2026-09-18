@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>S&K Auto | Repair Order</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #111827;
+  color: #222;
+}
+
+.header {
+  background: #0b1220;
+  border-bottom: 4px solid #ef3e23;
+  padding: 20px;
+  text-align: center;
+  color: white;
+}
+
+.header img {
+  width: 180px;
+  max-width: 90%;
+}
+
+.header h1 {
+  margin: 8px 0 2px;
+}
+
+.header p {
+  margin: 0;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 30px auto;
+  padding: 20px;
+}
+
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 25px;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 20px;
+}
+
+.info-box {
+  flex: 1;
+  min-width: 250px;
+}
+
+.info-box h3 {
+  color: #ef3e23;
+  margin-top: 0;
+}
+
+.status {
+  display: inline-block;
+  background: #f5c518;
+  color: #111;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 25px;
+}
+
+th {
+  background: #0b4dbb;
+  color: white;
+  padding: 12px;
+  text-align: left;
+}
+
+td {
+  padding: 12px;
+  border-bottom: 1px solid #ddd;
+}
+
+.money {
+  text-align: right;
+}
+
+.totals {
+  margin-top: 25px;
+  margin-left: auto;
+  max-width: 350px;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+}
+
+.grand-total {
+  border-top: 2px solid #ef3e23;
+  font-size: 22px;
+  font-weight: bold;
+  margin-top: 5px;
+  padding-top: 12px;
+}
+
+.actions {
+  margin-top: 30px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 0;
+  border-radius: 5px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.print-btn {
+  background: #ef3e23;
+  color: white;
+}
+
+.back-btn {
+  background: #374151;
+  color: white;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 40px;
+  color: white;
+}
+
+@media(max-width:700px) {
+  .container {
+    margin: 10px auto;
+    padding: 10px;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  table {
+    font-size: 13px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <img src="/sk-auto-logo.jpg" alt="S&K Auto">
+  <h1>Repair Order</h1>
+  <p>The Art of Automotive Repair</p>
+</div>
+
+<div class="container">
+
+  <div id="loading" class="loading">
+    Loading repair order...
+  </div>
+
+  <div id="error" class="error" style="display:none;">
+    Unable to load repair order.
+  </div>
+
+  <div id="repairOrder" class="card" style="display:none;">
+
+    <h2>
+      Repair Order #<span id="orderNumber"></span>
+    </h2>
+
+    <p>
+      Status:
+      <span id="status" class="status"></span>
+    </p>
+
+    <div class="top-row">
+
+      <div class="info-box">
+        <h3>Customer</h3>
+
+        <div id="customerName"></div>
+        <div id="customerPhone"></div>
+        <div id="customerEmail"></div>
+      </div>
+
+      <div class="info-box">
+        <h3>Vehicle</h3>
+
+        <div id="vehicle"></div>
+        <div>
+          Mileage:
+          <span id="mileage"></span>
+        </div>
+
+        <div>
+          VIN:
+          <span id="vin"></span>
+        </div>
+      </div>
+
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Parts</th>
+          <th>Labor</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+
+      <tbody id="items"></tbody>
+    </table>
+
+    <div class="totals">
+
+      <div class="total-row">
+        <span>Subtotal:</span>
+        <strong id="subtotal">$0.00</strong>
+      </div>
+
+      <div class="total-row">
+        <span>Tax:</span>
+        <strong id="tax">$0.00</strong>
+      </div>
+
+      <div class="total-row grand-total">
+        <span>TOTAL:</span>
+        <span id="total">$0.00</span>
+      </div>
+
+    </div>
+
+    <div class="actions">
+
+      <button
+        class="print-btn"
+        onclick="window.print()">
+        Print / Save PDF
+      </button>
+
+      <button
+        class="back-btn"
+        onclick="window.location.href='/repair-orders.html'">
+        Back to Repair Orders
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+async function loadRepairOrder() {
+
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  if (!id) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch('/api/repair-orders');
+
+    if (!response.ok) {
+      throw new Error('Unable to retrieve repair orders');
+    }
+
+    const orders = await response.json();
+
+    const order =
+      orders.find(item => String(item.id) === String(id));
+
+    if (!order) {
+      throw new Error('Repair order not found');
+    }
+
+    document.getElementById('orderNumber').textContent =
+      order.id;
+
+    document.getElementById('status').textContent =
+      order.status || 'waiting';
+
+    document.getElementById('customerName').textContent =
+      order.customer_name || '';
+
+    document.getElementById('customerPhone').textContent =
+      order.customer_phone || '';
+
+    document.getElementById('customerEmail').textContent =
+      order.customer_email || '';
+
+    document.getElementById('vehicle').textContent =
+      [
+        order.vehicle_year,
+        order.vehicle_make,
+        order.vehicle_model
+      ].filter(Boolean).join(' ');
+
+    document.getElementById('mileage').textContent =
+      order.vehicle_mileage || '';
+
+    document.getElementById('vin').textContent =
+      order.vehicle_vin || '';
+
+    const itemsBody =
+      document.getElementById('items');
+
+    itemsBody.innerHTML = '';
+
+    let subtotal = 0;
+
+    if (Array.isArray(order.items)) {
+
+      order.items.forEach(item => {
+
+        const parts =
+          Number(item.parts) || 0;
+
+        const labor =
+          Number(item.labor) || 0;
+
+        const itemTotal =
+          parts + labor;
+
+        subtotal += itemTotal;
+
+        const row =
+          document.createElement('tr');
+
+        row.innerHTML = `
+          <td>${item.description || ''}</td>
+          <td>${money(parts)}</td>
+          <td>${money(labor)}</td>
+          <td>${money(itemTotal)}</td>
+        `;
+
+        itemsBody.appendChild(row);
+
+      });
+
+    }
+
+    /*
+      Same 7.5% tax calculation currently
+      used by the estimate page.
+    */
+    const tax =
+      Math.round(subtotal * 0.075 * 100) / 100;
+
+    const total =
+      Math.round((subtotal + tax) * 100) / 100;
+
+    document.getElementById('subtotal').textContent =
+      money(subtotal);
+
+    document.getElementById('tax').textContent =
+      money(tax);
+
+    document.getElementById('total').textContent =
+      money(total);
+
+    document.getElementById('loading').style.display =
+      'none';
+
+    document.getElementById('repairOrder').style.display =
+      'block';
+
+  } catch (error) {
+
+    console.error(error);
+
+    document.getElementById('loading').style.display =
+      'none';
+
+    document.getElementById('error').style.display =
+      'block';
+
+  }
+}
+
+loadRepairOrder();
+
+</script>
+
+</body>
+</html>
