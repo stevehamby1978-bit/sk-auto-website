@@ -987,6 +987,50 @@ app.post("/api/repair-orders/:id/items", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - DELETE REPAIR ORDER ITEM =====
+app.delete("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
+  try {
+
+    const item = db.prepare(`
+      SELECT id
+      FROM repair_order_items
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).get(
+      req.params.itemId,
+      req.params.repairOrderId
+    );
+
+    if (!item) {
+      return res.status(404).json({
+        error: "Repair item not found."
+      });
+    }
+
+    db.prepare(`
+      DELETE FROM repair_order_items
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).run(
+      req.params.itemId,
+      req.params.repairOrderId
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    console.error("Delete repair order item error:", err);
+
+    res.status(500).json({
+      error: "Unable to delete repair item."
+    });
+
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
