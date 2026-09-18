@@ -792,9 +792,11 @@ app.post("/api/estimates/:token/respond", (req, res) => {
 
    const estimate = db.prepare(`
   SELECT
-    e.id,
-    e.status,
-    c.name AS customer_name,
+e.id,
+e.customer_id,
+e.vehicle_id,
+e.status,
+c.name AS customer_name,
     v.year AS vehicle_year,
     v.make AS vehicle_make,
     v.model AS vehicle_model
@@ -821,6 +823,51 @@ app.post("/api/estimates/:token/respond", (req, res) => {
       SET status = ?, responded_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(status, estimate.id);
+
+   // Automatically create a repair order when estimate is approved
+if (status === "approved") {
+  const existingRepairOrder = db.prepare(`
+    SELECT id
+    FROM repair_orders
+    WHERE estimate_id = ?
+  `).get(estimate.id);
+
+  if (!existingRepairOrder) {
+    const repairOrderResult = db.prepare(`
+      INSERT INTO repair_orders
+      (estimate_id, customer_id, vehicle_id, status)
+      VALUES (?, ?, ?, 'waiting')
+    `).run(
+      estimate.id,
+      estimate.customer_id,
+      estimate.vehicle_id
+    );
+
+    const repairOrderId = Number(repairOrderResult.lastInsertRowid);
+
+    const estimateItems = db.prepare(`
+      SELECT description, parts, labor
+      FROM estimate_items
+      WHERE estimate_id = ?
+      ORDER BY id
+    `).all(estimate.id);
+
+    const insertRepairItem = db.prepare(`
+      INSERT INTO repair_order_items
+      (repair_order_id, description, parts, labor)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    for (const item of estimateItems) {
+      insertRepairItem.run(
+        repairOrderId,
+        item.description,
+        item.parts,
+        item.labor
+      );
+    }
+  }
+} 
 const vehicleText = [
   estimate.vehicle_year,
   estimate.vehicle_make,
