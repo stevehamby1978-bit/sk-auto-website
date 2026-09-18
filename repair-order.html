@@ -505,9 +505,38 @@ if (order.authorized_at) {
 
   authorizationSavedInfo.style.display = 'block';
 
-  authorizationSavedInfo.textContent =
-    'Authorization recorded: ' +
-    authorizedDate.toLocaleString();
+ authorizationSavedInfo.innerHTML = `
+  <div style="font-weight:bold; font-size:16px; margin-bottom:8px;">
+    ✓ CUSTOMER AUTHORIZED
+  </div>
+
+  <div>
+    <strong>Authorized By:</strong>
+    ${order.authorized_by || ''}
+  </div>
+
+  <div>
+    <strong>Method:</strong>
+    ${
+      order.authorization_method === 'in_person' ? 'In Person' :
+      order.authorization_method === 'phone' ? 'Phone' :
+      order.authorization_method === 'text' ? 'Text Message' :
+      order.authorization_method === 'email' ? 'Email' :
+      order.authorization_method || ''
+    }
+  </div>
+
+  <div>
+    <strong>Date / Time:</strong>
+    ${authorizedDate.toLocaleString()}
+  </div>
+
+  ${
+    order.authorization_notes
+      ? `<div><strong>Notes:</strong> ${order.authorization_notes}</div>`
+      : ''
+  }
+`;
 }
   document.getElementById('customerName').textContent =
     
@@ -1010,9 +1039,41 @@ document.getElementById('saveNotesBtn').addEventListener('click', async () => {
 
     authorizationSavedInfo.style.display = 'block';
 
-    authorizationSavedInfo.textContent =
-      'Authorization recorded: ' +
-      new Date(result.authorized_at).toLocaleString();
+   const authorizedDate =
+  new Date(result.authorized_at);
+
+authorizationSavedInfo.innerHTML = `
+  <div style="font-weight:bold; font-size:16px; margin-bottom:8px;">
+    ✓ CUSTOMER AUTHORIZED
+  </div>
+
+  <div>
+    <strong>Authorized By:</strong>
+    ${authorizedBy}
+  </div>
+
+  <div>
+    <strong>Method:</strong>
+    ${
+      authorizationMethod === 'in_person' ? 'In Person' :
+      authorizationMethod === 'phone' ? 'Phone' :
+      authorizationMethod === 'text' ? 'Text Message' :
+      authorizationMethod === 'email' ? 'Email' :
+      authorizationMethod
+    }
+  </div>
+
+  <div>
+    <strong>Date / Time:</strong>
+    ${authorizedDate.toLocaleString()}
+  </div>
+
+  ${
+    authorizationNotes.trim()
+      ? `<div><strong>Notes:</strong> ${authorizationNotes}</div>`
+      : ''
+  }
+`;
 
     alert('Customer authorization saved.');
 
