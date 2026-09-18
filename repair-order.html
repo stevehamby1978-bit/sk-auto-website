@@ -353,6 +353,71 @@ button {
   </button>
 
 </div>
+
+    <div id="customerAuthorizationSection"
+     style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
+
+  <h3 style="margin-top:0;">Customer Authorization</h3>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+
+    <div>
+      <label for="authorizedBy">
+        <strong>Authorized By:</strong>
+      </label>
+
+      <input
+        id="authorizedBy"
+        type="text"
+        placeholder="Customer name"
+        style="width:100%; box-sizing:border-box; padding:10px; margin-top:5px;">
+    </div>
+
+    <div>
+      <label for="authorizationMethod">
+        <strong>Authorization Method:</strong>
+      </label>
+
+      <select
+        id="authorizationMethod"
+        style="width:100%; box-sizing:border-box; padding:10px; margin-top:5px;">
+
+        <option value="">Select Method</option>
+        <option value="in_person">In Person</option>
+        <option value="phone">Phone</option>
+        <option value="text">Text Message</option>
+        <option value="email">Email</option>
+
+      </select>
+    </div>
+
+  </div>
+
+  <div style="margin-top:12px;">
+    <label for="authorizationNotes">
+      <strong>Authorization Notes:</strong>
+    </label>
+
+    <textarea
+      id="authorizationNotes"
+      rows="4"
+      placeholder="Example: Customer approved additional brake repair by phone."
+      style="width:100%; box-sizing:border-box; padding:10px; margin-top:5px; resize:vertical;"></textarea>
+  </div>
+
+  <button
+    id="saveAuthorizationBtn"
+    type="button"
+    style="margin-top:12px; background:#28a745; color:white; border:none; padding:10px 18px; border-radius:5px; font-weight:bold; cursor:pointer;">
+    Save Customer Authorization
+  </button>
+
+  <div
+    id="authorizationSavedInfo"
+    style="display:none; margin-top:12px; padding:10px; background:#e8f5e9; border-radius:5px;">
+  </div>
+
+</div>
     <div class="actions">
 
       <button
