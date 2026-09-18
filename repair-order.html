@@ -419,6 +419,8 @@ const statusSelect =
 
 statusSelect.value =
   order.status || 'waiting';
+    document.getElementById('technicianNotes').value =
+  order.technician_notes || '';
     document.getElementById('customerName').textContent =
       order.customer_name || '';
 
@@ -800,6 +802,59 @@ statusBadge.className = 'status ' + status;
 
   }
 });
+
+document.getElementById('saveNotesBtn').addEventListener('click', async () => {
+
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  const technicianNotes =
+    document.getElementById('technicianNotes').value;
+
+  const button =
+    document.getElementById('saveNotesBtn');
+
+  try {
+
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    const response = await fetch(
+      '/api/repair-orders/' + encodeURIComponent(id) + '/notes',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          technician_notes: technicianNotes
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to save technician notes'
+      );
+    }
+
+    alert('Technician notes saved.');
+
+  } catch (error) {
+
+    alert(error.message);
+
+  } finally {
+
+    button.disabled = false;
+    button.textContent = 'Save Notes';
+
+  }
+});  
 loadRepairOrder();
 
 </script>
