@@ -461,7 +461,23 @@ statusSelect.value =
       style="background:#dc3545;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;">
       Delete
     </button>
-  </td>
+ <td>
+  <button
+    type="button"
+    class="editItemBtn"
+    data-item-id="${item.id}"
+    style="background:#0b4dbb;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;margin-right:5px;">
+    Edit
+  </button>
+
+  <button
+    type="button"
+    class="deleteItemBtn"
+    data-item-id="${item.id}"
+    style="background:#dc3545;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;">
+    Delete
+  </button>
+</td>
 `;
         itemsBody.appendChild(row);
 const deleteButton =
