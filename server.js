@@ -876,6 +876,57 @@ app.get("/api/repair-orders/:id", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - UPDATE REPAIR ORDER STATUS =====
+app.patch("/api/repair-orders/:id/status", (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const allowedStatuses = [
+      "waiting",
+      "in_progress",
+      "completed",
+      "cancelled"
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid repair order status."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET status = ?
+      WHERE id = ?
+    `).run(status, req.params.id);
+
+    res.json({
+      success: true,
+      id: Number(req.params.id),
+      status: status
+    });
+
+  } catch (err) {
+    console.error("Update repair order status error:", err);
+
+    res.status(500).json({
+      error: "Unable to update repair order status."
+    });
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
