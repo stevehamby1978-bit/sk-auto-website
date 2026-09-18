@@ -1178,6 +1178,90 @@ app.patch("/api/repair-orders/:id/notes", (req, res) => {
 
   }
 });
+
+// ===== S&K AUTO - UPDATE CUSTOMER AUTHORIZATION =====
+app.patch("/api/repair-orders/:id/authorization", (req, res) => {
+  try {
+
+    const {
+      authorized_by,
+      authorization_method,
+      authorization_notes
+    } = req.body;
+
+    if (!authorized_by || !authorized_by.trim()) {
+      return res.status(400).json({
+        error: "Authorized by is required."
+      });
+    }
+
+    const allowedMethods = [
+      "in_person",
+      "phone",
+      "text",
+      "email"
+    ];
+
+    if (!allowedMethods.includes(authorization_method)) {
+      return res.status(400).json({
+        error: "Please select a valid authorization method."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    const authorizedAt =
+      new Date().toISOString();
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET
+        authorized_by = ?,
+        authorization_method = ?,
+        authorization_notes = ?,
+        authorized_at = ?
+      WHERE id = ?
+    `).run(
+      authorized_by.trim(),
+      authorization_method,
+      typeof authorization_notes === "string"
+        ? authorization_notes.trim()
+        : "",
+      authorizedAt,
+      req.params.id
+    );
+
+    res.json({
+      success: true,
+      authorized_by: authorized_by.trim(),
+      authorization_method,
+      authorization_notes:
+        typeof authorization_notes === "string"
+          ? authorization_notes.trim()
+          : "",
+      authorized_at: authorizedAt
+    });
+
+  } catch (err) {
+
+    console.error("Update customer authorization error:", err);
+
+    res.status(500).json({
+      error: "Unable to save customer authorization."
+    });
+
+  }
+});
 // ===== S&K AUTO - RESPOND TO ESTIMATE =====
 
 app.post("/api/estimates/:token/respond", (req, res) => {
