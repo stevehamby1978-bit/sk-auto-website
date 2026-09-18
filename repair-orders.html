@@ -283,7 +283,7 @@ async function loadRepairOrders() {
             card.innerHTML = `
                 <div class="order-header">
                     <h3>Repair Order #${order.id}</h3>
-                    <span class="status">${order.status || 'waiting'}</span>
+                  <span class="status ${order.status || 'waiting'}">${order.status || 'waiting'}</span>
                 </div>
 
                 <div class="order-body">
