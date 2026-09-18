@@ -501,7 +501,8 @@ document.getElementById('updateStatusBtn').addEventListener('click', async () =>
 
     document.getElementById('status').textContent =
       result.status;
-
+document.getElementById('status').className =
+  'status ' + result.status;
     alert('Repair order status updated.');
 
   } catch (error) {
