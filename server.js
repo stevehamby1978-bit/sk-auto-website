@@ -158,7 +158,30 @@ db.exec(`
     FOREIGN KEY (estimate_id) REFERENCES estimates(id) ON DELETE CASCADE
   );
 `);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS repair_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    estimate_id INTEGER,
+    customer_id INTEGER NOT NULL,
+    vehicle_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'waiting',
+    technician_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT,
+    FOREIGN KEY (estimate_id) REFERENCES estimates(id),
+    FOREIGN KEY (customer_id) REFERENCES customers(id),
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+  );
 
+  CREATE TABLE IF NOT EXISTS repair_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repair_order_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    parts REAL NOT NULL DEFAULT 0,
+    labor REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (repair_order_id) REFERENCES repair_orders(id) ON DELETE CASCADE
+  );
+`);
 const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
