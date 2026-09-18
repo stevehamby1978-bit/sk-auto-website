@@ -184,6 +184,40 @@ db.exec(`
     FOREIGN KEY (repair_order_id) REFERENCES repair_orders(id) ON DELETE CASCADE
   );
 `);
+// ===== S&K AUTO - REPAIR ORDER AUTHORIZATION MIGRATION =====
+
+const repairOrderColumns = db
+  .prepare(`PRAGMA table_info(repair_orders)`)
+  .all()
+  .map(column => column.name);
+
+if (!repairOrderColumns.includes("authorized_by")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN authorized_by TEXT
+  `).run();
+}
+
+if (!repairOrderColumns.includes("authorization_method")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN authorization_method TEXT
+  `).run();
+}
+
+if (!repairOrderColumns.includes("authorization_notes")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN authorization_notes TEXT
+  `).run();
+}
+
+if (!repairOrderColumns.includes("authorized_at")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN authorized_at TEXT
+  `).run();
+}
 const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
