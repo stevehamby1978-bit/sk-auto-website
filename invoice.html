@@ -747,7 +747,7 @@ const paymentBadge =
 const paymentDetails =
   document.getElementById('paymentDetails');
 
-if (order.payment_status === 'paid') {
+if (order.payment_status === 'paid' && amountPaid >= total) {
 const paymentControls =
   document.getElementById('paymentControls');
 
