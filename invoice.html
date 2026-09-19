@@ -343,7 +343,15 @@
         <span>TOTAL:</span>
         <span id="total">$0.00</span>
       </div>
+<div class="total-row">
+  <span>Amount Paid:</span>
+  <strong id="displayAmountPaid">$0.00</strong>
+</div>
 
+<div class="total-row grand-total">
+  <span>BALANCE DUE:</span>
+  <span id="balanceDue">$0.00</span>
+</div>
     </div>
 
 
@@ -649,7 +657,17 @@ async function loadInvoice() {
 
     document.getElementById('total').textContent =
       money(total);
+const amountPaid =
+  Number(order.amount_paid) || 0;
 
+const balanceDue =
+  Math.max(0, total - amountPaid);
+
+document.getElementById('displayAmountPaid').textContent =
+  money(amountPaid);
+
+document.getElementById('balanceDue').textContent =
+  money(balanceDue);
 
     if (order.completed_at) {
 
