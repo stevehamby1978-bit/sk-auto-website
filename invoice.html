@@ -708,11 +708,11 @@ paymentStatus.value =
 
 paymentMethod.value =
   order.payment_method || '';
-    const amountPaid =
-  document.getElementById('amountPaid');
+   const amountPaid =
+  document.getElementById('displayAmountPaid');
 
-amountPaid.value =
-  Number(order.amount_paid || 0).toFixed(2);
+amountPaid.textContent =
+  money(Number(order.amount_paid) || 0);
 const paymentBadge =
   document.getElementById('paymentBadge');
 
