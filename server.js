@@ -996,7 +996,89 @@ db.prepare(`
     });
   }
 });
+// ===== S&K AUTO - UPDATE PAYMENT STATUS =====
+app.patch("/api/repair-orders/:id/payment", (req, res) => {
+  try {
+    const { payment_status, payment_method } = req.body;
 
+    const allowedStatuses = [
+      "unpaid",
+      "paid"
+    ];
+
+    const allowedMethods = [
+      "cash",
+      "card",
+      "check",
+      "other"
+    ];
+
+    if (!allowedStatuses.includes(payment_status)) {
+      return res.status(400).json({
+        error: "Invalid payment status."
+      });
+    }
+
+    if (
+      payment_status === "paid" &&
+      !allowedMethods.includes(payment_method)
+    ) {
+      return res.status(400).json({
+        error: "Please select a valid payment method."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    const paidAt =
+      payment_status === "paid"
+        ? new Date().toISOString()
+        : null;
+
+    const method =
+      payment_status === "paid"
+        ? payment_method
+        : null;
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET payment_status = ?,
+          payment_method = ?,
+          paid_at = ?
+      WHERE id = ?
+    `).run(
+      payment_status,
+      method,
+      paidAt,
+      req.params.id
+    );
+
+    res.json({
+      success: true,
+      id: Number(req.params.id),
+      payment_status: payment_status,
+      payment_method: method,
+      paid_at: paidAt
+    });
+
+  } catch (err) {
+    console.error("Update payment status error:", err);
+
+    res.status(500).json({
+      error: "Unable to update payment status."
+    });
+  }
+});
 // ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
 app.post("/api/repair-orders/:id/items", (req, res) => {
   try {
