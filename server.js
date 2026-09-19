@@ -193,6 +193,19 @@ const repairOrderColumns = db
   .prepare(`PRAGMA table_info(repair_orders)`)
   .all()
   .map(column => column.name);
+// ===== S&K AUTO - PAYMENT HISTORY TABLE =====
+db.exec(`
+  CREATE TABLE IF NOT EXISTS repair_order_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repair_order_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    payment_method TEXT NOT NULL,
+    paid_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repair_order_id)
+      REFERENCES repair_orders(id)
+      ON DELETE CASCADE
+  );
+`);
 // ===== S&K AUTO - PAYMENT AMOUNT MIGRATION =====
 if (!repairOrderColumns.includes("amount_paid")) {
   db.prepare(`
