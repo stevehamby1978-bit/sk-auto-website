@@ -733,7 +733,7 @@ const paymentSavedInfo =
   document.getElementById('paymentSavedInfo');
 
 paymentStatus.value =
-  order.payment_status || 'unpaid';
+  amountPaid >= total ? 'paid' : 'unpaid';
 
 paymentMethod.value =
   order.payment_method || '';
