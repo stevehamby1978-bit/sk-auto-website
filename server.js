@@ -951,7 +951,7 @@ repairOrder.payments = db.prepare(`
   ORDER BY id ASC
 `).all(repairOrder.id);
    
-    
+  console.log("PAYMENT HISTORY:", repairOrder.payments);  
     
     res.json(repairOrder);
 
