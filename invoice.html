@@ -391,7 +391,16 @@
         <option value="other">Other</option>
       </select>
     </div>
-
+<div style="margin-top:12px;">
+  <label for="amountPaid"><strong>Amount Paid:</strong></label>
+  <input
+    id="amountPaid"
+    type="number"
+    min="0"
+    step="0.01"
+    placeholder="0.00"
+    style="width:100%; padding:9px; margin-top:5px; box-sizing:border-box;">
+</div>
   </div>
 
   <button
@@ -681,6 +690,11 @@ paymentStatus.value =
 
 paymentMethod.value =
   order.payment_method || '';
+    const amountPaid =
+  document.getElementById('amountPaid');
+
+amountPaid.value =
+  Number(order.amount_paid || 0).toFixed(2);
 const paymentBadge =
   document.getElementById('paymentBadge');
 
@@ -824,7 +838,8 @@ document.getElementById('savePaymentBtn').addEventListener('click', async () => 
 
   const paymentMethod =
     document.getElementById('paymentMethod').value;
-
+const amountPaid =
+  Number(document.getElementById('amountPaid').value) || 0;
   const button =
     document.getElementById('savePaymentBtn');
 
@@ -847,10 +862,11 @@ document.getElementById('savePaymentBtn').addEventListener('click', async () => 
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          payment_status: paymentStatus,
-          payment_method: paymentMethod
-        })
+       body: JSON.stringify({
+  payment_status: paymentStatus,
+  payment_method: paymentMethod,
+  amount_paid: amountPaid
+})
       }
     );
 
