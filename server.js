@@ -193,7 +193,13 @@ const repairOrderColumns = db
   .prepare(`PRAGMA table_info(repair_orders)`)
   .all()
   .map(column => column.name);
-
+// ===== S&K AUTO - PAYMENT AMOUNT MIGRATION =====
+if (!repairOrderColumns.includes("amount_paid")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN amount_paid REAL NOT NULL DEFAULT 0
+  `).run();
+}
 if (!repairOrderColumns.includes("authorized_by")) {
   db.prepare(`
     ALTER TABLE repair_orders
@@ -999,7 +1005,11 @@ db.prepare(`
 // ===== S&K AUTO - UPDATE PAYMENT STATUS =====
 app.patch("/api/repair-orders/:id/payment", (req, res) => {
   try {
-    const { payment_status, payment_method } = req.body;
+    const {
+  payment_status,
+  payment_method,
+  amount_paid
+} = req.body;
 
     const allowedStatuses = [
       "unpaid",
@@ -1049,27 +1059,33 @@ app.patch("/api/repair-orders/:id/payment", (req, res) => {
       payment_status === "paid"
         ? payment_method
         : null;
-
-    db.prepare(`
-      UPDATE repair_orders
-      SET payment_status = ?,
-          payment_method = ?,
-          paid_at = ?
-      WHERE id = ?
-    `).run(
-      payment_status,
-      method,
-      paidAt,
-      req.params.id
-    );
+const amountPaid =
+  payment_status === "paid"
+    ? Math.max(0, Number(amount_paid) || 0)
+    : 0;
+db.prepare(`
+  UPDATE repair_orders
+  SET payment_status = ?,
+      payment_method = ?,
+      paid_at = ?,
+      amount_paid = ?
+  WHERE id = ?
+`).run(
+  payment_status,
+  method,
+  paidAt,
+  amountPaid,
+  req.params.id
+);
 
     res.json({
-      success: true,
-      id: Number(req.params.id),
-      payment_status: payment_status,
-      payment_method: method,
-      paid_at: paidAt
-    });
+  success: true,
+  id: Number(req.params.id),
+  payment_status: payment_status,
+  payment_method: method,
+  paid_at: paidAt,
+  amount_paid: amountPaid
+});
 
   } catch (err) {
     console.error("Update payment status error:", err);
