@@ -205,23 +205,47 @@
       }
     }
 
-    @media print {
+   @media print {
 
-      body {
-        background: white;
-        padding: 0;
-      }
+  @page {
+    size: letter;
+    margin: 0.35in;
+  }
 
-      .invoice {
-        max-width: none;
-        padding: 15px;
-        border-radius: 0;
-      }
+  body {
+    background: white;
+    padding: 0;
+    margin: 0;
+    font-size: 11px;
+  }
 
-      .actions {
-        display: none !important;
-      }
-    }
+  .invoice {
+    max-width: none;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .header {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+  }
+
+  table {
+    font-size: 11px;
+  }
+
+  th,
+  td {
+    padding: 5px 4px;
+  }
+
+  .actions {
+    display: none !important;
+  }
+}
   </style>
 
 </head>
