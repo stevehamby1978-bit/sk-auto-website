@@ -764,8 +764,51 @@ const paymentBadge =
 
 const paymentDetails =
   document.getElementById('paymentDetails');
+// ===== S&K AUTO - DISPLAY PAYMENT HISTORY =====
+const paymentHistorySection =
+  document.getElementById('paymentHistorySection');
 
-if (order.payment_status === 'paid' && amountPaid >= total) {
+const paymentHistory =
+  document.getElementById('paymentHistory');
+
+if (order.payments && order.payments.length > 0) {
+
+  paymentHistorySection.style.display = 'block';
+
+  paymentHistory.innerHTML = order.payments.map(payment => {
+
+    let method = payment.payment_method || '';
+
+    if (method === 'card') {
+      method = 'Credit / Debit Card';
+    } else if (method === 'cash') {
+      method = 'Cash';
+    } else if (method === 'check') {
+      method = 'Check';
+    } else if (method === 'other') {
+      method = 'Other';
+    }
+
+    const paidDate = payment.paid_at
+      ? new Date(payment.paid_at).toLocaleString()
+      : '';
+
+    return `
+      <div style="padding:10px 0; border-bottom:1px solid #ddd;">
+        <strong>${money(Number(payment.amount) || 0)}</strong>
+        &nbsp;—&nbsp; ${method}
+        <br>
+        <span style="font-size:13px;">${paidDate}</span>
+      </div>
+    `;
+
+  }).join('');
+
+}
+
+    
+    
+    if (order.payment_status === 'paid' && amountPaid >= total) {
 const paymentControls =
   document.getElementById('paymentControls');
 
