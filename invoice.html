@@ -708,11 +708,8 @@ paymentStatus.value =
 
 paymentMethod.value =
   order.payment_method || '';
-   const amountPaid =
-  document.getElementById('displayAmountPaid');
-
-amountPaid.textContent =
-  money(Number(order.amount_paid) || 0);
+  document.getElementById('displayAmountPaid').textContent =
+  money(amountPaid);
 const paymentBadge =
   document.getElementById('paymentBadge');
 
