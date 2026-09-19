@@ -1077,10 +1077,7 @@ app.patch("/api/repair-orders/:id/payment", (req, res) => {
         ? new Date().toISOString()
         : null;
 
-    const method =
-      payment_status === "paid"
-        ? payment_method
-        : null;
+   const method = payment_method || null;
 const amountPaid =
   Math.max(0, Number(amount_paid) || 0);
 db.prepare(`
