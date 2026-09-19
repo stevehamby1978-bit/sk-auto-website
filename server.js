@@ -1089,6 +1089,20 @@ db.prepare(`
   req.params.id
 );
 
+  // ===== S&K AUTO - RECORD PAYMENT HISTORY =====
+if (Number(amount_paid) > 0 && method) {
+  db.prepare(`
+    INSERT INTO repair_order_payments
+    (repair_order_id, amount, payment_method)
+    VALUES (?, ?, ?)
+  `).run(
+    req.params.id,
+    Number(amount_paid),
+    method
+  );
+} 
+    
+    
     res.json({
   success: true,
   id: Number(req.params.id),
