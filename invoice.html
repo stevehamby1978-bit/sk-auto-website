@@ -996,10 +996,11 @@ const amountPaid =
         headers: {
           'Content-Type': 'application/json'
         },
-       body: JSON.stringify({
+      body: JSON.stringify({
   payment_status: paymentStatus,
   payment_method: paymentMethod,
-  amount_paid: amountPaid
+  amount_paid: amountPaid,
+  payment_amount: newPayment
 })
       }
     );
