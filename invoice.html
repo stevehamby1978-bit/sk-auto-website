@@ -710,6 +710,8 @@ paymentMethod.value =
   order.payment_method || '';
   document.getElementById('displayAmountPaid').textContent =
   money(amountPaid);
+    document.getElementById('amountPaid').value =
+  amountPaid.toFixed(2);
 const paymentBadge =
   document.getElementById('paymentBadge');
 
