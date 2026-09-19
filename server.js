@@ -168,6 +168,9 @@ db.exec(`
     vehicle_id INTEGER,
     status TEXT NOT NULL DEFAULT 'waiting',
     technician_notes TEXT,
+    payment_status TEXT NOT NULL DEFAULT 'unpaid',
+payment_method TEXT,
+paid_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT,
     FOREIGN KEY (estimate_id) REFERENCES estimates(id),
@@ -209,6 +212,28 @@ if (!repairOrderColumns.includes("authorization_notes")) {
   db.prepare(`
     ALTER TABLE repair_orders
     ADD COLUMN authorization_notes TEXT
+  `).run();
+}
+// ===== S&K AUTO - REPAIR ORDER PAYMENT MIGRATION =====
+
+if (!repairOrderColumns.includes("payment_status")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'
+  `).run();
+}
+
+if (!repairOrderColumns.includes("payment_method")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN payment_method TEXT
+  `).run();
+}
+
+if (!repairOrderColumns.includes("paid_at")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN paid_at TEXT
   `).run();
 }
 
