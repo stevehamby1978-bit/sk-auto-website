@@ -746,10 +746,10 @@ paymentStatus.value =
 
 paymentMethod.value =
   order.payment_method || '';
+  window.currentAmountPaid = amountPaid;  
   document.getElementById('displayAmountPaid').textContent =
   money(amountPaid);
-    document.getElementById('amountPaid').value =
-  amountPaid.toFixed(2);
+document.getElementById('amountPaid').value = '';
 const paymentBadge =
   document.getElementById('paymentBadge');
 
@@ -914,8 +914,14 @@ document.getElementById('savePaymentBtn').addEventListener('click', async () => 
 
   const paymentMethod =
     document.getElementById('paymentMethod').value;
-const amountPaid =
+const newPayment =
   Number(document.getElementById('amountPaid').value) || 0;
+
+const previousAmountPaid =
+  Number(window.currentAmountPaid) || 0;
+
+const amountPaid =
+  previousAmountPaid + newPayment;
   const button =
     document.getElementById('savePaymentBtn');
 
