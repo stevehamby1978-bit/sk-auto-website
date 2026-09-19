@@ -786,6 +786,12 @@ paymentControls.style.display = 'none';
       paidDate.toLocaleString();
   }
 
+} else if (amountPaid > 0) {
+
+  paymentBadge.textContent = 'PARTIALLY PAID';
+  paymentBadge.style.background = '#f0ad4e';
+  paymentDetails.style.display = 'none';
+
 } else {
 
   paymentBadge.textContent = 'UNPAID';
