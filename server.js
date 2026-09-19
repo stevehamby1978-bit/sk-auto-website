@@ -943,7 +943,16 @@ app.get("/api/repair-orders/:id", (req, res) => {
         (Number(item.labor) || 0),
       0
     );
-
+// ===== S&K AUTO - GET PAYMENT HISTORY =====
+repairOrder.payments = db.prepare(`
+  SELECT id, amount, payment_method, paid_at
+  FROM repair_order_payments
+  WHERE repair_order_id = ?
+  ORDER BY id ASC
+`).all(repairOrder.id);
+   
+    
+    
     res.json(repairOrder);
 
   } catch (err) {
