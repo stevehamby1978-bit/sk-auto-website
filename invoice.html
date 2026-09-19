@@ -797,8 +797,10 @@ if (order.paid_at) {
   paymentSavedInfo.style.display = 'block';
 
   paymentSavedInfo.textContent =
-    '✓ PAID - ' +
-    paidDate.toLocaleString();
+  '✓ PAYMENT RECEIVED: ' +
+  money(amountPaid) +
+  ' - ' +
+  paidDate.toLocaleString();
 }
 
     if (order.authorized_at) {
