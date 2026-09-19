@@ -1060,9 +1060,7 @@ app.patch("/api/repair-orders/:id/payment", (req, res) => {
         ? payment_method
         : null;
 const amountPaid =
-  payment_status === "paid"
-    ? Math.max(0, Number(amount_paid) || 0)
-    : 0;
+  Math.max(0, Number(amount_paid) || 0);
 db.prepare(`
   UPDATE repair_orders
   SET payment_status = ?,
