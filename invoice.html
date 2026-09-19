@@ -790,7 +790,17 @@ paymentControls.style.display = 'none';
 
   paymentBadge.textContent = 'PARTIALLY PAID';
   paymentBadge.style.background = '#f0ad4e';
-  paymentDetails.style.display = 'none';
+  paymentDetails.style.display = 'block';
+
+if (order.paid_at) {
+  const partialPaidDate = new Date(order.paid_at);
+
+  paymentDetails.innerHTML =
+    '<strong>Payment Received:</strong> ' +
+    money(amountPaid) +
+    '<br><strong>Date:</strong> ' +
+    partialPaidDate.toLocaleString();
+}
 
 } else {
 
