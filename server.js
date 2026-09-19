@@ -1011,11 +1011,11 @@ app.patch("/api/repair-orders/:id/payment", (req, res) => {
   amount_paid
 } = req.body;
 
-    const allowedStatuses = [
-      "unpaid",
-      "paid"
-    ];
-
+   const allowedStatuses = [
+  "unpaid",
+  "partial",
+  "paid"
+];
     const allowedMethods = [
       "cash",
       "card",
