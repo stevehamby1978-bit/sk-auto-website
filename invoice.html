@@ -375,7 +375,7 @@
   id="paymentDetails"
   style="display:none; margin-bottom:15px; line-height:1.6;">
 </div>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+  <div id="paymentControls" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
 
     <div>
       <label><strong>Payment Status:</strong></label>
@@ -409,7 +409,7 @@
     placeholder="0.00"
     style="width:100%; padding:9px; margin-top:5px; box-sizing:border-box;">
 </div>
-  </div>
+  
 
   <button
     id="savePaymentBtn"
@@ -719,7 +719,10 @@ const paymentDetails =
   document.getElementById('paymentDetails');
 
 if (order.payment_status === 'paid') {
+const paymentControls =
+  document.getElementById('paymentControls');
 
+paymentControls.style.display = 'none';
   paymentBadge.textContent = '✓ PAID';
   paymentBadge.style.background = '#28a745';
 
