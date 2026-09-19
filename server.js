@@ -1033,6 +1033,8 @@ app.patch("/api/repair-orders/:id/payment", (req, res) => {
   amount_paid
 } = req.body;
 
+   const paymentAmount =
+  Math.max(0, Number(req.body.payment_amount) || 0); 
    const allowedStatuses = [
   "unpaid",
   "partial",
@@ -1096,14 +1098,14 @@ db.prepare(`
 );
 
   // ===== S&K AUTO - RECORD PAYMENT HISTORY =====
-if (Number(amount_paid) > 0 && method) {
+if (paymentAmount > 0 && method) {
   db.prepare(`
     INSERT INTO repair_order_payments
     (repair_order_id, amount, payment_method)
     VALUES (?, ?, ?)
   `).run(
     req.params.id,
-    Number(amount_paid),
+    paymentAmount,
     method
   );
 } 
