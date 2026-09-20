@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Shop Dashboard</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0d0d0d;
+      color: #222;
+    }
+
+    .dashboard {
+      max-width: 1250px;
+      min-height: 100vh;
+      margin: 0 auto;
+      background: #f4f4f4;
+    }
+
+    /* ===== HEADER ===== */
+
+    .header {
+      background: #151515;
+      color: white;
+      padding: 24px 30px;
+      border-bottom: 4px solid #ef3e23;
+
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .logo {
+      width: 105px;
+      height: auto;
+      display: block;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .brand p {
+      margin: 5px 0 0;
+      color: #ccc;
+    }
+
+    .website-btn {
+      display: inline-block;
+      padding: 11px 16px;
+      background: #333;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .website-btn:hover {
+      background: #555;
+    }
+
+
+    /* ===== MAIN CONTENT ===== */
+
+    .content {
+      padding: 30px;
+    }
+
+    .welcome {
+      margin-bottom: 25px;
+    }
+
+    .welcome h2 {
+      margin: 0 0 6px;
+      font-size: 26px;
+    }
+
+    .welcome p {
+      margin: 0;
+      color: #666;
+    }
+
+
+    /* ===== QUICK STATUS ===== */
+
+    .stats {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(190px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.10);
+      border-top: 4px solid #ef3e23;
+    }
+
+    .stat-label {
+      color: #666;
+      font-size: 14px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .stat-number {
+      font-size: 30px;
+      font-weight: bold;
+      margin-top: 7px;
+    }
+
+
+    /* ===== NAVIGATION ===== */
+
+    .section-title {
+      margin: 0 0 15px;
+      font-size: 21px;
+    }
+
+    .nav-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+
+    .nav-card {
+      display: block;
+      background: white;
+      border-radius: 9px;
+      padding: 22px;
+      text-decoration: none;
+      color: #222;
+      box-shadow: 0 2px 9px rgba(0,0,0,.10);
+      border-left: 5px solid #ef3e23;
+      transition: transform .15s ease,
+                  box-shadow .15s ease;
+    }
+
+    .nav-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 14px rgba(0,0,0,.16);
+    }
+
+    .nav-icon {
+      font-size: 31px;
+      margin-bottom: 10px;
+    }
+
+    .nav-card h3 {
+      margin: 0 0 7px;
+      font-size: 20px;
+    }
+
+    .nav-card p {
+      margin: 0;
+      color: #666;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .coming-soon {
+      opacity: .65;
+      cursor: default;
+    }
+
+
+    /* ===== FOOTER ===== */
+
+    .footer {
+      text-align: center;
+      padding: 30px;
+      color: #777;
+      font-size: 13px;
+    }
+
+
+    /* ===== MOBILE ===== */
+
+    @media(max-width: 650px) {
+
+      .header {
+        padding: 20px;
+      }
+
+      .content {
+        padding: 18px;
+      }
+
+      .brand {
+        align-items: flex-start;
+      }
+
+      .logo {
+        width: 80px;
+      }
+
+      .brand h1 {
+        font-size: 24px;
+      }
+
+      .nav-grid {
+        grid-template-columns: 1fr;
+      }
+
+    }
+  </style>
+</head>
+
+
+<body>
+
+<div class="dashboard">
+
+
+  <!-- ===== HEADER ===== -->
+
+  <header class="header">
+
+    <div class="brand">
+
+      <img
+        src="sk-auto-invoice-logo.png"
+        alt="S&K Auto"
+        class="logo">
+
+      <div>
+        <h1>S&amp;K Auto</h1>
+        <p>Shop Management Dashboard</p>
+      </div>
+
+    </div>
+
+    <a href="index.html" class="website-btn">
+      View Website
+    </a>
+
+  </header>
+
+
+  <!-- ===== CONTENT ===== -->
+
+  <main class="content">
+
+    <div class="welcome">
+      <h2>Shop Dashboard</h2>
+      <p>
+        Customers, estimates, repair orders,
+        invoices and scheduling in one place.
+      </p>
+    </div>
+
+
+    <!-- ===== QUICK STATUS ===== -->
+
+    <div class="stats">
+
+      <div class="stat-card">
+        <div class="stat-label">Customers</div>
+        <div class="stat-number" id="customerCount">—</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Active Repair Orders</div>
+        <div class="stat-number" id="activeRepairCount">—</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Completed Jobs</div>
+        <div class="stat-number" id="completedCount">—</div>
+      </div>
+
+    </div>
+
+
+    <!-- ===== SHOP MANAGEMENT ===== -->
+
+    <h2 class="section-title">
+      Shop Management
+    </h2>
+
+    <div class="nav-grid">
+
+
+      <!-- CUSTOMERS -->
+
+      <a href="customers.html" class="nav-card">
+
+        <div class="nav-icon">👤</div>
+
+        <h3>Customers</h3>
+
+        <p>
+          Search customers, view vehicles,
+          service history and customer information.
+        </p>
+
+      </a>
+
+
+      <!-- ESTIMATES -->
+
+      <a href="estimates-admin.html" class="nav-card">
+
+        <div class="nav-icon">📝</div>
+
+        <h3>Estimates</h3>
+
+        <p>
+          Create estimates and manage customer
+          repair approvals.
+        </p>
+
+      </a>
+
+
+      <!-- REPAIR ORDERS -->
+
+      <a href="repair-orders.html" class="nav-card">
+
+        <div class="nav-icon">🔧</div>
+
+        <h3>Repair Orders</h3>
+
+        <p>
+          View active jobs, update repair status
+          and manage repair work.
+        </p>
+
+      </a>
+
+
+      <!-- APPOINTMENTS -->
+
+      <a href="admin.html" class="nav-card">
+
+        <div class="nav-icon">📅</div>
+
+        <h3>Appointments</h3>
+
+        <p>
+          View scheduled service appointments
+          and upcoming customers.
+        </p>
+
+      </a>
+
+
+      <!-- INVOICES -->
+
+      <div class="nav-card coming-soon">
+
+        <div class="nav-icon">💵</div>
+
+        <h3>Invoices &amp; Payments</h3>
+
+        <p>
+          View invoices, payment status,
+          balances and payment history.
+          Coming next.
+        </p>
+
+      </div>
+
+
+      <!-- SERVICE HISTORY -->
+
+      <div class="nav-card coming-soon">
+
+        <div class="nav-icon">🚗</div>
+
+        <h3>Vehicle Service History</h3>
+
+        <p>
+          Search repair history by customer,
+          vehicle or VIN. Coming next.
+        </p>
+
+      </div>
+
+
+    </div>
+
+  </main>
+
+
+  <div class="footer">
+    S&amp;K Auto • The Art of Automotive Repair
+  </div>
+
+</div>
+
+
+<script>
+
+async function loadDashboard() {
+
+  try {
+
+    /* ===== CUSTOMERS ===== */
+
+    const customerResponse =
+      await fetch('/api/customers');
+
+    if (customerResponse.ok) {
+
+      const customers =
+        await customerResponse.json();
+
+      document.getElementById(
+        'customerCount'
+      ).textContent = customers.length;
+
+    }
+
+
+    /* ===== REPAIR ORDERS ===== */
+
+    const repairResponse =
+      await fetch('/api/repair-orders');
+
+    if (repairResponse.ok) {
+
+      const repairs =
+        await repairResponse.json();
+
+      const active =
+        repairs.filter(order =>
+          order.status !== 'completed' &&
+          order.status !== 'cancelled'
+        );
+
+      const completed =
+        repairs.filter(order =>
+          order.status === 'completed'
+        );
+
+      document.getElementById(
+        'activeRepairCount'
+      ).textContent = active.length;
+
+      document.getElementById(
+        'completedCount'
+      ).textContent = completed.length;
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      'Dashboard load error:',
+      error
+    );
+
+  }
+
+}
+
+
+loadDashboard();
+
+</script>
+
+</body>
+</html>
