@@ -210,7 +210,96 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function showEditCustomer() {
 
+  const customer = window.currentCustomer;
+
+  if (!customer) return;
+
+  document.getElementById('editCustomerName').value =
+    customer.name || '';
+
+  document.getElementById('editCustomerPhone').value =
+    customer.phone || '';
+
+  document.getElementById('editCustomerEmail').value =
+    customer.email || '';
+
+  document.getElementById('editCustomerMessage').textContent = '';
+
+  document.getElementById('editCustomerForm').style.display =
+    'block';
+}
+
+
+function hideEditCustomer() {
+
+  document.getElementById('editCustomerForm').style.display =
+    'none';
+
+  document.getElementById('editCustomerMessage').textContent = '';
+}
+
+
+async function saveCustomerChanges() {
+
+  const name =
+    document.getElementById('editCustomerName').value.trim();
+
+  const phone =
+    document.getElementById('editCustomerPhone').value.trim();
+
+  const email =
+    document.getElementById('editCustomerEmail').value.trim();
+
+  const message =
+    document.getElementById('editCustomerMessage');
+
+  if (!name) {
+    message.textContent = 'Customer name is required.';
+    return;
+  }
+
+  try {
+
+    message.textContent = 'Saving changes...';
+
+    const response = await fetch(
+      '/api/customers/' + encodeURIComponent(customerId),
+      {
+        method: 'PATCH',
+
+        headers: {
+          'Content-Type': 'application/json'
+        },
+
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          email: email
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to update customer.'
+      );
+    }
+
+    await loadCustomer();
+
+  } catch (error) {
+
+    console.error(error);
+
+    message.textContent =
+      error.message || 'Unable to update customer.';
+
+  }
+}
 async function loadCustomer() {
 
   const content =
@@ -237,7 +326,7 @@ async function loadCustomer() {
     const customer =
       await response.json();
 
-
+window.currentCustomer = customer;
     const vehicles =
       customer.vehicles || [];
 
@@ -370,7 +459,58 @@ async function loadCustomer() {
         <div class="customer-name">
           ${escapeHtml(customer.name)}
         </div>
+<button
+  type="button"
+  class="view-btn"
+  onclick="showEditCustomer()">
+  Edit Customer
+</button>
+<div
+  id="editCustomerForm"
+  style="display:none; margin-top:15px; margin-bottom:15px;">
 
+  <input
+    type="text"
+    id="editCustomerName"
+    class="search"
+    placeholder="Customer name"
+    style="margin-bottom:10px; width:100%;">
+
+  <input
+    type="tel"
+    id="editCustomerPhone"
+    class="search"
+    placeholder="Phone number"
+    style="margin-bottom:10px; width:100%;">
+
+  <input
+    type="email"
+    id="editCustomerEmail"
+    class="search"
+    placeholder="Email address"
+    style="margin-bottom:10px; width:100%;">
+
+  <button
+    type="button"
+    class="view-btn"
+    onclick="saveCustomerChanges()">
+    Save Changes
+  </button>
+
+  <button
+    type="button"
+    class="back-btn"
+    onclick="hideEditCustomer()"
+    style="margin:0 0 0 8px;">
+    Cancel
+  </button>
+
+  <div
+    id="editCustomerMessage"
+    style="margin-top:10px;">
+  </div>
+
+</div>
         <div class="info">
 
           <p>
