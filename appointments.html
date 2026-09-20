@@ -438,6 +438,47 @@ async function deleteAppointment(id) {
     alert('Unable to delete appointment.');
   }
 }
+
+  async function updateAppointmentStatus(id) {
+  const statusSelect =
+    document.getElementById('status-' + id);
+
+  const status = statusSelect.value;
+
+  try {
+    const response = await fetch(
+      '/api/appointments/' +
+      encodeURIComponent(id) +
+      '/status',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: status
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || 'Unable to update appointment status.');
+      return;
+    }
+
+    await loadAppointments();
+
+  } catch (error) {
+    console.error(
+      'Update appointment status error:',
+      error
+    );
+
+    alert('Unable to update appointment status.');
+  }
+}
 loadAppointments();
 </script>
 </body>
