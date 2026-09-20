@@ -857,6 +857,51 @@ estimate.total =
     });
   }
 });
+// ===== S&K AUTO - ADD CUSTOMER =====
+app.post("/api/customers", (req, res) => {
+  try {
+
+    const {
+      name,
+      phone,
+      email
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: "Customer name is required."
+      });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO customers
+      (name, phone, email)
+      VALUES (?, ?, ?)
+    `).run(
+      name.trim(),
+      phone ? phone.trim() : "",
+      email ? email.trim() : ""
+    );
+
+    res.status(201).json({
+      success: true,
+      id: Number(result.lastInsertRowid),
+      name: name.trim(),
+      phone: phone ? phone.trim() : "",
+      email: email ? email.trim() : ""
+    });
+
+  } catch (err) {
+
+    console.error("Add customer error:", err);
+
+    res.status(500).json({
+      error: "Unable to add customer."
+    });
+
+  }
+});
+
 // ===== S&K AUTO - GET ALL CUSTOMERS =====
 app.get("/api/customers", (req, res) => {
   try {
