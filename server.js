@@ -1158,7 +1158,39 @@ app.get("/api/appointments", (req, res) => {
 
   }
 });
+// ===== S&K AUTO - DELETE APPOINTMENT =====
+app.delete("/api/appointments/:id", (req, res) => {
+  try {
+    const appointment = db.prepare(`
+      SELECT id
+      FROM bookings
+      WHERE id = ?
+    `).get(req.params.id);
 
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found."
+      });
+    }
+
+    db.prepare(`
+      DELETE FROM bookings
+      WHERE id = ?
+    `).run(req.params.id);
+
+    res.json({
+      success: true,
+      message: "Appointment deleted."
+    });
+
+  } catch (err) {
+    console.error("Delete appointment error:", err);
+
+    res.status(500).json({
+      error: "Unable to delete appointment."
+    });
+  }
+});
 // ===== S&K AUTO - GET ALL REPAIR ORDERS =====
 app.get("/api/repair-orders", (req, res) => {
   try {
