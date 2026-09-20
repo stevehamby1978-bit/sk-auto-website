@@ -276,6 +276,98 @@
     </div>
 
   </div>
+<script>
+async function loadAppointments() {
 
+  const appointmentList =
+    document.getElementById('appointmentList');
+
+  const appointmentCount =
+    document.getElementById('appointmentCount');
+
+  try {
+
+    appointmentList.innerHTML =
+      '<div class="message">Loading appointments...</div>';
+
+    const response =
+      await fetch('/api/appointments');
+
+    if (!response.ok) {
+      throw new Error('Unable to load appointments.');
+    }
+
+    const appointments =
+      await response.json();
+
+    appointmentCount.textContent =
+      appointments.length +
+      (appointments.length === 1
+        ? ' Appointment'
+        : ' Appointments');
+
+    if (appointments.length === 0) {
+
+      appointmentList.innerHTML =
+        '<div class="message">No appointments scheduled.</div>';
+
+      return;
+    }
+
+    appointmentList.innerHTML =
+      appointments.map(appointment => {
+
+        return `
+          <div class="appointment-card">
+
+            <div class="appointment-date">
+              ${appointment.date || ''}
+              &nbsp; • &nbsp;
+              ${appointment.time || ''}
+            </div>
+
+            <h3>${appointment.name || 'Customer'}</h3>
+
+            <p><strong>Phone:</strong>
+              ${appointment.phone || ''}
+            </p>
+
+            <p><strong>Email:</strong>
+              ${appointment.email || ''}
+            </p>
+
+            <p><strong>Vehicle:</strong>
+              ${appointment.vehicle || ''}
+            </p>
+
+            <p><strong>Service:</strong>
+              ${appointment.service || ''}
+            </p>
+
+            ${
+              appointment.notes
+                ? `<p><strong>Notes:</strong> ${appointment.notes}</p>`
+                : ''
+            }
+
+          </div>
+        `;
+      }).join('');
+
+  } catch (error) {
+
+    console.error(
+      'Appointment load error:',
+      error
+    );
+
+    appointmentList.innerHTML =
+      '<div class="message">Unable to load appointments.</div>';
+
+  }
+}
+
+loadAppointments();
+</script>
 </body>
 </html>
