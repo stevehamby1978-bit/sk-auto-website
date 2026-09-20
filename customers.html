@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Customers</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111;
+      color: #222;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: #f4f4f4;
+    }
+
+    .header {
+      background: #151515;
+      color: white;
+      padding: 24px 30px;
+      border-bottom: 4px solid #ef3e23;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      color: #ccc;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      margin-bottom: 25px;
+      flex-wrap: wrap;
+    }
+
+    .search {
+      flex: 1;
+      min-width: 250px;
+      padding: 13px 15px;
+      font-size: 16px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+    }
+
+    .back-btn {
+      display: inline-block;
+      padding: 12px 18px;
+      background: #333;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .back-btn:hover {
+      background: #555;
+    }
+
+    .customer-count {
+      margin-bottom: 15px;
+      font-weight: bold;
+      color: #555;
+    }
+
+    .customer-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .customer-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+      border-left: 5px solid #ef3e23;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .customer-info h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    .customer-info p {
+      margin: 4px 0;
+      color: #555;
+    }
+
+    .stats {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .view-btn {
+      display: inline-block;
+      padding: 10px 16px;
+      background: #ef3e23;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .view-btn:hover {
+      background: #c9321d;
+    }
+
+    .message {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media(max-width: 650px) {
+      .content {
+        padding: 18px;
+      }
+
+      .customer-card {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .view-btn {
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="page">
+
+    <div class="header">
+      <h1>S&amp;K Auto Customers</h1>
+      <p>Customer &amp; Vehicle Service Database</p>
+    </div>
+
+    <div class="content">
+
+      <div class="toolbar">
+
+        <input
+          type="text"
+          id="searchInput"
+          class="search"
+          placeholder="Search name, phone or email..."
+        >
+
+        <a href="repair-orders.html" class="back-btn">
+          Repair Orders
+        </a>
+
+      </div>
+
+      <div id="customerCount" class="customer-count"></div>
+
+      <div id="customerList" class="customer-list">
+        <div class="message">Loading customers...</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    let customers = [];
+
+    async function loadCustomers() {
+
+      const customerList =
+        document.getElementById('customerList');
+
+      try {
+
+        const response =
+          await fetch('/api/customers');
+
+        if (!response.ok) {
+          throw new Error('Unable to load customers.');
+        }
+
+        customers = await response.json();
+
+        displayCustomers(customers);
+
+      } catch (error) {
+
+        console.error(error);
+
+        customerList.innerHTML =
+          '<div class="message">Unable to load customers.</div>';
+
+      }
+
+    }
+
+
+    function displayCustomers(list) {
+
+      const customerList =
+        document.getElementById('customerList');
+
+      const customerCount =
+        document.getElementById('customerCount');
+
+      customerCount.textContent =
+        list.length +
+        (list.length === 1 ? ' customer' : ' customers');
+
+      if (list.length === 0) {
+
+        customerList.innerHTML =
+          '<div class="message">No customers found.</div>';
+
+        return;
+      }
+
+      customerList.innerHTML = list.map(customer => {
+
+        const name =
+          customer.name || 'Unnamed Customer';
+
+        const phone =
+          customer.phone || 'No phone';
+
+        const email =
+          customer.email || 'No email';
+
+        const vehicleCount =
+          Number(customer.vehicle_count) || 0;
+
+        const repairCount =
+          Number(customer.repair_order_count) || 0;
+
+        return `
+          <div class="customer-card">
+
+            <div class="customer-info">
+
+              <h2>${escapeHtml(name)}</h2>
+
+              <p>
+                <strong>Phone:</strong>
+                ${escapeHtml(phone)}
+              </p>
+
+              <p>
+                <strong>Email:</strong>
+                ${escapeHtml(email)}
+              </p>
+
+              <div class="stats">
+                ${vehicleCount}
+                ${vehicleCount === 1 ? 'Vehicle' : 'Vehicles'}
+                &nbsp; • &nbsp;
+                ${repairCount}
+                ${repairCount === 1 ? 'Repair Order' : 'Repair Orders'}
+              </div>
+
+            </div>
+
+            <a
+              class="view-btn"
+              href="customer.html?id=${encodeURIComponent(customer.id)}"
+            >
+              View Customer
+            </a>
+
+          </div>
+        `;
+
+      }).join('');
+
+    }
+
+
+    document
+      .getElementById('searchInput')
+      .addEventListener('input', function() {
+
+        const search =
+          this.value.toLowerCase().trim();
+
+        const filtered =
+          customers.filter(customer => {
+
+            const name =
+              String(customer.name || '').toLowerCase();
+
+            const phone =
+              String(customer.phone || '').toLowerCase();
+
+            const email =
+              String(customer.email || '').toLowerCase();
+
+            return (
+              name.includes(search) ||
+              phone.includes(search) ||
+              email.includes(search)
+            );
+
+          });
+
+        displayCustomers(filtered);
+
+      });
+
+
+    function escapeHtml(value) {
+
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+
+    }
+
+
+    loadCustomers();
+
+  </script>
+
+</body>
+</html>
