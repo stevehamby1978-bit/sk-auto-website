@@ -891,6 +891,114 @@ app.get("/api/customers", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - GET ONE CUSTOMER =====
+app.get("/api/customers/:id", (req, res) => {
+  try {
+
+    const customer = db.prepare(`
+      SELECT
+        id,
+        name,
+        phone,
+        email
+      FROM customers
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!customer) {
+      return res.status(404).json({
+        error: "Customer not found."
+      });
+    }
+
+    // Get all vehicles belonging to this customer
+    customer.vehicles = db.prepare(`
+      SELECT
+        id,
+        year,
+        make,
+        model,
+        vin,
+        mileage
+      FROM vehicles
+      WHERE customer_id = ?
+      ORDER BY year DESC, make ASC, model ASC
+    `).all(customer.id);
+
+
+    // Get complete repair history
+    customer.repair_orders = db.prepare(`
+      SELECT
+        r.id,
+        r.vehicle_id,
+        r.status,
+        r.payment_status,
+        r.payment_method,
+        r.amount_paid,
+        r.created_at,
+        r.completed_at,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM repair_orders r
+      LEFT JOIN vehicles v
+        ON r.vehicle_id = v.id
+      WHERE r.customer_id = ?
+      ORDER BY r.id DESC
+    `).all(customer.id);
+
+
+    // Add repair items and totals to each repair order
+    for (const repairOrder of customer.repair_orders) {
+
+      repairOrder.items = db.prepare(`
+        SELECT
+          id,
+          description,
+          parts,
+          labor
+        FROM repair_order_items
+        WHERE repair_order_id = ?
+        ORDER BY id ASC
+      `).all(repairOrder.id);
+
+      repairOrder.subtotal =
+        repairOrder.items.reduce(
+          (sum, item) =>
+            sum +
+            (Number(item.parts) || 0) +
+            (Number(item.labor) || 0),
+          0
+        );
+
+      repairOrder.tax =
+        Math.round(
+          repairOrder.subtotal * 0.075 * 100
+        ) / 100;
+
+      repairOrder.total =
+        Math.round(
+          (repairOrder.subtotal + repairOrder.tax) * 100
+        ) / 100;
+
+    }
+
+
+    res.json(customer);
+
+  } catch (err) {
+
+    console.error("Get customer error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve customer."
+    });
+
+  }
+});
 // ===== S&K AUTO - GET ALL REPAIR ORDERS =====
 app.get("/api/repair-orders", (req, res) => {
   try {
