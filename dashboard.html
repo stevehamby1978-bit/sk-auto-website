@@ -296,6 +296,12 @@
      <div class="stat-card">
   <div class="stat-label">Today's Appointments</div>
   <div class="stat-number" id="todayAppointmentCount">—</div>
+       <div class="appointment-status-summary">
+  <span>Scheduled: <strong id="scheduledCount">0</strong></span>
+  <span>Checked In: <strong id="checkedInCount">0</strong></span>
+  <span>In Progress: <strong id="inProgressCount">0</strong></span>
+  <span>Completed: <strong id="appointmentCompletedCount">0</strong></span>
+</div>
 </div> 
     </div>
 
@@ -517,7 +523,36 @@ if (appointmentResponse.ok) {
   document.getElementById(
     'todayAppointmentCount'
   ).textContent = appointmentData.count;
+const scheduled = appointmentData.appointments.filter(
+  appointment => appointment.status === 'scheduled'
+).length;
 
+const checkedIn = appointmentData.appointments.filter(
+  appointment => appointment.status === 'checked_in'
+).length;
+
+const inProgress = appointmentData.appointments.filter(
+  appointment => appointment.status === 'in_progress'
+).length;
+
+const completedAppointments = appointmentData.appointments.filter(
+  appointment => appointment.status === 'completed'
+).length;
+document.getElementById(
+  'scheduledCount'
+).textContent = scheduled;
+
+document.getElementById(
+  'checkedInCount'
+).textContent = checkedIn;
+
+document.getElementById(
+  'inProgressCount'
+).textContent = inProgress;
+
+document.getElementById(
+  'appointmentCompletedCount'
+).textContent = completedAppointments;
 }
 
   } catch (error) {
