@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Appointments</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111827;
+      color: #222;
+    }
+
+    .header {
+      background: #1f2933;
+      border-bottom: 4px solid #ef3e23;
+      padding: 18px 25px;
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      color: white;
+    }
+
+    .brand img {
+      width: 75px;
+      height: auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 25px;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: #ccc;
+      font-size: 14px;
+    }
+
+    .dashboard-btn {
+      display: inline-block;
+      background: #ef3e23;
+      color: white;
+      text-decoration: none;
+      padding: 11px 16px;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: auto;
+      background: #f5f5f5;
+      min-height: calc(100vh - 115px);
+      padding: 30px;
+    }
+
+    .page-title {
+      margin-bottom: 25px;
+    }
+
+    .page-title h2 {
+      margin: 0 0 6px;
+      font-size: 28px;
+    }
+
+    .page-title p {
+      margin: 0;
+      color: #666;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search {
+      width: 100%;
+      max-width: 430px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
+    }
+
+    .refresh-btn {
+      border: 0;
+      background: #333;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .appointment-count {
+      margin-bottom: 15px;
+      color: #555;
+      font-weight: bold;
+    }
+
+    .appointment-list {
+      display: grid;
+      gap: 15px;
+    }
+
+    .appointment-card {
+      background: white;
+      border-left: 5px solid #ef3e23;
+      border-radius: 7px;
+      padding: 18px;
+      box-shadow: 0 2px 7px rgba(0,0,0,.08);
+    }
+
+    .appointment-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+
+    .appointment-date {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .appointment-time {
+      font-size: 18px;
+      font-weight: bold;
+      color: #ef3e23;
+    }
+
+    .appointment-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 25px;
+    }
+
+    .field {
+      line-height: 1.5;
+    }
+
+    .field strong {
+      color: #555;
+    }
+
+    .notes {
+      margin-top: 15px;
+      padding-top: 12px;
+      border-top: 1px solid #ddd;
+    }
+
+    .message {
+      text-align: center;
+      padding: 35px;
+      background: white;
+      border-radius: 7px;
+      color: #666;
+    }
+
+    .footer {
+      text-align: center;
+      color: #777;
+      padding: 30px 0 10px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 700px) {
+      .header-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .page {
+        padding: 20px 15px;
+      }
+
+      .appointment-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <div class="header-inner">
+
+      <div class="brand">
+        <img src="sk-auto-logo.jpg" alt="S&K Auto">
+
+        <div>
+          <h1>S&amp;K Auto</h1>
+          <p>Appointment Management</p>
+        </div>
+      </div>
+
+      <a href="dashboard.html" class="dashboard-btn">
+        ← Dashboard
+      </a>
+
+    </div>
+  </div>
+
+
+  <div class="page">
+
+    <div class="page-title">
+      <h2>Appointments</h2>
+      <p>View and manage scheduled service appointments.</p>
+    </div>
+
+
+    <div class="toolbar">
+
+      <input
+        type="text"
+        id="searchInput"
+        class="search"
+        placeholder="Search customer, phone, vehicle or service...">
+
+      <button
+        type="button"
+        class="refresh-btn"
+        onclick="loadAppointments()">
+        Refresh Appointments
+      </button>
+
+    </div>
+
+
+    <div
+      id="appointmentCount"
+      class="appointment-count">
+    </div>
+
+
+    <div
+      id="appointmentList"
+      class="appointment-list">
+
+      <div class="message">
+        Loading appointments...
+      </div>
+
+    </div>
+
+
+    <div class="footer">
+      S&amp;K Auto • The Art of Automotive Repair
+    </div>
+
+  </div>
+
+</body>
+</html>
