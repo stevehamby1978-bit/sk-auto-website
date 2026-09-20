@@ -360,6 +360,76 @@
 
   </div>
 <script>
+async function loadManualAvailability() {
+
+  const date =
+    document.getElementById('newDate').value;
+
+  const timeSelect =
+    document.getElementById('newTime');
+
+  timeSelect.innerHTML =
+    '<option value="">Checking available times...</option>';
+
+  if (!date) {
+    timeSelect.innerHTML =
+      '<option value="">Select Appointment Time</option>';
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      `/api/availability?date=${encodeURIComponent(date)}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Unable to load availability.');
+    }
+
+    const data = await response.json();
+
+    timeSelect.innerHTML = '';
+
+    if (!data.available || data.available.length === 0) {
+
+      timeSelect.innerHTML =
+        '<option value="">No times available</option>';
+
+      return;
+    }
+
+    const firstOption =
+      document.createElement('option');
+
+    firstOption.value = '';
+    firstOption.textContent = 'Select Appointment Time';
+
+    timeSelect.appendChild(firstOption);
+
+    data.available.forEach(time => {
+
+      const option =
+        document.createElement('option');
+
+      option.value = time;
+      option.textContent = time;
+
+      timeSelect.appendChild(option);
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Availability error:',
+      error
+    );
+
+    timeSelect.innerHTML =
+      '<option value="">Unable to load times</option>';
+  }
+}
+  
   function openNewAppointmentForm() {
   const form = document.getElementById('newAppointmentForm');
 
