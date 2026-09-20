@@ -336,8 +336,7 @@ async function loadAppointments() {
       appointments.map(appointment => {
 
         return `
-          <div class="appointment-card">
-
+          <div class="appointment-card status-${appointment.status || 'scheduled'}">
             <div class="appointment-date">
               ${appointment.date || ''}
               &nbsp; • &nbsp;
