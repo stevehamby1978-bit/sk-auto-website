@@ -1105,6 +1105,37 @@ app.get("/api/customers/:id", (req, res) => {
 
   }
 });
+
+// ===== S&K AUTO - TODAY'S APPOINTMENTS =====
+app.get("/api/dashboard/todays-appointments", (req, res) => {
+  try {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Chicago",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
+
+    const appointments = db.prepare(`
+      SELECT *
+      FROM bookings
+      WHERE date = ?
+      ORDER BY time ASC
+    `).all(today);
+
+    res.json({
+      count: appointments.length,
+      appointments: appointments
+    });
+
+  } catch (err) {
+    console.error("Today's appointments error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve today's appointments."
+    });
+  }
+});
 // ===== S&K AUTO - GET ALL REPAIR ORDERS =====
 app.get("/api/repair-orders", (req, res) => {
   try {
