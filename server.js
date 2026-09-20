@@ -1214,6 +1214,128 @@ app.delete("/api/appointments/:id", (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - UPDATE APPOINTMENT =====
+app.patch("/api/appointments/:id", (req, res) => {
+  try {
+    const id = req.params.id;
+
+    const {
+      date,
+      time,
+      name,
+      phone,
+      email,
+      vehicle,
+      service,
+      notes
+    } = req.body;
+
+    if (
+      !date ||
+      !time ||
+      !name ||
+      !phone ||
+      !vehicle ||
+      !service
+    ) {
+      return res.status(400).json({
+        error: "Please complete all required appointment fields."
+      });
+    }
+
+    if (!SHOP_SLOTS.includes(time)) {
+      return res.status(400).json({
+        error: "Invalid appointment time."
+      });
+    }
+
+    if (!isValidDateString(date) || !isWeekday(date)) {
+      return res.status(400).json({
+        error: "Please choose a Monday-Friday date."
+      });
+    }
+
+    if (isBlockedDate(date)) {
+      return res.status(400).json({
+        error: "S&K Auto is closed on this date."
+      });
+    }
+
+    const blockedTime = db.prepare(`
+      SELECT 1
+      FROM blocked_times
+      WHERE date = ? AND time = ?
+    `).get(date, time);
+
+    if (blockedTime) {
+      return res.status(400).json({
+        error: "That appointment time is unavailable."
+      });
+    }
+
+    const existingBooking = db.prepare(`
+      SELECT id
+      FROM bookings
+      WHERE date = ?
+        AND time = ?
+        AND id != ?
+    `).get(date, time, id);
+
+    if (existingBooking) {
+      return res.status(409).json({
+        error: "That appointment time is already booked."
+      });
+    }
+
+    const appointment = db.prepare(`
+      SELECT id
+      FROM bookings
+      WHERE id = ?
+    `).get(id);
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE bookings
+      SET date = ?,
+          time = ?,
+          name = ?,
+          phone = ?,
+          email = ?,
+          vehicle = ?,
+          service = ?,
+          notes = ?
+      WHERE id = ?
+    `).run(
+      date,
+      time,
+      name.trim(),
+      phone.trim(),
+      (email || "").trim(),
+      vehicle.trim(),
+      service.trim(),
+      (notes || "").trim(),
+      id
+    );
+
+    res.json({
+      success: true,
+      message: "Appointment updated successfully."
+    });
+
+  } catch (err) {
+    console.error("Update appointment error:", err);
+
+    res.status(500).json({
+      error: "Unable to update appointment."
+    });
+  }
+});
+
 // ===== S&K AUTO - UPDATE APPOINTMENT STATUS =====
 app.patch("/api/appointments/:id/status", (req, res) => {
   try {
