@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Invoices & Payments</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111;
+      color: #222;
+    }
+
+    .page {
+      max-width: 1250px;
+      min-height: 100vh;
+      margin: 0 auto;
+      background: #f4f4f4;
+    }
+
+    .header {
+      background: #151515;
+      color: white;
+      padding: 24px 30px;
+      border-bottom: 4px solid #ef3e23;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .header p {
+      margin: 5px 0 0;
+      color: #ccc;
+    }
+
+    .dashboard-btn {
+      display: inline-block;
+      background: #333;
+      color: white;
+      text-decoration: none;
+      padding: 11px 17px;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .stat {
+      background: white;
+      padding: 18px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.10);
+      border-top: 4px solid #ef3e23;
+    }
+
+    .stat-label {
+      color: #666;
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      margin-top: 7px;
+      font-size: 27px;
+      font-weight: bold;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search {
+      flex: 1;
+      min-width: 250px;
+      padding: 12px 14px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+
+    .filter {
+      padding: 12px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      background: white;
+      font-size: 15px;
+    }
+
+    .invoice-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .invoice-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.10);
+      border-left: 5px solid #ef3e23;
+
+      display: grid;
+      grid-template-columns:
+        minmax(220px, 1.5fr)
+        minmax(150px, 1fr)
+        minmax(160px, 1fr)
+        auto;
+
+      gap: 20px;
+      align-items: center;
+    }
+
+    .invoice-card h3 {
+      margin: 0 0 7px;
+    }
+
+    .invoice-card p {
+      margin: 4px 0;
+      color: #555;
+    }
+
+    .money-line {
+      margin: 4px 0;
+    }
+
+    .balance {
+      font-weight: bold;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 20px;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .paid {
+      background: #28a745;
+    }
+
+    .partial {
+      background: #e0a800;
+    }
+
+    .unpaid {
+      background: #dc3545;
+    }
+
+    .view-btn {
+      display: inline-block;
+      padding: 10px 15px;
+      background: #ef3e23;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .message {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media(max-width: 800px) {
+
+      .content {
+        padding: 18px;
+      }
+
+      .invoice-card {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .view-btn {
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+
+
+<body>
+
+<div class="page">
+
+  <header class="header">
+
+    <div>
+      <h1>S&amp;K Auto — Invoices &amp; Payments</h1>
+      <p>Invoice balances and payment status</p>
+    </div>
+
+    <a href="dashboard.html" class="dashboard-btn">
+      ← Dashboard
+    </a>
+
+  </header>
+
+
+  <main class="content">
+
+
+    <!-- SUMMARY -->
+
+    <div class="stats">
+
+      <div class="stat">
+        <div class="stat-label">Total Invoices</div>
+        <div class="stat-value" id="totalInvoices">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Paid</div>
+        <div class="stat-value" id="paidCount">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Partial</div>
+        <div class="stat-value" id="partialCount">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Unpaid</div>
+        <div class="stat-value" id="unpaidCount">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Outstanding Balance</div>
+        <div class="stat-value" id="outstandingBalance">$0.00</div>
+      </div>
+
+    </div>
+
+
+    <!-- SEARCH -->
+
+    <div class="toolbar">
+
+      <input
+        type="text"
+        id="searchInput"
+        class="search"
+        placeholder="Search customer, vehicle, VIN or invoice..."
+      >
+
+      <select id="statusFilter" class="filter">
+        <option value="all">All Payments</option>
+        <option value="unpaid">Unpaid</option>
+        <option value="partial">Partial</option>
+        <option value="paid">Paid</option>
+      </select>
+
+    </div>
+
+
+    <!-- INVOICES -->
+
+    <div id="invoiceList" class="invoice-list">
+      <div class="message">Loading invoices...</div>
+    </div>
+
+  </main>
+
+</div>
+
+
+<script>
+
+let invoices = [];
+
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+function calculateInvoice(order) {
+
+  const items = order.items || [];
+
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum +
+      (Number(item.parts) || 0) +
+      (Number(item.labor) || 0),
+    0
+  );
+
+  const tax =
+    Math.round(subtotal * 0.075 * 100) / 100;
+
+  const total =
+    Math.round((subtotal + tax) * 100) / 100;
+
+  const amountPaid =
+    Number(order.amount_paid) || 0;
+
+  const balance =
+    Math.max(
+      0,
+      Math.round((total - amountPaid) * 100) / 100
+    );
+
+  return {
+    subtotal,
+    tax,
+    total,
+    amountPaid,
+    balance
+  };
+}
+
+
+function getPaymentStatus(order, totals) {
+
+  if (
+    order.payment_status === 'paid' ||
+    (totals.total > 0 &&
+     totals.amountPaid >= totals.total)
+  ) {
+    return 'paid';
+  }
+
+  if (
+    order.payment_status === 'partial' ||
+    totals.amountPaid > 0
+  ) {
+    return 'partial';
+  }
+
+  return 'unpaid';
+}
+
+
+async function loadInvoices() {
+
+  const invoiceList =
+    document.getElementById('invoiceList');
+
+  try {
+
+    const response =
+      await fetch('/api/repair-orders');
+
+    if (!response.ok) {
+      throw new Error('Unable to load invoices.');
+    }
+
+    invoices = await response.json();
+
+    updateSummary();
+    filterInvoices();
+
+  } catch (error) {
+
+    console.error(error);
+
+    invoiceList.innerHTML =
+      '<div class="message">Unable to load invoices.</div>';
+
+  }
+}
+
+
+function updateSummary() {
+
+  let paid = 0;
+  let partial = 0;
+  let unpaid = 0;
+  let outstanding = 0;
+
+  invoices.forEach(order => {
+
+    const totals =
+      calculateInvoice(order);
+
+    const status =
+      getPaymentStatus(order, totals);
+
+    if (status === 'paid') {
+      paid++;
+    }
+
+    if (status === 'partial') {
+      partial++;
+    }
+
+    if (status === 'unpaid') {
+      unpaid++;
+    }
+
+    outstanding += totals.balance;
+
+  });
+
+
+  document.getElementById('totalInvoices').textContent =
+    invoices.length;
+
+  document.getElementById('paidCount').textContent =
+    paid;
+
+  document.getElementById('partialCount').textContent =
+    partial;
+
+  document.getElementById('unpaidCount').textContent =
+    unpaid;
+
+  document.getElementById('outstandingBalance').textContent =
+    money(outstanding);
+
+}
+
+
+function filterInvoices() {
+
+  const search =
+    document
+      .getElementById('searchInput')
+      .value
+      .toLowerCase()
+      .trim();
+
+  const filter =
+    document
+      .getElementById('statusFilter')
+      .value;
+
+
+  const filtered = invoices.filter(order => {
+
+    const totals =
+      calculateInvoice(order);
+
+    const status =
+      getPaymentStatus(order, totals);
+
+    if (
+      filter !== 'all' &&
+      status !== filter
+    ) {
+      return false;
+    }
+
+
+    const invoiceNumber =
+      'SK-' +
+      String(order.id).padStart(5, '0');
+
+    const searchable = [
+      invoiceNumber,
+      order.id,
+      order.customer_name,
+      order.customer_phone,
+      order.customer_email,
+      order.vehicle_year,
+      order.vehicle_make,
+      order.vehicle_model,
+      order.vehicle_vin
+    ]
+      .join(' ')
+      .toLowerCase();
+
+
+    return searchable.includes(search);
+
+  });
+
+
+  displayInvoices(filtered);
+
+}
+
+
+function displayInvoices(list) {
+
+  const invoiceList =
+    document.getElementById('invoiceList');
+
+
+  if (list.length === 0) {
+
+    invoiceList.innerHTML =
+      '<div class="message">No invoices found.</div>';
+
+    return;
+  }
+
+
+  invoiceList.innerHTML =
+    list.map(order => {
+
+      const totals =
+        calculateInvoice(order);
+
+      const status =
+        getPaymentStatus(order, totals);
+
+      const invoiceNumber =
+        'SK-' +
+        String(order.id).padStart(5, '0');
+
+
+      return `
+        <div class="invoice-card">
+
+          <div>
+
+            <h3>
+              ${escapeHtml(invoiceNumber)}
+            </h3>
+
+            <p>
+              <strong>
+                ${escapeHtml(
+                  order.customer_name || 'Customer'
+                )}
+              </strong>
+            </p>
+
+            <p>
+              Repair Order #${escapeHtml(order.id)}
+            </p>
+
+          </div>
+
+
+          <div>
+
+            <strong>
+              ${escapeHtml(order.vehicle_year || '')}
+              ${escapeHtml(order.vehicle_make || '')}
+              ${escapeHtml(order.vehicle_model || '')}
+            </strong>
+
+            <p>
+              VIN:
+              ${escapeHtml(
+                order.vehicle_vin || 'Not entered'
+              )}
+            </p>
+
+          </div>
+
+
+          <div>
+
+            <div class="money-line">
+              Total:
+              <strong>${money(totals.total)}</strong>
+            </div>
+
+            <div class="money-line">
+              Paid:
+              ${money(totals.amountPaid)}
+            </div>
+
+            <div class="money-line balance">
+              Balance:
+              ${money(totals.balance)}
+            </div>
+
+            <div style="margin-top:8px;">
+              <span class="badge ${status}">
+                ${status}
+              </span>
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <a
+              href="invoice.html?id=${encodeURIComponent(order.id)}"
+              class="view-btn">
+              View Invoice
+            </a>
+
+          </div>
+
+        </div>
+      `;
+
+    }).join('');
+
+}
+
+
+document
+  .getElementById('searchInput')
+  .addEventListener(
+    'input',
+    filterInvoices
+  );
+
+
+document
+  .getElementById('statusFilter')
+  .addEventListener(
+    'change',
+    filterInvoices
+  );
+
+
+loadInvoices();
+
+</script>
+
+</body>
+</html>
