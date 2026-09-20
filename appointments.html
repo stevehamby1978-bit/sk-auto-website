@@ -661,6 +661,12 @@ async function loadAppointments() {
 
   </select>
 </div> 
+<button
+  type="button"
+  class="refresh-btn"
+  onclick="editAppointment(${appointment.id})">
+  Edit Appointment
+</button>
   <button
   class="delete-btn"
   onclick="deleteAppointment(${appointment.id})">
