@@ -345,6 +345,99 @@
 
   </div>
 <script>
+  function openNewAppointmentForm() {
+  const form = document.getElementById('newAppointmentForm');
+
+  form.style.display = 'block';
+
+  document.getElementById('newDate').value =
+    new Date().toLocaleDateString('en-CA');
+
+  form.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+}
+
+
+function closeNewAppointmentForm() {
+  document.getElementById('newAppointmentForm').style.display = 'none';
+}
+
+
+async function saveNewAppointment() {
+
+  const booking = {
+    service: document.getElementById('newService').value.trim(),
+    vehicle: document.getElementById('newVehicle').value.trim(),
+    date: document.getElementById('newDate').value,
+    time: document.getElementById('newTime').value,
+    name: document.getElementById('newName').value.trim(),
+    phone: document.getElementById('newPhone').value.trim(),
+    email: document.getElementById('newEmail').value.trim(),
+    notes: document.getElementById('newNotes').value.trim()
+  };
+
+  if (
+    !booking.service ||
+    !booking.vehicle ||
+    !booking.date ||
+    !booking.time ||
+    !booking.name ||
+    !booking.phone
+  ) {
+    alert(
+      'Please complete the service, vehicle, date, time, name, and phone fields.'
+    );
+    return;
+  }
+
+  const formData = new FormData();
+
+  Object.entries(booking).forEach(([key, value]) => {
+    formData.append(key, value);
+  });
+
+  try {
+
+    const response = await fetch('/api/book', {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(
+        data.error ||
+        data.message ||
+        'Unable to create appointment.'
+      );
+      return;
+    }
+
+    alert('Appointment created successfully.');
+
+    document.getElementById('newDate').value = '';
+    document.getElementById('newTime').value = '';
+    document.getElementById('newName').value = '';
+    document.getElementById('newPhone').value = '';
+    document.getElementById('newEmail').value = '';
+    document.getElementById('newVehicle').value = '';
+    document.getElementById('newService').value = '';
+    document.getElementById('newNotes').value = '';
+
+    closeNewAppointmentForm();
+
+    await loadAppointments();
+
+  } catch (error) {
+
+    console.error('Create appointment error:', error);
+
+    alert('Unable to create appointment.');
+  }
+}
 async function loadAppointments() {
 
   const appointmentList =
