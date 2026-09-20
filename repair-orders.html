@@ -208,11 +208,18 @@ td {
 
 <div class="container">
 
-    <div class="topbar">
-        <h2>Active Repair Orders</h2>
-        <button onclick="loadRepairOrders()">Refresh Orders</button>
-    </div>
+   
+<div class="topbar">
+  <h2>Active Repair Orders</h2>
 
+  <div>
+    <a href="customers.html">
+      <button type="button">Customers</button>
+    </a>
+
+    <button onclick="loadRepairOrders()">Refresh Orders</button>
+  </div>
+</div>
     <div id="repairOrders">
         <div class="empty">Loading repair orders...</div>
     </div>
