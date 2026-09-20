@@ -504,6 +504,22 @@ document.getElementById(
 
     }
 
+    /* ===== TODAY'S APPOINTMENTS ===== */
+
+const appointmentResponse =
+  await fetch('/api/dashboard/todays-appointments');
+
+if (appointmentResponse.ok) {
+
+  const appointmentData =
+    await appointmentResponse.json();
+
+  document.getElementById(
+    'todayAppointmentCount'
+  ).textContent = appointmentData.count;
+
+}
+
   } catch (error) {
 
     console.error(
