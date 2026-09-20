@@ -1136,6 +1136,29 @@ app.get("/api/dashboard/todays-appointments", (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - GET ALL APPOINTMENTS =====
+app.get("/api/appointments", (req, res) => {
+  try {
+
+    const appointments = db.prepare(`
+      SELECT *
+      FROM bookings
+      ORDER BY date ASC, time ASC
+    `).all();
+
+    res.json(appointments);
+
+  } catch (err) {
+
+    console.error("Get appointments error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve appointments."
+    });
+
+  }
+});
+
 // ===== S&K AUTO - GET ALL REPAIR ORDERS =====
 app.get("/api/repair-orders", (req, res) => {
   try {
