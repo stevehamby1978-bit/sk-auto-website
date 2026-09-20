@@ -280,8 +280,10 @@
 
     <div id="newAppointmentForm" style="display:none; margin:20px 0; padding:20px; background:#fff; border-radius:8px;">
 
-  <h3>New Appointment</h3>
-
+  <h3 id="appointmentFormTitle">New Appointment</h3>
+      
+<input type="hidden" id="editingAppointmentId" value="">
+      
   <input
   type="date"
   id="newDate"
@@ -321,13 +323,13 @@
 
   <br><br>
 
-  <button
-    type="button"
-    class="refresh-btn"
-    onclick="saveNewAppointment()">
-    Save Appointment
-  </button>
-
+ <button
+  type="button"
+  id="appointmentSaveButton"
+  class="refresh-btn"
+  onclick="saveAppointmentForm()">
+  Save Appointment
+</button>
   <button
     type="button"
     onclick="closeNewAppointmentForm()">
@@ -448,8 +450,104 @@ async function loadManualAvailability() {
 function closeNewAppointmentForm() {
   document.getElementById('newAppointmentForm').style.display = 'none';
 }
+function editAppointment(id) {
+  const appointment = window.currentAppointments.find(
+    appointment => appointment.id === id
+  );
 
+  if (!appointment) {
+    alert('Unable to find appointment.');
+    return;
+  }
 
+  editingAppointmentId = id;
+
+  document.getElementById('newDate').value = appointment.date || '';
+  document.getElementById('newTime').value = appointment.time || '';
+  document.getElementById('newName').value = appointment.name || '';
+  document.getElementById('newPhone').value = appointment.phone || '';
+  document.getElementById('newEmail').value = appointment.email || '';
+  document.getElementById('newVehicle').value = appointment.vehicle || '';
+  document.getElementById('newService').value = appointment.service || '';
+  document.getElementById('newNotes').value = appointment.notes || '';
+
+  document.getElementById('newAppointmentForm').style.display = 'block';
+
+  document.getElementById('appointmentSaveButton').textContent =
+    'Update Appointment';
+
+  document.getElementById('newAppointmentForm').scrollIntoView({
+    behavior: 'smooth'
+  });
+}
+async function updateExistingAppointment() {
+  const booking = {
+    service: document.getElementById('newService').value.trim(),
+    vehicle: document.getElementById('newVehicle').value.trim(),
+    date: document.getElementById('newDate').value,
+    time: document.getElementById('newTime').value,
+    name: document.getElementById('newName').value.trim(),
+    phone: document.getElementById('newPhone').value.trim(),
+    email: document.getElementById('newEmail').value.trim(),
+    notes: document.getElementById('newNotes').value.trim()
+  };
+
+  if (
+    !booking.service ||
+    !booking.vehicle ||
+    !booking.date ||
+    !booking.time ||
+    !booking.name ||
+    !booking.phone
+  ) {
+    alert('Please complete the service, vehicle, date, time, name, and phone fields.');
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      '/api/appointments/' + encodeURIComponent(editingAppointmentId),
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(booking)
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || 'Unable to update appointment.');
+      return;
+    }
+
+    alert('Appointment updated successfully.');
+
+    editingAppointmentId = null;
+
+    document.getElementById('appointmentSaveButton').textContent =
+      'Save Appointment';
+
+    closeNewAppointmentForm();
+
+    await loadAppointments();
+
+  } catch (error) {
+    console.error('Update appointment error:', error);
+    alert('Unable to update appointment.');
+  }
+}  
+let editingAppointmentId = null;
+
+async function saveAppointmentForm() {
+  if (editingAppointmentId) {
+    await updateExistingAppointment();
+  } else {
+    await saveNewAppointment();
+  }
+}
 async function saveNewAppointment() {
 
   const booking = {
