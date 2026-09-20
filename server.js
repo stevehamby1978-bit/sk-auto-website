@@ -1130,11 +1130,27 @@ app.get("/api/dashboard/todays-appointments", (req, res) => {
       ORDER BY time ASC
     `).all(today);
 
-    res.json({
-      count: appointments.length,
-      appointments: appointments
-    });
+   const statusCounts = {
+  scheduled: 0,
+  checked_in: 0,
+  in_progress: 0,
+  completed: 0,
+  cancelled: 0
+};
 
+for (const appointment of appointments) {
+  const status = appointment.status || "scheduled";
+
+  if (Object.prototype.hasOwnProperty.call(statusCounts, status)) {
+    statusCounts[status]++;
+  }
+}
+
+res.json({
+  count: appointments.length,
+  appointments: appointments,
+  statusCounts: statusCounts
+});
   } catch (err) {
     console.error("Today's appointments error:", err);
 
