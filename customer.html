@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Customer Profile</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111;
+      color: #222;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: #f4f4f4;
+    }
+
+    .header {
+      background: #151515;
+      color: white;
+      padding: 24px 30px;
+      border-bottom: 4px solid #ef3e23;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      color: #ccc;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .back-btn {
+      display: inline-block;
+      margin-bottom: 20px;
+      padding: 11px 17px;
+      background: #333;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 22px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.10);
+    }
+
+    .card h2 {
+      margin-top: 0;
+      border-bottom: 2px solid #ef3e23;
+      padding-bottom: 10px;
+    }
+
+    .customer-name {
+      font-size: 26px;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+
+    .info p {
+      margin: 7px 0;
+    }
+
+    .vehicle {
+      border: 1px solid #ddd;
+      border-left: 5px solid #ef3e23;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 12px;
+    }
+
+    .vehicle h3 {
+      margin: 0 0 8px;
+    }
+
+    .vehicle p {
+      margin: 5px 0;
+    }
+
+    .repair {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 15px;
+    }
+
+    .repair-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .repair h3 {
+      margin: 0 0 8px;
+    }
+
+    .status {
+      font-weight: bold;
+      text-transform: capitalize;
+    }
+
+    .items {
+      margin-top: 15px;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+
+    .item {
+      padding: 7px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .total {
+      margin-top: 12px;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .view-btn {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 9px 14px;
+      background: #ef3e23;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+
+    .message {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media(max-width:650px) {
+      .content {
+        padding: 18px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="page">
+
+  <div class="header">
+    <h1>S&amp;K Auto</h1>
+    <p>Customer &amp; Vehicle Service History</p>
+  </div>
+
+  <div class="content">
+
+    <a href="customers.html" class="back-btn">
+      ← Back to Customers
+    </a>
+
+    <div id="customerContent">
+      <div class="message">Loading customer...</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+
+const params =
+  new URLSearchParams(window.location.search);
+
+const customerId =
+  params.get('id');
+
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+async function loadCustomer() {
+
+  const content =
+    document.getElementById('customerContent');
+
+  if (!customerId) {
+    content.innerHTML =
+      '<div class="message">Customer ID is missing.</div>';
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        '/api/customers/' +
+        encodeURIComponent(customerId)
+      );
+
+    if (!response.ok) {
+      throw new Error('Unable to load customer.');
+    }
+
+    const customer =
+      await response.json();
+
+
+    const vehicles =
+      customer.vehicles || [];
+
+    const repairs =
+      customer.repair_orders || [];
+
+
+    let vehicleHtml = '';
+
+    if (vehicles.length === 0) {
+
+      vehicleHtml =
+        '<p>No vehicles saved for this customer.</p>';
+
+    } else {
+
+      vehicleHtml = vehicles.map(vehicle => `
+        <div class="vehicle">
+
+          <h3>
+            ${escapeHtml(vehicle.year)}
+            ${escapeHtml(vehicle.make)}
+            ${escapeHtml(vehicle.model)}
+          </h3>
+
+          <p>
+            <strong>VIN:</strong>
+            ${escapeHtml(vehicle.vin || 'Not entered')}
+          </p>
+
+          <p>
+            <strong>Mileage:</strong>
+            ${escapeHtml(vehicle.mileage || 'Not entered')}
+          </p>
+
+        </div>
+      `).join('');
+
+    }
+
+
+    let repairHtml = '';
+
+    if (repairs.length === 0) {
+
+      repairHtml =
+        '<p>No repair history for this customer.</p>';
+
+    } else {
+
+      repairHtml = repairs.map(repair => {
+
+        const items =
+          repair.items || [];
+
+        const itemHtml =
+          items.length
+          ? items.map(item => `
+              <div class="item">
+
+                <strong>
+                  ${escapeHtml(item.description)}
+                </strong>
+
+                <br>
+
+                Parts: ${money(item.parts)}
+                &nbsp; | &nbsp;
+                Labor: ${money(item.labor)}
+
+              </div>
+            `).join('')
+          : '<p>No repair items.</p>';
+
+
+        return `
+          <div class="repair">
+
+            <div class="repair-top">
+
+              <div>
+
+                <h3>
+                  Repair Order #${escapeHtml(repair.id)}
+                </h3>
+
+                <div>
+                  ${escapeHtml(repair.vehicle_year || '')}
+                  ${escapeHtml(repair.vehicle_make || '')}
+                  ${escapeHtml(repair.vehicle_model || '')}
+                </div>
+
+              </div>
+
+              <div class="status">
+                ${escapeHtml(
+                  String(repair.status || '')
+                    .replaceAll('_', ' ')
+                )}
+              </div>
+
+            </div>
+
+            <div class="items">
+              ${itemHtml}
+            </div>
+
+            <div class="total">
+              Total: ${money(repair.total)}
+            </div>
+
+            <a
+              href="repair-order.html?id=${encodeURIComponent(repair.id)}"
+              class="view-btn">
+              View Repair Order
+            </a>
+
+          </div>
+        `;
+
+      }).join('');
+
+    }
+
+
+    content.innerHTML = `
+
+      <div class="card">
+
+        <div class="customer-name">
+          ${escapeHtml(customer.name)}
+        </div>
+
+        <div class="info">
+
+          <p>
+            <strong>Phone:</strong>
+            ${escapeHtml(customer.phone || 'Not entered')}
+          </p>
+
+          <p>
+            <strong>Email:</strong>
+            ${escapeHtml(customer.email || 'Not entered')}
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="card">
+
+        <h2>Vehicles</h2>
+
+        ${vehicleHtml}
+
+      </div>
+
+
+      <div class="card">
+
+        <h2>Service History</h2>
+
+        ${repairHtml}
+
+      </div>
+    `;
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    content.innerHTML =
+      '<div class="message">Unable to load customer information.</div>';
+
+  }
+
+}
+
+
+loadCustomer();
+
+</script>
+
+</body>
+</html>
