@@ -937,6 +937,67 @@ app.get("/api/customers", (req, res) => {
   }
 });
 
+// ===== S&K AUTO - EDIT CUSTOMER =====
+app.patch("/api/customers/:id", (req, res) => {
+  try {
+
+    const {
+      name,
+      phone,
+      email
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: "Customer name is required."
+      });
+    }
+
+    const customer = db.prepare(`
+      SELECT id
+      FROM customers
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!customer) {
+      return res.status(404).json({
+        error: "Customer not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE customers
+      SET
+        name = ?,
+        phone = ?,
+        email = ?
+      WHERE id = ?
+    `).run(
+      name.trim(),
+      phone ? phone.trim() : "",
+      email ? email.trim() : "",
+      req.params.id
+    );
+
+    res.json({
+      success: true,
+      id: Number(req.params.id),
+      name: name.trim(),
+      phone: phone ? phone.trim() : "",
+      email: email ? email.trim() : ""
+    });
+
+  } catch (err) {
+
+    console.error("Edit customer error:", err);
+
+    res.status(500).json({
+      error: "Unable to update customer."
+    });
+
+  }
+});
+
 // ===== S&K AUTO - GET ONE CUSTOMER =====
 app.get("/api/customers/:id", (req, res) => {
   try {
