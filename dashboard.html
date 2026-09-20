@@ -301,6 +301,7 @@
   <span>Checked In: <strong id="checkedInCount">0</strong></span>
   <span>In Progress: <strong id="inProgressCount">0</strong></span>
   <span>Completed: <strong id="appointmentCompletedCount">0</strong></span>
+         <div id="todayAppointmentList"></div>
 </div>
 </div> 
     </div>
@@ -553,6 +554,41 @@ document.getElementById(
 document.getElementById(
   'appointmentCompletedCount'
 ).textContent = completedAppointments;
+  const todayAppointmentList =
+  document.getElementById('todayAppointmentList');
+
+if (appointmentData.appointments.length === 0) {
+  todayAppointmentList.innerHTML =
+    '<div style="margin-top:10px;">No appointments scheduled for today.</div>';
+} else {
+  todayAppointmentList.innerHTML =
+    appointmentData.appointments.map(appointment => {
+
+      let status = appointment.status || 'scheduled';
+
+      if (status === 'checked_in') {
+        status = 'Checked In';
+      } else if (status === 'in_progress') {
+        status = 'In Progress';
+      } else if (status === 'completed') {
+        status = 'Completed';
+      } else {
+        status = 'Scheduled';
+      }
+
+      return `
+        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #ddd;">
+          <strong>${appointment.time || ''}</strong>
+          &nbsp;–&nbsp;
+          ${appointment.name || 'Customer'}
+          <br>
+          <span>${appointment.vehicle || ''}</span>
+          <br>
+          <strong>Status:</strong> ${status}
+        </div>
+      `;
+    }).join('');
+}
 }
 
   } catch (error) {
