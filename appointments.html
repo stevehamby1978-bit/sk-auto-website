@@ -433,6 +433,10 @@ async function loadManualAvailability() {
 }
   
   function openNewAppointmentForm() {
+  editingAppointmentId = null;
+
+document.getElementById('appointmentSaveButton').textContent =
+  'Save Appointment';  
   const form = document.getElementById('newAppointmentForm');
 
   form.style.display = 'block';
@@ -644,6 +648,8 @@ async function loadAppointments() {
     const appointments =
       await response.json();
 
+window.currentAppointments = appointments;
+    
     appointmentCount.textContent =
       appointments.length +
       (appointments.length === 1
