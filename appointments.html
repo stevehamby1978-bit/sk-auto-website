@@ -282,7 +282,11 @@
 
   <h3>New Appointment</h3>
 
-  <input type="date" id="newDate" required>
+  <input
+  type="date"
+  id="newDate"
+  onchange="loadManualAvailability()"
+  required>
 
   <select id="newTime" required>
   <option value="">Select Appointment Time</option>
