@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Vehicle Service History</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #111;
+      color: #222;
+    }
+
+    .page {
+      max-width: 1250px;
+      min-height: 100vh;
+      margin: 0 auto;
+      background: #f4f4f4;
+    }
+
+    .header {
+      background: #151515;
+      color: white;
+      padding: 24px 30px;
+      border-bottom: 4px solid #ef3e23;
+
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .header p {
+      margin: 5px 0 0;
+      color: #ccc;
+    }
+
+    .dashboard-btn {
+      display: inline-block;
+      padding: 11px 17px;
+      background: #333;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .dashboard-btn:hover {
+      background: #555;
+    }
+
+    .content {
+      padding: 30px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search {
+      flex: 1;
+      min-width: 260px;
+      padding: 13px 15px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+
+    .filter {
+      padding: 12px;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      background: white;
+      font-size: 15px;
+    }
+
+    .result-count {
+      margin-bottom: 15px;
+      color: #555;
+      font-weight: bold;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 15px;
+    }
+
+    .history-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.10);
+      border-left: 5px solid #ef3e23;
+    }
+
+    .history-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .history-card h2 {
+      margin: 0 0 7px;
+      font-size: 21px;
+    }
+
+    .history-card p {
+      margin: 5px 0;
+      color: #555;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 20px;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .waiting {
+      background: #e0a800;
+    }
+
+    .in_progress {
+      background: #007bff;
+    }
+
+    .completed {
+      background: #28a745;
+    }
+
+    .cancelled {
+      background: #dc3545;
+    }
+
+    .items {
+      margin-top: 15px;
+      padding-top: 12px;
+      border-top: 1px solid #ddd;
+    }
+
+    .item {
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .item:last-child {
+      border-bottom: 0;
+    }
+
+    .total {
+      margin-top: 13px;
+      text-align: right;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .buttons {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 15px;
+      border-radius: 5px;
+      text-decoration: none;
+      color: white;
+      background: #ef3e23;
+      font-weight: bold;
+    }
+
+    .invoice-btn {
+      background: #333;
+    }
+
+    .message {
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      text-align: center;
+      color: #666;
+    }
+
+    @media(max-width:650px) {
+      .content {
+        padding: 18px;
+      }
+
+      .buttons {
+        flex-direction: column;
+      }
+
+      .btn {
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="page">
+
+  <header class="header">
+
+    <div>
+      <h1>S&amp;K Auto — Vehicle Service History</h1>
+      <p>
+        Search completed and active vehicle repair history
+      </p>
+    </div>
+
+    <a href="dashboard.html" class="dashboard-btn">
+      ← Dashboard
+    </a>
+
+  </header>
+
+
+  <main class="content">
+
+    <div class="toolbar">
+
+      <input
+        type="text"
+        id="searchInput"
+        class="search"
+        placeholder="Search customer, vehicle, VIN, repair or RO number..."
+      >
+
+      <select id="statusFilter" class="filter">
+        <option value="all">All Statuses</option>
+        <option value="completed">Completed</option>
+        <option value="in_progress">In Progress</option>
+        <option value="waiting">Waiting</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+
+    </div>
+
+    <div
+      id="resultCount"
+      class="result-count">
+    </div>
+
+    <div
+      id="historyList"
+      class="history-list">
+
+      <div class="message">
+        Loading service history...
+      </div>
+
+    </div>
+
+  </main>
+
+</div>
+
+
+<script>
+
+let repairOrders = [];
+
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+function calculateTotal(order) {
+
+  const items =
+    order.items || [];
+
+  const subtotal =
+    items.reduce(
+      (sum, item) =>
+        sum +
+        (Number(item.parts) || 0) +
+        (Number(item.labor) || 0),
+      0
+    );
+
+  const tax =
+    Math.round(
+      subtotal * 0.075 * 100
+    ) / 100;
+
+  return Math.round(
+    (subtotal + tax) * 100
+  ) / 100;
+}
+
+
+async function loadServiceHistory() {
+
+  const historyList =
+    document.getElementById('historyList');
+
+  try {
+
+    const response =
+      await fetch('/api/repair-orders');
+
+    if (!response.ok) {
+      throw new Error(
+        'Unable to load service history.'
+      );
+    }
+
+    repairOrders =
+      await response.json();
+
+    filterHistory();
+
+  } catch (error) {
+
+    console.error(error);
+
+    historyList.innerHTML =
+      '<div class="message">' +
+      'Unable to load service history.' +
+      '</div>';
+
+  }
+}
+
+
+function filterHistory() {
+
+  const search =
+    document
+      .getElementById('searchInput')
+      .value
+      .toLowerCase()
+      .trim();
+
+  const status =
+    document
+      .getElementById('statusFilter')
+      .value;
+
+
+  const filtered =
+    repairOrders.filter(order => {
+
+      if (
+        status !== 'all' &&
+        order.status !== status
+      ) {
+        return false;
+      }
+
+
+      const itemDescriptions =
+        (order.items || [])
+          .map(item => item.description)
+          .join(' ');
+
+
+      const searchable = [
+        order.id,
+        order.customer_name,
+        order.customer_phone,
+        order.customer_email,
+        order.vehicle_year,
+        order.vehicle_make,
+        order.vehicle_model,
+        order.vehicle_vin,
+        order.vehicle_mileage,
+        itemDescriptions
+      ]
+        .join(' ')
+        .toLowerCase();
+
+
+      return searchable.includes(search);
+
+    });
+
+
+  displayHistory(filtered);
+
+}
+
+
+function displayHistory(list) {
+
+  const historyList =
+    document.getElementById('historyList');
+
+  const resultCount =
+    document.getElementById('resultCount');
+
+
+  resultCount.textContent =
+    list.length +
+    (list.length === 1
+      ? ' service record'
+      : ' service records');
+
+
+  if (list.length === 0) {
+
+    historyList.innerHTML =
+      '<div class="message">' +
+      'No service records found.' +
+      '</div>';
+
+    return;
+  }
+
+
+  historyList.innerHTML =
+    list.map(order => {
+
+      const items =
+        order.items || [];
+
+      const total =
+        calculateTotal(order);
+
+      const status =
+        order.status || 'waiting';
+
+
+      const itemHtml =
+        items.length
+          ? items.map(item => `
+
+              <div class="item">
+
+                <strong>
+                  ${escapeHtml(item.description)}
+                </strong>
+
+                <br>
+
+                Parts:
+                ${money(item.parts)}
+
+                &nbsp; | &nbsp;
+
+                Labor:
+                ${money(item.labor)}
+
+              </div>
+
+            `).join('')
+
+          : '<div class="item">No repair items.</div>';
+
+
+      return `
+
+        <div class="history-card">
+
+          <div class="history-top">
+
+            <div>
+
+              <h2>
+                ${escapeHtml(
+                  order.vehicle_year || ''
+                )}
+                ${escapeHtml(
+                  order.vehicle_make || ''
+                )}
+                ${escapeHtml(
+                  order.vehicle_model || ''
+                )}
+              </h2>
+
+              <p>
+                <strong>Customer:</strong>
+                ${escapeHtml(
+                  order.customer_name || 'Unknown'
+                )}
+              </p>
+
+              <p>
+                <strong>VIN:</strong>
+                ${escapeHtml(
+                  order.vehicle_vin || 'Not entered'
+                )}
+              </p>
+
+              <p>
+                <strong>Mileage:</strong>
+                ${escapeHtml(
+                  order.vehicle_mileage || 'Not entered'
+                )}
+              </p>
+
+              <p>
+                <strong>Repair Order:</strong>
+                #${escapeHtml(order.id)}
+              </p>
+
+            </div>
+
+
+            <div>
+
+              <span class="status ${escapeHtml(status)}">
+
+                ${escapeHtml(
+                  String(status)
+                    .replaceAll('_', ' ')
+                )}
+
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div class="items">
+
+            ${itemHtml}
+
+          </div>
+
+
+          <div class="total">
+            Total: ${money(total)}
+          </div>
+
+
+          <div class="buttons">
+
+            <a
+              href="repair-order.html?id=${encodeURIComponent(order.id)}"
+              class="btn">
+              View Repair Order
+            </a>
+
+            <a
+              href="invoice.html?id=${encodeURIComponent(order.id)}"
+              class="btn invoice-btn">
+              View Invoice
+            </a>
+
+          </div>
+
+        </div>
+
+      `;
+
+    }).join('');
+
+}
+
+
+document
+  .getElementById('searchInput')
+  .addEventListener(
+    'input',
+    filterHistory
+  );
+
+
+document
+  .getElementById('statusFilter')
+  .addEventListener(
+    'change',
+    filterHistory
+  );
+
+
+loadServiceHistory();
+
+</script>
+
+</body>
+</html>
