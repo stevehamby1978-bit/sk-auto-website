@@ -857,7 +857,40 @@ estimate.total =
     });
   }
 });
+// ===== S&K AUTO - GET ALL CUSTOMERS =====
+app.get("/api/customers", (req, res) => {
+  try {
+    const customers = db.prepare(`
+      SELECT
+        c.id,
+        c.name,
+        c.phone,
+        c.email,
+        COUNT(DISTINCT v.id) AS vehicle_count,
+        COUNT(DISTINCT r.id) AS repair_order_count
+      FROM customers c
+      LEFT JOIN vehicles v
+        ON v.customer_id = c.id
+      LEFT JOIN repair_orders r
+        ON r.customer_id = c.id
+      GROUP BY
+        c.id,
+        c.name,
+        c.phone,
+        c.email
+      ORDER BY c.name ASC
+    `).all();
 
+    res.json(customers);
+
+  } catch (err) {
+    console.error("Get customers error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve customers."
+    });
+  }
+});
 // ===== S&K AUTO - GET ALL REPAIR ORDERS =====
 app.get("/api/repair-orders", (req, res) => {
   try {
