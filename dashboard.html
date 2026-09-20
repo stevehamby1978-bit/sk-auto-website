@@ -456,7 +456,40 @@ async function loadDashboard() {
         repairs.filter(order =>
           order.status === 'completed'
         );
+let outstandingBalance = 0;
 
+repairs.forEach(order => {
+
+  const items = order.items || [];
+
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum +
+      (Number(item.parts) || 0) +
+      (Number(item.labor) || 0),
+    0
+  );
+
+  const tax =
+    Math.round(subtotal * 0.075 * 100) / 100;
+
+  const total =
+    Math.round((subtotal + tax) * 100) / 100;
+
+  const amountPaid =
+    Number(order.amount_paid) || 0;
+
+  const balance =
+    Math.max(0, total - amountPaid);
+
+  outstandingBalance += balance;
+
+});
+
+document.getElementById(
+  'outstandingBalance'
+).textContent =
+  '$' + outstandingBalance.toFixed(2);
       document.getElementById(
         'activeRepairCount'
       ).textContent = active.length;
