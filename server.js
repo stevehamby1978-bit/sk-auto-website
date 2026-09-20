@@ -1198,6 +1198,58 @@ app.delete("/api/appointments/:id", (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - UPDATE APPOINTMENT STATUS =====
+app.patch("/api/appointments/:id/status", (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const allowedStatuses = [
+      "scheduled",
+      "checked_in",
+      "in_progress",
+      "completed",
+      "cancelled"
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid appointment status."
+      });
+    }
+
+    const appointment = db.prepare(`
+      SELECT id
+      FROM bookings
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE bookings
+      SET status = ?
+      WHERE id = ?
+    `).run(status, req.params.id);
+
+    res.json({
+      success: true,
+      id: Number(req.params.id),
+      status: status
+    });
+
+  } catch (err) {
+    console.error("Update appointment status error:", err);
+
+    res.status(500).json({
+      error: "Unable to update appointment status."
+    });
+  }
+});
+
 // ===== S&K AUTO - GET ALL REPAIR ORDERS =====
 app.get("/api/repair-orders", (req, res) => {
   try {
