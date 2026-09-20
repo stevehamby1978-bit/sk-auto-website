@@ -269,7 +269,57 @@
         Refresh Appointments
       </button>
 
+      <button
+  type="button"
+  class="refresh-btn"
+  onclick="openNewAppointmentForm()">
+  + New Appointment
+</button>
+
     </div>
+
+    <div id="newAppointmentForm" style="display:none; margin:20px 0; padding:20px; background:#fff; border-radius:8px;">
+
+  <h3>New Appointment</h3>
+
+  <input type="date" id="newDate" required>
+
+  <input type="time" id="newTime" required>
+
+  <input type="text" id="newName"
+    placeholder="Customer Name" required>
+
+  <input type="tel" id="newPhone"
+    placeholder="Phone Number" required>
+
+  <input type="email" id="newEmail"
+    placeholder="Email Address">
+
+  <input type="text" id="newVehicle"
+    placeholder="Vehicle - Year Make Model">
+
+  <input type="text" id="newService"
+    placeholder="Service Needed">
+
+  <textarea id="newNotes"
+    placeholder="Appointment Notes"></textarea>
+
+  <br><br>
+
+  <button
+    type="button"
+    class="refresh-btn"
+    onclick="saveNewAppointment()">
+    Save Appointment
+  </button>
+
+  <button
+    type="button"
+    onclick="closeNewAppointmentForm()">
+    Cancel
+  </button>
+
+</div>
 
 
     <div
