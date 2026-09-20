@@ -176,13 +176,71 @@
           class="search"
           placeholder="Search name, phone or email..."
         >
-
+<button
+  type="button"
+  class="back-btn"
+  onclick="showAddCustomer()">
+  + Add Customer
+</button>
         <a href="repair-orders.html" class="back-btn">
           Repair Orders
         </a>
 
       </div>
+<div
+  id="addCustomerForm"
+  class="card"
+  style="display:none; margin-bottom:20px;">
 
+  <h2 style="margin-top:0;">Add Customer</h2>
+
+  <div style="display:grid; gap:12px;">
+
+    <input
+      type="text"
+      id="newCustomerName"
+      class="search"
+      placeholder="Customer name *"
+    >
+
+    <input
+      type="tel"
+      id="newCustomerPhone"
+      class="search"
+      placeholder="Phone number"
+    >
+
+    <input
+      type="email"
+      id="newCustomerEmail"
+      class="search"
+      placeholder="Email address"
+    >
+
+    <div>
+      <button
+        type="button"
+        class="back-btn"
+        onclick="saveCustomer()">
+        Save Customer
+      </button>
+
+      <button
+        type="button"
+        class="back-btn"
+        onclick="hideAddCustomer()">
+        Cancel
+      </button>
+    </div>
+
+  </div>
+
+  <div
+    id="addCustomerMessage"
+    style="margin-top:12px;">
+  </div>
+
+</div>
       <div id="customerCount" class="customer-count"></div>
 
       <div id="customerList" class="customer-list">
@@ -196,7 +254,87 @@
   <script>
 
     let customers = [];
+function showAddCustomer() {
+  document.getElementById('addCustomerForm').style.display = 'block';
+  document.getElementById('newCustomerName').focus();
+}
 
+
+function hideAddCustomer() {
+  document.getElementById('addCustomerForm').style.display = 'none';
+
+  document.getElementById('newCustomerName').value = '';
+  document.getElementById('newCustomerPhone').value = '';
+  document.getElementById('newCustomerEmail').value = '';
+  document.getElementById('addCustomerMessage').textContent = '';
+}
+
+
+async function saveCustomer() {
+
+  const name =
+    document.getElementById('newCustomerName').value.trim();
+
+  const phone =
+    document.getElementById('newCustomerPhone').value.trim();
+
+  const email =
+    document.getElementById('newCustomerEmail').value.trim();
+
+  const message =
+    document.getElementById('addCustomerMessage');
+
+
+  if (!name) {
+    message.textContent = 'Customer name is required.';
+    return;
+  }
+
+
+  try {
+
+    message.textContent = 'Saving customer...';
+
+    const response = await fetch('/api/customers', {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        name: name,
+        phone: phone,
+        email: email
+      })
+    });
+
+
+    const result = await response.json();
+
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to add customer.'
+      );
+    }
+
+
+    hideAddCustomer();
+
+    await loadCustomers();
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    message.textContent =
+      error.message || 'Unable to add customer.';
+
+  }
+
+}
     async function loadCustomers() {
 
       const customerList =
