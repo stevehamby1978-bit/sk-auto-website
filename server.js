@@ -220,6 +220,18 @@ db.exec(`
       ON DELETE CASCADE
   );
 `);
+// ===== S&K AUTO - INVOICE EMAIL HISTORY =====
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS invoice_email_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repair_order_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repair_order_id)
+      REFERENCES repair_orders(id)
+      ON DELETE CASCADE
+  );
+`).run();
 // ===== S&K AUTO - PAYMENT AMOUNT MIGRATION =====
 if (!repairOrderColumns.includes("amount_paid")) {
   db.prepare(`
@@ -2455,7 +2467,15 @@ const paymentStatusText =
     console.log(
       `Invoice #${repairOrder.id} emailed to ${repairOrder.customer_email}`
     );
-
+// Record successful invoice email
+db.prepare(`
+  INSERT INTO invoice_email_history
+  (repair_order_id, email)
+  VALUES (?, ?)
+`).run(
+  repairOrder.id,
+  repairOrder.customer_email
+);
     res.json({
       success: true,
       email: repairOrder.customer_email
@@ -2469,7 +2489,31 @@ const paymentStatusText =
     });
   }
 });
+// ===== S&K AUTO - GET INVOICE EMAIL HISTORY =====
+app.get("/api/repair-orders/:id/invoice-email-history", (req, res) => {
+  try {
+    const repairOrderId = req.params.id;
 
+    const history = db.prepare(`
+      SELECT
+        id,
+        email,
+        sent_at
+      FROM invoice_email_history
+      WHERE repair_order_id = ?
+      ORDER BY id DESC
+    `).all(repairOrderId);
+
+    res.json(history);
+
+  } catch (err) {
+    console.error("Invoice email history error:", err);
+
+    res.status(500).json({
+      error: "Unable to load invoice email history."
+    });
+  }
+});
 // ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
 app.post("/api/repair-orders/:id/items", (req, res) => {
   try {
