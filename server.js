@@ -2104,16 +2104,40 @@ app.post("/api/estimates", (req, res) => {
 
     const createEstimate = db.transaction(() => {
 
-      const customerResult = db.prepare(`
-        INSERT INTO customers (name, phone, email)
-        VALUES (?, ?, ?)
-      `).run(
-        customer.name.trim(),
-        customer.phone.trim(),
-        customer.email ? customer.email.trim() : null
-      );
+     let existingCustomer = db.prepare(`
+  SELECT id
+  FROM customers
+  WHERE phone = ?
+  LIMIT 1
+`).get(customer.phone.trim());
 
-      const customerId = Number(customerResult.lastInsertRowid);
+let customerId;
+
+if (existingCustomer) {
+  customerId = Number(existingCustomer.id);
+
+  db.prepare(`
+    UPDATE customers
+    SET name = ?, email = ?
+    WHERE id = ?
+  `).run(
+    customer.name.trim(),
+    customer.email ? customer.email.trim() : null,
+    customerId
+  );
+
+} else {
+  const customerResult = db.prepare(`
+    INSERT INTO customers (name, phone, email)
+    VALUES (?, ?, ?)
+  `).run(
+    customer.name.trim(),
+    customer.phone.trim(),
+    customer.email ? customer.email.trim() : null
+  );
+
+  customerId = Number(customerResult.lastInsertRowid);
+}
 
       const vehicleResult = db.prepare(`
         INSERT INTO vehicles
