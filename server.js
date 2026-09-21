@@ -1004,7 +1004,68 @@ app.patch("/api/customers/:id", (req, res) => {
 
   }
 });
+// ===== S&K AUTO - DELETE CUSTOMER =====
+app.delete("/api/customers/:id", (req, res) => {
+  try {
+    const customerId = req.params.id;
 
+    const customer = db.prepare(`
+      SELECT id
+      FROM customers
+      WHERE id = ?
+    `).get(customerId);
+
+    if (!customer) {
+      return res.status(404).json({
+        error: "Customer not found."
+      });
+    }
+
+    // Protect customers that have repair order history
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE customer_id = ?
+      LIMIT 1
+    `).get(customerId);
+
+    if (repairOrder) {
+      return res.status(400).json({
+        error: "This customer cannot be deleted because they have repair order history."
+      });
+    }
+
+    // Delete estimates belonging to this customer.
+    // Estimate items will be removed automatically by ON DELETE CASCADE.
+    db.prepare(`
+      DELETE FROM estimates
+      WHERE customer_id = ?
+    `).run(customerId);
+
+    // Delete vehicles belonging to this customer
+    db.prepare(`
+      DELETE FROM vehicles
+      WHERE customer_id = ?
+    `).run(customerId);
+
+    // Delete the customer
+    db.prepare(`
+      DELETE FROM customers
+      WHERE id = ?
+    `).run(customerId);
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+    console.error("Delete customer error:", err);
+
+    res.status(500).json({
+      error: "Unable to delete customer."
+    });
+  }
+});
 // ===== S&K AUTO - GET ONE CUSTOMER =====
 app.get("/api/customers/:id", (req, res) => {
   try {
