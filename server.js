@@ -2244,6 +2244,221 @@ if (
     });
   }
 });
+
+// ===== S&K AUTO - EMAIL INVOICE =====
+app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
+  try {
+    const repairOrder = db.prepare(`
+      SELECT
+        r.id,
+        r.customer_id,
+        r.vehicle_id,
+        r.status,
+        r.payment_status,
+        r.payment_method,
+        r.amount_paid,
+        r.created_at,
+        c.name AS customer_name,
+        c.email AS customer_email,
+        c.phone AS customer_phone,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      LEFT JOIN vehicles v
+        ON r.vehicle_id = v.id
+      WHERE r.id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    if (!repairOrder.customer_email) {
+      return res.status(400).json({
+        error: "This customer does not have an email address."
+      });
+    }
+
+    const items = db.prepare(`
+      SELECT
+        description,
+        parts,
+        labor
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+      ORDER BY id ASC
+    `).all(req.params.id);
+
+    const subtotal = items.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.parts || 0) +
+        Number(item.labor || 0),
+      0
+    );
+
+    const tax = subtotal * 0.075;
+    const total = subtotal + tax;
+    const amountPaid = Number(repairOrder.amount_paid || 0);
+    const balance = Math.max(0, total - amountPaid);
+
+    const vehicleDescription = [
+      repairOrder.vehicle_year,
+      repairOrder.vehicle_make,
+      repairOrder.vehicle_model
+    ].filter(Boolean).join(" ");
+
+    const itemRows = items.map(item => {
+      const parts = Number(item.parts || 0);
+      const labor = Number(item.labor || 0);
+      const lineTotal = parts + labor;
+
+      return `
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid #dddddd;">
+            ${item.description || ""}
+          </td>
+          <td style="padding:10px;border-bottom:1px solid #dddddd;text-align:right;">
+            $${parts.toFixed(2)}
+          </td>
+          <td style="padding:10px;border-bottom:1px solid #dddddd;text-align:right;">
+            $${labor.toFixed(2)}
+          </td>
+          <td style="padding:10px;border-bottom:1px solid #dddddd;text-align:right;">
+            $${lineTotal.toFixed(2)}
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    await resend.emails.send({
+      from: "S&K Auto <appointments@skautohutch.com>",
+      to: [repairOrder.customer_email],
+      subject: `S&K Auto Invoice #${repairOrder.id}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
+          <div style="max-width:700px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
+
+            <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
+              <h1 style="margin:0;font-size:26px;">S&K AUTO</h1>
+              <p style="margin:5px 0 0;color:#cccccc;">
+                The Art of Automotive Repair
+              </p>
+            </div>
+
+            <div style="padding:25px;">
+              <h2 style="margin-top:0;">
+                Invoice #${repairOrder.id}
+              </h2>
+
+              <p>
+                Thank you, ${repairOrder.customer_name || "Customer"}.
+              </p>
+
+              <p>
+                Below is your invoice from S&K Auto.
+              </p>
+
+              <table style="width:100%;margin:20px 0;border-collapse:collapse;">
+                <tr>
+                  <td style="padding:6px 0;font-weight:bold;">Vehicle</td>
+                  <td style="padding:6px 0;text-align:right;">
+                    ${vehicleDescription || "Not listed"}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:6px 0;font-weight:bold;">VIN</td>
+                  <td style="padding:6px 0;text-align:right;">
+                    ${repairOrder.vehicle_vin || "Not listed"}
+                  </td>
+                </tr>
+              </table>
+
+              <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+                <thead>
+                  <tr style="background:#eeeeee;">
+                    <th style="padding:10px;text-align:left;">Service</th>
+                    <th style="padding:10px;text-align:right;">Parts</th>
+                    <th style="padding:10px;text-align:right;">Labor</th>
+                    <th style="padding:10px;text-align:right;">Total</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  ${itemRows}
+                </tbody>
+              </table>
+
+              <div style="margin-top:25px;text-align:right;">
+                <p>
+                  <strong>Subtotal:</strong>
+                  $${subtotal.toFixed(2)}
+                </p>
+
+                <p>
+                  <strong>Tax:</strong>
+                  $${tax.toFixed(2)}
+                </p>
+
+                <p style="font-size:18px;">
+                  <strong>Total:</strong>
+                  $${total.toFixed(2)}
+                </p>
+
+                <p>
+                  <strong>Amount Paid:</strong>
+                  $${amountPaid.toFixed(2)}
+                </p>
+
+                <p style="font-size:20px;">
+                  <strong>Balance Due:</strong>
+                  $${balance.toFixed(2)}
+                </p>
+              </div>
+
+              <div style="margin-top:30px;border-top:1px solid #dddddd;padding-top:20px;">
+                <strong>S&K Auto</strong><br>
+                3107 Homestead<br>
+                Hutchinson, KS 67502<br>
+                (620) 899-0425
+              </div>
+
+              <p style="margin-top:25px;font-size:13px;color:#777777;">
+                Please keep this email for your records.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      `
+    });
+
+    console.log(
+      `Invoice #${repairOrder.id} emailed to ${repairOrder.customer_email}`
+    );
+
+    res.json({
+      success: true,
+      email: repairOrder.customer_email
+    });
+
+  } catch (err) {
+    console.error("Email invoice error:", err);
+
+    res.status(500).json({
+      error: "Unable to email invoice."
+    });
+  }
+});
+
 // ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
 app.post("/api/repair-orders/:id/items", (req, res) => {
   try {
