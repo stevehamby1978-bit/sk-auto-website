@@ -838,9 +838,19 @@ if (order.payments && order.payments.length > 0) {
       method = 'Other';
     }
 
-    const paidDate = payment.paid_at
-      ? new Date(payment.paid_at).toLocaleString()
-      : '';
+  const paidDate = payment.paid_at
+  ? new Date(
+      payment.paid_at.replace(' ', 'T') + 'Z'
+    ).toLocaleString('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  : '';
 
     return `
       <div style="padding:3px 0; border-bottom:1px solid #ddd;">
