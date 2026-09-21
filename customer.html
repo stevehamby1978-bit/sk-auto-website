@@ -300,6 +300,39 @@ async function saveCustomerChanges() {
 
   }
 }
+async function deleteVehicle(vehicleId) {
+  const confirmed = confirm(
+    'Are you sure you want to delete this vehicle? This cannot be undone.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      '/api/vehicles/' + encodeURIComponent(vehicleId),
+      {
+        method: 'DELETE'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to delete vehicle.'
+      );
+    }
+
+    await loadCustomer();
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Unable to delete vehicle.');
+  }
+}
+  
 async function loadCustomer() {
 
   const content =
@@ -361,6 +394,12 @@ window.currentCustomer = customer;
             <strong>Mileage:</strong>
             ${escapeHtml(vehicle.mileage || 'Not entered')}
           </p>
+<button
+  type="button"
+  class="delete-vehicle-btn"
+  onclick="deleteVehicle(${vehicle.id})">
+  Delete Vehicle
+</button>
 
         </div>
       `).join('');
