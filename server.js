@@ -2010,7 +2010,7 @@ db.prepare(`
   }
 });
 // ===== S&K AUTO - UPDATE PAYMENT STATUS =====
-app.patch("/api/repair-orders/:id/payment", (req, res) => {
+app.patch("/api/repair-orders/:id/payment", async (req, res) => {
   try {
     const {
   payment_status,
