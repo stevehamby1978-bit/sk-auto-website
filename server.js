@@ -879,7 +879,48 @@ app.post("/api/customers", (req, res) => {
         error: "Customer name is required."
       });
     }
+// Check for an existing customer with the same phone or email
+const cleanPhone = phone ? phone.replace(/\D/g, "") : "";
+const cleanEmail = email ? email.trim().toLowerCase() : "";
 
+const existingCustomers = db.prepare(`
+  SELECT id, name, phone, email
+  FROM customers
+`).all();
+
+const duplicateCustomer = existingCustomers.find(existing => {
+  const existingPhone = existing.phone
+    ? existing.phone.replace(/\D/g, "")
+    : "";
+
+  const existingEmail = existing.email
+    ? existing.email.trim().toLowerCase()
+    : "";
+
+  const phoneMatches =
+    cleanPhone &&
+    existingPhone &&
+    cleanPhone === existingPhone;
+
+  const emailMatches =
+    cleanEmail &&
+    existingEmail &&
+    cleanEmail === existingEmail;
+
+  return phoneMatches || emailMatches;
+});
+
+if (duplicateCustomer) {
+  return res.status(409).json({
+    error: "Possible duplicate customer.",
+    duplicate: {
+      id: duplicateCustomer.id,
+      name: duplicateCustomer.name,
+      phone: duplicateCustomer.phone,
+      email: duplicateCustomer.email
+    }
+  });
+}
     const result = db.prepare(`
       INSERT INTO customers
       (name, phone, email)
