@@ -221,6 +221,34 @@
         grid-template-columns: 1fr;
       }
     }
+    .edit-btn,
+.delete-btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    margin-top: 8px;
+    margin-right: 6px;
+}
+
+.edit-btn {
+    background: #333;
+    color: white;
+}
+
+.edit-btn:hover {
+    background: #111;
+}
+
+.delete-btn {
+    background: #c62828;
+    color: white;
+}
+
+.delete-btn:hover {
+    background: #a61f1f;
+}
   </style>
 </head>
 
@@ -732,7 +760,7 @@ window.currentAppointments = appointments;
 
 <button
   type="button"
-  class="refresh-btn"
+  class="edit-btn"
   onclick="editAppointment(${appointment.id})">
   Edit Appointment
 </button>
