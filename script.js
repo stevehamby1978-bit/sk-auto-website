@@ -6,6 +6,7 @@
  * Unauthorized copying, modification, distribution, or commercial use
  * is prohibited except with permission from the copyright owner.
  */
+
 document.getElementById('year').textContent = new Date().getFullYear();
 
 const menuBtn = document.querySelector('.menu-btn');
