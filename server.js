@@ -1143,10 +1143,18 @@ app.delete("/api/vehicles/:id", (req, res) => {
       });
     }
 
-    db.prepare(`
-      DELETE FROM vehicles
-      WHERE id = ?
-    `).run(vehicleId);
+   // Keep existing estimates, but detach them from this vehicle
+db.prepare(`
+  UPDATE estimates
+  SET vehicle_id = NULL
+  WHERE vehicle_id = ?
+`).run(vehicleId);
+
+// Delete the vehicle
+db.prepare(`
+  DELETE FROM vehicles
+  WHERE id = ?
+`).run(vehicleId);
 
     res.json({
       success: true
