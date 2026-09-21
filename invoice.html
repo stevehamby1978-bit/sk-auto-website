@@ -499,6 +499,16 @@
   <div id="paymentHistory"></div>
 </div>
 <!-- ===== END PAYMENT HISTORY ===== -->
+<!-- ===== S&K AUTO - INVOICE EMAIL HISTORY ===== -->
+<div
+  id="invoiceEmailHistorySection"
+  style="margin-top:20px; padding:16px; background:#f3f4f6; border-radius:7px; display:none;"
+>
+  <h3 style="margin-top:0;">Invoice Email History</h3>
+
+  <div id="invoiceEmailHistory"></div>
+</div>
+<!-- ===== END INVOICE EMAIL HISTORY ===== -->
     <div
       id="authorizationInfo"
       class="authorization">
@@ -967,7 +977,45 @@ if (order.paid_at) {
 
     }
 
+// ===== S&K AUTO - LOAD INVOICE EMAIL HISTORY =====
+try {
+  const emailHistoryResponse = await fetch(
+    `/api/repair-orders/${id}/invoice-email-history`
+  );
 
+  if (emailHistoryResponse.ok) {
+    const emailHistory = await emailHistoryResponse.json();
+
+    const emailHistorySection =
+      document.getElementById('invoiceEmailHistorySection');
+
+    const emailHistoryContainer =
+      document.getElementById('invoiceEmailHistory');
+
+    if (emailHistory.length > 0) {
+      emailHistorySection.style.display = 'block';
+
+      emailHistoryContainer.innerHTML = emailHistory.map(entry => {
+        const sentDate = new Date(entry.sent_at).toLocaleString();
+
+        return `
+          <div style="padding:10px 0;border-bottom:1px solid #ddd;">
+            <strong>Sent to:</strong> ${entry.email}<br>
+            <strong>Sent:</strong> ${sentDate}
+          </div>
+        `;
+      }).join('');
+    } else {
+      emailHistorySection.style.display = 'none';
+      emailHistoryContainer.innerHTML = '';
+    }
+  }
+} catch (emailHistoryError) {
+  console.error(
+    'Unable to load invoice email history:',
+    emailHistoryError
+  );
+}
     document.getElementById('loading').style.display =
       'none';
 
