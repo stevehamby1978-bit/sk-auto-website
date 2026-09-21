@@ -2314,7 +2314,12 @@ app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
       repairOrder.vehicle_make,
       repairOrder.vehicle_model
     ].filter(Boolean).join(" ");
-
+const paymentStatusText =
+  repairOrder.payment_status === "paid"
+    ? "PAID"
+    : repairOrder.payment_status === "partial"
+      ? "PARTIALLY PAID"
+      : "UNPAID";
     const itemRows = items.map(item => {
       const parts = Number(item.parts || 0);
       const labor = Number(item.labor || 0);
@@ -2365,7 +2370,9 @@ app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
               <p>
                 Below is your invoice from S&K Auto.
               </p>
-
+<div style="margin:20px 0;padding:12px;text-align:center;background:#f2f2f2;border-radius:6px;font-size:18px;font-weight:bold;">
+  PAYMENT STATUS: ${paymentStatusText}
+</div>
               <table style="width:100%;margin:20px 0;border-collapse:collapse;">
                 <tr>
                   <td style="padding:6px 0;font-weight:bold;">Vehicle</td>
