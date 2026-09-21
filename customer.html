@@ -332,6 +332,135 @@ async function deleteVehicle(vehicleId) {
     alert(error.message || 'Unable to delete vehicle.');
   }
 }
+
+  async function showMergeCustomer() {
+  const customer = window.currentCustomer;
+
+  if (!customer || !customer.id) {
+    alert('Unable to identify this customer.');
+    return;
+  }
+
+  const form = document.getElementById('mergeCustomerForm');
+  const select = document.getElementById('mergeCustomerSelect');
+  const message = document.getElementById('mergeCustomerMessage');
+
+  if (!form || !select) {
+    alert('Merge customer form could not be found.');
+    return;
+  }
+
+  if (form.style.display === 'block') {
+    form.style.display = 'none';
+    return;
+  }
+
+  message.textContent = '';
+  select.innerHTML =
+    '<option value="">Select duplicate customer...</option>';
+
+  try {
+    const response = await fetch('/api/customers');
+
+    if (!response.ok) {
+      throw new Error('Unable to load customers.');
+    }
+
+    const customers = await response.json();
+
+    customers
+      .filter(otherCustomer =>
+        String(otherCustomer.id) !== String(customer.id)
+      )
+      .sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '')
+      )
+      .forEach(otherCustomer => {
+        const option = document.createElement('option');
+
+        option.value = otherCustomer.id;
+
+        const phone = otherCustomer.phone
+          ? ` - ${otherCustomer.phone}`
+          : '';
+
+        option.textContent =
+          `${otherCustomer.name || 'Unnamed Customer'}${phone}`;
+
+        select.appendChild(option);
+      });
+
+    form.style.display = 'block';
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Unable to load customers.');
+  }
+}
+
+  async function mergeCustomer() {
+  const customer = window.currentCustomer;
+  const select = document.getElementById('mergeCustomerSelect');
+  const message = document.getElementById('mergeCustomerMessage');
+
+  if (!customer || !customer.id) {
+    alert('Unable to identify this customer.');
+    return;
+  }
+
+  const duplicateCustomerId = select.value;
+
+  if (!duplicateCustomerId) {
+    message.textContent = 'Please select a customer to merge.';
+    return;
+  }
+
+  const confirmed = confirm(
+    'Merge this duplicate customer into the current customer? ' +
+    'Vehicles, estimates, and repair history will be moved to this customer. ' +
+    'The duplicate customer will then be deleted.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    message.textContent = 'Merging customer...';
+
+    const response = await fetch(
+      '/api/customers/' +
+      encodeURIComponent(customer.id) +
+      '/merge',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          duplicateCustomerId: duplicateCustomerId
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to merge customer.'
+      );
+    }
+
+    message.textContent = 'Customers merged successfully.';
+
+    await loadCustomer();
+
+  } catch (error) {
+    console.error(error);
+    message.textContent =
+      error.message || 'Unable to merge customer.';
+  }
+}
 async function deleteCustomer() {
   const customer = window.currentCustomer;
 
@@ -542,6 +671,42 @@ window.currentCustomer = customer;
   onclick="showEditCustomer()">
   Edit Customer
 </button>
+<button
+  type="button"
+  class="view-btn"
+  onclick="showMergeCustomer()">
+  Merge Customer
+</button>
+<div
+  id="mergeCustomerForm"
+  style="display:none; margin-top:15px; margin-bottom:15px; padding:15px; border:1px solid #ccc;">
+
+  <strong>Merge Duplicate Customer</strong>
+
+  <p style="margin-top:8px;">
+    Select the duplicate customer to merge into this customer.
+  </p>
+
+  <select
+    id="mergeCustomerSelect"
+    class="search"
+    style="width:100%; margin-bottom:10px;">
+    <option value="">Select duplicate customer...</option>
+  </select>
+
+  <button
+    type="button"
+    class="view-btn"
+    onclick="mergeCustomer()">
+    Merge Into This Customer
+  </button>
+
+  <div
+    id="mergeCustomerMessage"
+    style="margin-top:10px;">
+  </div>
+
+</div>
 <button
   type="button"
   class="delete-customer-btn"
