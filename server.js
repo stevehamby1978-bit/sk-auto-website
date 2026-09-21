@@ -1787,6 +1787,168 @@ repairOrder.payments = db.prepare(`
   }
 });
 
+
+// ===== S&K AUTO - EMAIL / RESEND PAYMENT RECEIPT =====
+app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
+  try {
+    const repairOrder = db.prepare(`
+      SELECT
+        r.id,
+        r.amount_paid,
+        r.payment_method,
+        c.name AS customer_name,
+        c.email AS customer_email,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin
+      FROM repair_orders r
+      LEFT JOIN customers c ON r.customer_id = c.id
+      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      WHERE r.id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    if (!repairOrder.customer_email) {
+      return res.status(400).json({
+        error: "This customer does not have an email address."
+      });
+    }
+
+    const items = db.prepare(`
+      SELECT description, parts, labor
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+      ORDER BY id ASC
+    `).all(req.params.id);
+
+    const subtotal = items.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.parts || 0) +
+        Number(item.labor || 0),
+      0
+    );
+
+    const tax = subtotal * 0.075;
+    const total = subtotal + tax;
+    const amountPaid = Number(repairOrder.amount_paid || 0);
+    const balance = Math.max(0, total - amountPaid);
+
+    const lastPayment = db.prepare(`
+      SELECT amount, payment_method, paid_at
+      FROM repair_order_payments
+      WHERE repair_order_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(req.params.id);
+
+    const paymentAmount = lastPayment
+      ? Number(lastPayment.amount || 0)
+      : amountPaid;
+
+    const paymentMethod =
+      (lastPayment && lastPayment.payment_method) ||
+      repairOrder.payment_method ||
+      "Not listed";
+
+    const vehicleDescription = [
+      repairOrder.vehicle_year,
+      repairOrder.vehicle_make,
+      repairOrder.vehicle_model
+    ].filter(Boolean).join(" ");
+
+    await resend.emails.send({
+      from: "S&K Auto <appointments@skautohutch.com>",
+      to: [repairOrder.customer_email],
+      subject: `S&K Auto Payment Receipt - Invoice #${repairOrder.id}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
+          <div style="max-width:650px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
+
+            <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
+              <h1 style="margin:0;font-size:26px;">S&K AUTO</h1>
+              <p style="margin:5px 0 0;color:#cccccc;">The Art of Automotive Repair</p>
+            </div>
+
+            <div style="padding:25px;">
+              <h2 style="margin-top:0;">Payment Receipt</h2>
+
+              <p>Thank you, ${repairOrder.customer_name || "Customer"}.</p>
+              <p>This is a copy of your payment receipt for Invoice #${repairOrder.id}.</p>
+
+              <table style="width:100%;border-collapse:collapse;font-size:16px;">
+                <tr>
+                  <td style="padding:8px 0;font-weight:bold;">Vehicle</td>
+                  <td style="padding:8px 0;text-align:right;">${vehicleDescription || "Not listed"}</td>
+                </tr>
+
+                <tr>
+                  <td style="padding:8px 0;font-weight:bold;">Payment Method</td>
+                  <td style="padding:8px 0;text-align:right;">${paymentMethod}</td>
+                </tr>
+
+                <tr>
+                  <td style="padding:8px 0;font-weight:bold;">Payment</td>
+                  <td style="padding:8px 0;text-align:right;">$${paymentAmount.toFixed(2)}</td>
+                </tr>
+
+                <tr>
+                  <td style="padding:8px 0;font-weight:bold;">Invoice Total</td>
+                  <td style="padding:8px 0;text-align:right;">$${total.toFixed(2)}</td>
+                </tr>
+
+                <tr>
+                  <td style="padding:8px 0;font-weight:bold;">Total Paid</td>
+                  <td style="padding:8px 0;text-align:right;">$${amountPaid.toFixed(2)}</td>
+                </tr>
+
+                <tr>
+                  <td style="padding:8px 0;font-weight:bold;">Balance Due</td>
+                  <td style="padding:8px 0;text-align:right;font-weight:bold;">$${balance.toFixed(2)}</td>
+                </tr>
+              </table>
+
+              <hr style="margin:25px 0;border:none;border-top:1px solid #dddddd;">
+
+              <p style="margin-bottom:5px;"><strong>S&K Auto</strong></p>
+              <p style="margin:5px 0;">3107 Homestead</p>
+              <p style="margin:5px 0;">Hutchinson, KS 67502</p>
+              <p style="margin:5px 0;">(620) 899-0425</p>
+
+              <p style="margin-top:25px;font-size:13px;color:#777777;">
+                Please keep this email for your records.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      `
+    });
+
+    console.log(
+      `Payment receipt resent to ${repairOrder.customer_email}`
+    );
+
+    res.json({
+      success: true,
+      email: repairOrder.customer_email
+    });
+
+  } catch (err) {
+    console.error("Resend payment receipt error:", err);
+
+    res.status(500).json({
+      error: "Unable to email payment receipt."
+    });
+  }
+});
+
 // ===== S&K AUTO - UPDATE REPAIR ORDER STATUS =====
 app.patch("/api/repair-orders/:id/status", (req, res) => {
   try {
