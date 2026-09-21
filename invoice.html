@@ -538,6 +538,14 @@
       </button>
 
       <button
+  class="print-btn"
+  type="button"
+  id="emailInvoiceBtn"
+  onclick="emailInvoice()">
+  Email Invoice
+</button>
+      
+      <button
         class="back-btn"
         type="button"
         id="backBtn">
@@ -1059,6 +1067,64 @@ const amountPaid =
 
   }
 });
+  async function emailInvoice() {
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  if (!id) {
+    alert('Unable to identify this invoice.');
+    return;
+  }
+
+  const button =
+    document.getElementById('emailInvoiceBtn');
+
+  const confirmed = confirm(
+    'Email this invoice to the customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Sending...';
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(id) +
+      '/email-invoice',
+      {
+        method: 'POST'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to email invoice.'
+      );
+    }
+
+    alert('Invoice emailed successfully.');
+
+  } catch (error) {
+    console.error('Email invoice error:', error);
+
+    alert(
+      error.message ||
+      'Unable to email invoice.'
+    );
+
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Email Invoice';
+  }
+}
 loadInvoice();
 
 </script>
