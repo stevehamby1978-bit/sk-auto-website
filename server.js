@@ -1113,6 +1113,54 @@ app.get("/api/customers/:id", (req, res) => {
   }
 });
 
+// ===== S&K AUTO - DELETE VEHICLE =====
+app.delete("/api/vehicles/:id", (req, res) => {
+  try {
+    const vehicleId = req.params.id;
+
+    const vehicle = db.prepare(`
+      SELECT id
+      FROM vehicles
+      WHERE id = ?
+    `).get(vehicleId);
+
+    if (!vehicle) {
+      return res.status(404).json({
+        error: "Vehicle not found."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE vehicle_id = ?
+      LIMIT 1
+    `).get(vehicleId);
+
+    if (repairOrder) {
+      return res.status(400).json({
+        error: "This vehicle cannot be deleted because it has repair order history."
+      });
+    }
+
+    db.prepare(`
+      DELETE FROM vehicles
+      WHERE id = ?
+    `).run(vehicleId);
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+    console.error("Delete vehicle error:", err);
+
+    res.status(500).json({
+      error: "Unable to delete vehicle."
+    });
+  }
+});
+
 // ===== S&K AUTO - TODAY'S APPOINTMENTS =====
 app.get("/api/dashboard/todays-appointments", (req, res) => {
   try {
