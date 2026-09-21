@@ -1004,6 +1004,91 @@ app.patch("/api/customers/:id", (req, res) => {
 
   }
 });
+// ===== S&K AUTO - MERGE CUSTOMERS =====
+app.post("/api/customers/:id/merge", (req, res) => {
+  try {
+    const keepCustomerId = Number(req.params.id);
+    const duplicateCustomerId = Number(req.body.duplicateCustomerId);
+
+    if (!keepCustomerId || !duplicateCustomerId) {
+      return res.status(400).json({
+        error: "Both customers are required."
+      });
+    }
+
+    if (keepCustomerId === duplicateCustomerId) {
+      return res.status(400).json({
+        error: "A customer cannot be merged into itself."
+      });
+    }
+
+    const keepCustomer = db.prepare(`
+      SELECT id
+      FROM customers
+      WHERE id = ?
+    `).get(keepCustomerId);
+
+    const duplicateCustomer = db.prepare(`
+      SELECT id
+      FROM customers
+      WHERE id = ?
+    `).get(duplicateCustomerId);
+
+    if (!keepCustomer || !duplicateCustomer) {
+      return res.status(404).json({
+        error: "Customer not found."
+      });
+    }
+
+    const mergeCustomers = db.transaction(() => {
+
+      // Move vehicles to the customer being kept
+      db.prepare(`
+        UPDATE vehicles
+        SET customer_id = ?
+        WHERE customer_id = ?
+      `).run(keepCustomerId, duplicateCustomerId);
+
+      // Move estimates to the customer being kept
+      db.prepare(`
+        UPDATE estimates
+        SET customer_id = ?
+        WHERE customer_id = ?
+      `).run(keepCustomerId, duplicateCustomerId);
+
+      // Move repair orders to the customer being kept
+      db.prepare(`
+        UPDATE repair_orders
+        SET customer_id = ?
+        WHERE customer_id = ?
+      `).run(keepCustomerId, duplicateCustomerId);
+
+      // Delete the now-empty duplicate customer
+      db.prepare(`
+        DELETE FROM customers
+        WHERE id = ?
+      `).run(duplicateCustomerId);
+
+    });
+
+    mergeCustomers();
+
+    res.json({
+      success: true,
+      customerId: keepCustomerId
+    });
+
+  } catch (err) {
+    console.error("Merge customer error:", err);
+
+    res.status(500).json({
+      error: "Unable to merge customers."
+    });
+  }
+});
+
+
+
 // ===== S&K AUTO - DELETE CUSTOMER =====
 app.delete("/api/customers/:id", (req, res) => {
   try {
