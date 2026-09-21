@@ -283,12 +283,32 @@ async function saveCustomerChanges() {
 
     const result = await response.json();
 
-    if (!response.ok) {
-      throw new Error(
-        result.error || 'Unable to update customer.'
-      );
-    }
+  if (response.status === 409 && result.duplicate) {
+  const duplicate = result.duplicate;
 
+  const details = [
+    'Possible duplicate customer found:',
+    '',
+    duplicate.name || 'Unnamed Customer',
+    duplicate.phone || '',
+    duplicate.email || '',
+    '',
+    'Changes were NOT saved.'
+  ].filter(line => line !== '').join('\n');
+
+  alert(details);
+
+  message.textContent =
+    'Customer not updated — possible duplicate found.';
+
+  return;
+}
+
+if (!response.ok) {
+  throw new Error(
+    result.error || 'Unable to update customer.'
+  );
+}
     await loadCustomer();
 
   } catch (error) {
