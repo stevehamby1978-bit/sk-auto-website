@@ -1,4 +1,11 @@
-
+/*
+ * S&K Auto Shop Management System
+ * Copyright © 2026 S&K Auto. All Rights Reserved.
+ *
+ * This software and its source code are proprietary to S&K Auto.
+ * Unauthorized copying, modification, distribution, or commercial use
+ * is prohibited except with permission from the copyright owner.
+ */
 const express = require('express');
 const Database = require('better-sqlite3');
 const path = require('path');
