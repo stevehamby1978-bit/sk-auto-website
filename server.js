@@ -2351,12 +2351,16 @@ const paymentStatusText =
         <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
           <div style="max-width:700px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
 
-            <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
-              <h1 style="margin:0;font-size:26px;">S&K AUTO</h1>
-              <p style="margin:5px 0 0;color:#cccccc;">
-                The Art of Automotive Repair
-              </p>
-            </div>
+           <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
+  <img
+    src="https://skautohutch.com/sk-auto-invoice-logo.png"
+    alt="S&K Auto"
+    style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto 8px auto;"
+  >
+  <p style="margin:5px 0 0;color:#cccccc;">
+    The Art of Automotive Repair
+  </p>
+</div>
 
             <div style="padding:25px;">
               <h2 style="margin-top:0;">
