@@ -313,11 +313,32 @@ async function saveCustomer() {
     const result = await response.json();
 
 
-    if (!response.ok) {
-      throw new Error(
-        result.error || 'Unable to add customer.'
-      );
-    }
+   if (response.status === 409 && result.duplicate) {
+  const duplicate = result.duplicate;
+
+  const details = [
+    'Possible duplicate customer found:',
+    '',
+    duplicate.name || 'Unnamed Customer',
+    duplicate.phone || '',
+    duplicate.email || '',
+    '',
+    'This customer was NOT added again.'
+  ].filter(line => line !== '').join('\n');
+
+  alert(details);
+
+  message.textContent =
+    'Customer not added — possible duplicate found.';
+
+  return;
+}
+
+if (!response.ok) {
+  throw new Error(
+    result.error || 'Unable to add customer.'
+  );
+}
 
 
     hideAddCustomer();
