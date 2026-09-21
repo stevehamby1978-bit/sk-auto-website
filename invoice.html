@@ -996,7 +996,17 @@ try {
       emailHistorySection.style.display = 'block';
 
       emailHistoryContainer.innerHTML = emailHistory.map(entry => {
-        const sentDate = new Date(entry.sent_at).toLocaleString();
+        const sentDate = new Date(
+  entry.sent_at.replace(' ', 'T') + 'Z'
+).toLocaleString('en-US', {
+  timeZone: 'America/Chicago',
+  month: 'numeric',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit'
+});
 
         return `
           <div style="padding:10px 0;border-bottom:1px solid #ddd;">
