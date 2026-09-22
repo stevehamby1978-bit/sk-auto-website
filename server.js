@@ -1046,6 +1046,15 @@ if (!customerShopColumns.includes("shop_id")) {
     ADD COLUMN shop_id INTEGER
   `).run();
 }
+
+// ===== S&K AUTO SaaS - ASSIGN EXISTING CUSTOMERS =====
+if (primaryShop) {
+  db.prepare(`
+    UPDATE customers
+    SET shop_id = ?
+    WHERE shop_id IS NULL
+  `).run(primaryShop.id);
+}
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
