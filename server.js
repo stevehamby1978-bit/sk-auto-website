@@ -1117,6 +1117,27 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// ===== S&K AUTO SaaS - ESTIMATE SHOP MIGRATION =====
+const estimateShopColumns = db.prepare(`
+  PRAGMA table_info(estimates)
+`).all().map(column => column.name);
+
+if (!estimateShopColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE estimates
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
+
+// ===== S&K AUTO SaaS - ASSIGN EXISTING ESTIMATES =====
+if (primaryShop) {
+  db.prepare(`
+    UPDATE estimates
+    SET shop_id = ?
+    WHERE shop_id IS NULL
+  `).run(primaryShop.id);
+}
+
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
