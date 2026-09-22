@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const { Resend } = require('resend');
 const twilio = require('twilio');
 const multer = require('multer');
-
+const bcrypt = require('bcryptjs');
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
