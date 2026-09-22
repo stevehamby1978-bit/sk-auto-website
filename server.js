@@ -1819,8 +1819,12 @@ app.get("/api/customers/:id", (req, res) => {
         phone,
         email
       FROM customers
-      WHERE id = ?
-    `).get(req.params.id);
+WHERE id = ?
+  AND shop_id = ?
+`).get(
+  req.params.id,
+  req.session.employee.shop_id
+);
 
     if (!customer) {
       return res.status(404).json({
