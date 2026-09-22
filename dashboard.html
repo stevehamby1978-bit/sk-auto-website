@@ -386,7 +386,21 @@
         </p>
 
       </a>
+<!-- EMPLOYEES - OWNER ONLY -->
+<a
+  href="employees.html"
+  class="nav-card"
+  id="employeesCard"
+  style="display:none;"
+>
+  <div class="nav-icon">👥</div>
 
+  <h3>Employees</h3>
+
+  <p>
+    Manage employee accounts, roles and access.
+  </p>
+</a>
 
       <!-- APPOINTMENTS -->
 
@@ -638,7 +652,15 @@ async function loadCurrentEmployee() {
 
     const data = await response.json();
     const employee = data.employee;
+const employeesCard = document.getElementById('employeesCard');
 
+if (
+  employeesCard &&
+  employee.role &&
+  employee.role.toLowerCase() === 'owner'
+) {
+  employeesCard.style.display = '';
+}
     const roleName = employee.role
       ? employee.role
           .replace('_', ' ')
