@@ -2292,8 +2292,9 @@ app.get("/api/repair-orders", (req, res) => {
       FROM repair_orders r
       LEFT JOIN customers c ON r.customer_id = c.id
       LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      WHERE r.shop_id = ?
       ORDER BY r.id DESC
-    `).all();
+    `).all(req.session.employee.shop_id);
 
     for (const repairOrder of repairOrders) {
       repairOrder.items = db.prepare(`
