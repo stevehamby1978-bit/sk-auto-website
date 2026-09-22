@@ -894,6 +894,32 @@ estimate.total =
     });
   }
 });
+// ===== S&K AUTO - GET EMPLOYEES =====
+app.get("/api/employees", (req, res) => {
+  try {
+    const employees = db.prepare(`
+      SELECT
+        id,
+        name,
+        email,
+        role,
+        active,
+        created_at
+      FROM employees
+      ORDER BY active DESC, name ASC
+    `).all();
+
+    res.json(employees);
+
+  } catch (err) {
+    console.error("Get employees error:", err);
+
+    res.status(500).json({
+      error: "Unable to load employees."
+    });
+  }
+});
+
 // ===== S&K AUTO - ADD EMPLOYEE =====
 app.post("/api/employees", async (req, res) => {
   try {
