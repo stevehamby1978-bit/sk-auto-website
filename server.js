@@ -1659,11 +1659,15 @@ app.patch("/api/customers/:id", (req, res) => {
       });
     }
 
-    const customer = db.prepare(`
-      SELECT id
-      FROM customers
-      WHERE id = ?
-    `).get(req.params.id);
+   const customer = db.prepare(`
+    SELECT id
+    FROM customers
+    WHERE id = ?
+      AND shop_id = ?
+`).get(
+    req.params.id,
+    req.session.employee.shop_id
+);
 
     if (!customer) {
       return res.status(404).json({
@@ -1675,10 +1679,14 @@ const cleanPhone = phone ? phone.replace(/\D/g, "") : "";
 const cleanEmail = email ? email.trim().toLowerCase() : "";
 
 const otherCustomers = db.prepare(`
-  SELECT id, name, phone, email
-  FROM customers
-  WHERE id != ?
-`).all(req.params.id);
+    SELECT id, name, phone, email
+    FROM customers
+    WHERE id != ?
+      AND shop_id = ?
+`).all(
+    req.params.id,
+    req.session.employee.shop_id
+);
 
 const duplicateCustomer = otherCustomers.find(existing => {
   const existingPhone = existing.phone
@@ -1714,19 +1722,21 @@ if (duplicateCustomer) {
   });
 } 
 
-    db.prepare(`
-      UPDATE customers
-      SET
+  db.prepare(`
+    UPDATE customers
+    SET
         name = ?,
         phone = ?,
         email = ?
-      WHERE id = ?
-    `).run(
-      name.trim(),
-      phone ? phone.trim() : "",
-      email ? email.trim() : "",
-      req.params.id
-    );
+    WHERE id = ?
+      AND shop_id = ?
+`).run(
+    name.trim(),
+    phone ? phone.trim() : "",
+    email ? email.trim() : "",
+    req.params.id,
+    req.session.employee.shop_id
+);
 
     res.json({
       success: true,
@@ -1765,16 +1775,24 @@ app.post("/api/customers/:id/merge", (req, res) => {
     }
 
     const keepCustomer = db.prepare(`
-      SELECT id
-      FROM customers
-      WHERE id = ?
-    `).get(keepCustomerId);
+    SELECT id
+    FROM customers
+    WHERE id = ?
+      AND shop_id = ?
+`).get(
+    keepCustomerId,
+    req.session.employee.shop_id
+);
 
-    const duplicateCustomer = db.prepare(`
-      SELECT id
-      FROM customers
-      WHERE id = ?
-    `).get(duplicateCustomerId);
+const duplicateCustomer = db.prepare(`
+    SELECT id
+    FROM customers
+    WHERE id = ?
+      AND shop_id = ?
+`).get(
+    duplicateCustomerId,
+    req.session.employee.shop_id
+);
 
     if (!keepCustomer || !duplicateCustomer) {
       return res.status(404).json({
@@ -1805,12 +1823,14 @@ app.post("/api/customers/:id/merge", (req, res) => {
         WHERE customer_id = ?
       `).run(keepCustomerId, duplicateCustomerId);
 
-      // Delete the now-empty duplicate customer
       db.prepare(`
-        DELETE FROM customers
-        WHERE id = ?
-      `).run(duplicateCustomerId);
-
+    DELETE FROM customers
+    WHERE id = ?
+      AND shop_id = ?
+`).run(
+    duplicateCustomerId,
+    req.session.employee.shop_id
+);
     });
 
     mergeCustomers();
