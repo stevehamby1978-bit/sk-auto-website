@@ -187,6 +187,21 @@ db.exec(`
 // ===== S&K AUTO ESTIMATE SYSTEM =====
 
 db.exec(`
+-- ===== S&K AUTO SaaS - SHOPS =====
+CREATE TABLE IF NOT EXISTS shops (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  zip TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
   -- ===== S&K AUTO - EMPLOYEES =====
   CREATE TABLE IF NOT EXISTS employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
