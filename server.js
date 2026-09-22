@@ -933,6 +933,27 @@ estimate.total =
     });
   }
 });
+// ===== S&K AUTO - EMPLOYEE TEMPORARY PASSWORD MIGRATION =====
+try {
+  const employeeColumns = db.prepare(`
+    PRAGMA table_info(employees)
+  `).all();
+
+  const hasMustChangePassword = employeeColumns.some(
+    column => column.name === 'must_change_password'
+  );
+
+  if (!hasMustChangePassword) {
+    db.prepare(`
+      ALTER TABLE employees
+      ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0
+    `).run();
+
+    console.log('Added must_change_password column to employees.');
+  }
+} catch (err) {
+  console.error('Employee password migration error:', err);
+}
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
@@ -986,13 +1007,13 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    req.session.employee = {
-      id: employee.id,
-      name: employee.name,
-      email: employee.email,
-      role: employee.role
-    };
-
+   req.session.employee = {
+  id: employee.id,
+  name: employee.name,
+  email: employee.email,
+  role: employee.role,
+  must_change_password: employee.must_change_password
+};
     req.session.save(err => {
       if (err) {
         console.error("Session save error:", err);
@@ -1141,14 +1162,15 @@ app.post("/api/employees", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const result = db.prepare(`
-      INSERT INTO employees (
-        name,
-        email,
-        password_hash,
-        role,
-        active
-      )
-      VALUES (?, ?, ?, ?, 1)
+    INSERT INTO employees (
+  name,
+  email,
+  password_hash,
+  role,
+  active,
+  must_change_password
+)
+VALUES (?, ?, ?, ?, 1, 1)
     `).run(
       name.trim(),
       cleanEmail,
