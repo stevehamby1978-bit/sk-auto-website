@@ -894,6 +894,98 @@ estimate.total =
     });
   }
 });
+// ===== S&K AUTO - ADD EMPLOYEE =====
+app.post("/api/employees", async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role
+    } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: "Employee name is required."
+      });
+    }
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        error: "Employee email is required."
+      });
+    }
+
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        error: "Password must be at least 8 characters."
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    const allowedRoles = [
+      "owner",
+      "manager",
+      "service_writer",
+      "technician"
+    ];
+
+    const employeeRole = allowedRoles.includes(role)
+      ? role
+      : "technician";
+
+    const existingEmployee = db.prepare(`
+      SELECT id
+      FROM employees
+      WHERE LOWER(email) = ?
+    `).get(cleanEmail);
+
+    if (existingEmployee) {
+      return res.status(409).json({
+        error: "An employee with this email already exists."
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const result = db.prepare(`
+      INSERT INTO employees (
+        name,
+        email,
+        password_hash,
+        role,
+        active
+      )
+      VALUES (?, ?, ?, ?, 1)
+    `).run(
+      name.trim(),
+      cleanEmail,
+      passwordHash,
+      employeeRole
+    );
+
+    res.status(201).json({
+      success: true,
+      employee: {
+        id: result.lastInsertRowid,
+        name: name.trim(),
+        email: cleanEmail,
+        role: employeeRole,
+        active: 1
+      }
+    });
+
+  } catch (err) {
+    console.error("Add employee error:", err);
+
+    res.status(500).json({
+      error: "Unable to add employee."
+    });
+  }
+});
+
+
 // ===== S&K AUTO - ADD CUSTOMER =====
 app.post("/api/customers", (req, res) => {
   try {
