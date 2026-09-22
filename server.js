@@ -977,6 +977,7 @@ app.post("/api/login", async (req, res) => {
         email,
         password_hash,
         role,
+        must_change_password,
         active
       FROM employees
       WHERE LOWER(email) = ?
