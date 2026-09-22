@@ -920,8 +920,9 @@ app.get("/api/estimates", (req, res) => {
       FROM estimates e
       LEFT JOIN customers c ON e.customer_id = c.id
       LEFT JOIN vehicles v ON e.vehicle_id = v.id
+      WHERE e.shop_id = ?
       ORDER BY e.id DESC
-    `).all();
+   `).all(req.session.employee.shop_id);
 
     res.json(estimates);
   } catch (err) {
