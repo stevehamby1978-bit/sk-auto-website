@@ -357,6 +357,14 @@
                     <span class="status ${statusClass}">
                       ${statusText}
                     </span>
+<br><br>
+
+<button
+  type="button"
+  onclick="resetEmployeePassword(${employee.id}, '${escapeHtml(employee.name)}')">
+  Reset Password
+</button>
+                   
                   </div>
                 </div>
               </div>
@@ -446,7 +454,64 @@
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
     }
+async function resetEmployeePassword(employeeId, employeeName) {
+  const temporaryPassword = prompt(
+    `Enter a new temporary password for ${employeeName}:`
+  );
 
+  if (temporaryPassword === null) {
+    return;
+  }
+
+  if (temporaryPassword.length < 8) {
+    alert('Temporary password must be at least 8 characters.');
+    return;
+  }
+
+  const confirmed = confirm(
+    `Reset ${employeeName}'s password?\n\n` +
+    `They will be required to change it the next time they sign in.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/employees/${employeeId}/reset-password`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          password: temporaryPassword
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to reset password.'
+      );
+    }
+
+    alert(
+      `${employeeName}'s password has been reset.\n\n` +
+      `They must change it the next time they sign in.`
+    );
+
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      error.message || 'Unable to reset password.'
+    );
+  }
+}
 
     loadEmployees();
   </script>
