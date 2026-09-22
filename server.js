@@ -1458,7 +1458,8 @@ const cleanEmail = email ? email.trim().toLowerCase() : "";
 const existingCustomers = db.prepare(`
   SELECT id, name, phone, email
   FROM customers
-`).all();
+  WHERE shop_id = ?
+`).all(req.session.employee.shop_id);
 
 const duplicateCustomer = existingCustomers.find(existing => {
   const existingPhone = existing.phone
@@ -1493,15 +1494,16 @@ if (duplicateCustomer) {
     }
   });
 }
-    const result = db.prepare(`
-      INSERT INTO customers
-      (name, phone, email)
-      VALUES (?, ?, ?)
-    `).run(
-      name.trim(),
-      phone ? phone.trim() : "",
-      email ? email.trim() : ""
-    );
+  const result = db.prepare(`
+  INSERT INTO customers
+  (name, phone, email, shop_id)
+  VALUES (?, ?, ?, ?)
+`).run(
+  name.trim(),
+  phone ? phone.trim() : "",
+  email ? email.trim() : "",
+  req.session.employee.shop_id
+);
 
     res.status(201).json({
       success: true,
