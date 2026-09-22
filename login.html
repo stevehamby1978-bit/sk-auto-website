@@ -203,9 +203,14 @@
             );
           }
 
-          window.location.href =
-            '/dashboard.html';
-
+          if (
+  result.employee &&
+  Number(result.employee.must_change_password) === 1
+) {
+  window.location.href = '/change-password.html';
+} else {
+  window.location.href = '/dashboard.html';
+}
         } catch (error) {
           console.error(error);
 
