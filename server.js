@@ -911,6 +911,96 @@ estimate.total =
     });
   }
 });
+// ===== S&K AUTO - EMPLOYEE LOGIN =====
+app.post("/api/login", async (req, res) => {
+  try {
+    const {
+      email,
+      password
+    } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email and password are required."
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    const employee = db.prepare(`
+      SELECT
+        id,
+        name,
+        email,
+        password_hash,
+        role,
+        active
+      FROM employees
+      WHERE LOWER(email) = ?
+      LIMIT 1
+    `).get(cleanEmail);
+
+    if (!employee) {
+      return res.status(401).json({
+        error: "Invalid email or password."
+      });
+    }
+
+    if (!employee.active) {
+      return res.status(403).json({
+        error: "This employee account is inactive."
+      });
+    }
+
+    const passwordMatches =
+      await bcrypt.compare(
+        password,
+        employee.password_hash
+      );
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        error: "Invalid email or password."
+      });
+    }
+
+    req.session.employee = {
+      id: employee.id,
+      name: employee.name,
+      email: employee.email,
+      role: employee.role
+    };
+
+    req.session.save(err => {
+      if (err) {
+        console.error("Session save error:", err);
+
+        return res.status(500).json({
+          error: "Unable to complete login."
+        });
+      }
+
+      res.json({
+        success: true,
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          email: employee.email,
+          role: employee.role
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error("Employee login error:", err);
+
+    res.status(500).json({
+      error: "Unable to log in."
+    });
+  }
+});
+
+
 // ===== S&K AUTO - GET EMPLOYEES =====
 app.get("/api/employees", (req, res) => {
   try {
