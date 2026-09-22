@@ -1025,12 +1025,13 @@ app.post("/api/login", async (req, res) => {
 
       res.json({
         success: true,
-        employee: {
-          id: employee.id,
-          name: employee.name,
-          email: employee.email,
-          role: employee.role
-        }
+      employee: {
+  id: employee.id,
+  name: employee.name,
+  email: employee.email,
+  role: employee.role,
+  must_change_password: employee.must_change_password
+}
       });
     });
 
