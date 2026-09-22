@@ -1043,6 +1043,69 @@ app.post("/api/login", async (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - CHANGE EMPLOYEE PASSWORD =====
+app.post("/api/change-password", async (req, res) => {
+  try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to change your password."
+      });
+    }
+
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({
+        error: "New password must be at least 8 characters."
+      });
+    }
+
+    const employeeId = req.session.employee.id;
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    const result = db.prepare(`
+      UPDATE employees
+      SET
+        password_hash = ?,
+        must_change_password = 0
+      WHERE id = ?
+    `).run(
+      passwordHash,
+      employeeId
+    );
+
+    if (result.changes === 0) {
+      return res.status(404).json({
+        error: "Employee account not found."
+      });
+    }
+
+    req.session.employee.must_change_password = 0;
+
+    req.session.save(err => {
+      if (err) {
+        console.error("Password change session error:", err);
+
+        return res.status(500).json({
+          error: "Password changed, but the session could not be updated."
+        });
+      }
+
+      res.json({
+        success: true
+      });
+    });
+
+  } catch (err) {
+    console.error("Change employee password error:", err);
+
+    res.status(500).json({
+      error: "Unable to change password."
+    });
+  }
+});
+
 // ===== S&K AUTO - EMPLOYEE LOGOUT =====
 app.post("/api/logout", (req, res) => {
   if (!req.session) {
