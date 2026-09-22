@@ -486,7 +486,7 @@ async function resetEmployeePassword(employeeId, employeeName) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          password: temporaryPassword
+        temporaryPassword: temporaryPassword
         })
       }
     );
