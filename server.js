@@ -1055,6 +1055,27 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// ===== S&K AUTO SaaS - VEHICLE SHOP MIGRATION =====
+const vehicleShopColumns = db.prepare(`
+  PRAGMA table_info(vehicles)
+`).all().map(column => column.name);
+
+if (!vehicleShopColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE vehicles
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
+
+// ===== S&K AUTO SaaS - ASSIGN EXISTING VEHICLES =====
+if (primaryShop) {
+  db.prepare(`
+    UPDATE vehicles
+    SET shop_id = ?
+    WHERE shop_id IS NULL
+  `).run(primaryShop.id);
+}
+
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
@@ -3524,8 +3545,12 @@ app.post("/api/estimates", (req, res) => {
   SELECT id
   FROM customers
   WHERE phone = ?
+    AND shop_id = ?
   LIMIT 1
-`).get(customer.phone.trim());
+`).get(
+  customer.phone.trim(),
+  req.session.employee.shop_id
+);
 
 let customerId;
 
@@ -3543,15 +3568,15 @@ if (existingCustomer) {
   );
 
 } else {
-  const customerResult = db.prepare(`
-    INSERT INTO customers (name, phone, email)
-    VALUES (?, ?, ?)
-  `).run(
-    customer.name.trim(),
-    customer.phone.trim(),
-    customer.email ? customer.email.trim() : null
-  );
-
+ const customerResult = db.prepare(`
+  INSERT INTO customers (name, phone, email, shop_id)
+  VALUES (?, ?, ?, ?)
+`).run(
+  customer.name.trim(),
+  customer.phone.trim(),
+  customer.email ? customer.email.trim() : null,
+  req.session.employee.shop_id
+);
   customerId = Number(customerResult.lastInsertRowid);
 }
 
