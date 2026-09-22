@@ -1045,6 +1045,18 @@ app.post("/api/logout", (req, res) => {
     });
   });
 });
+// ===== S&K AUTO - CURRENT EMPLOYEE =====
+app.get("/api/current-employee", (req, res) => {
+  if (!req.session || !req.session.employee) {
+    return res.status(401).json({
+      error: "Not logged in."
+    });
+  }
+
+  res.json({
+    employee: req.session.employee
+  });
+});
 
 
 // ===== S&K AUTO - GET EMPLOYEES =====
