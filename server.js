@@ -68,6 +68,22 @@ const db = new Database(dbPath);
 console.log(`Using booking database: ${dbPath}`);
 
 app.use(express.json());
+// ===== S&K AUTO - EMPLOYEE SESSIONS =====
+app.set('trust proxy', 1);
+
+app.use(session({
+  name: 'skauto_session',
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: 8 * 60 * 60 * 1000
+  }
+}));
+
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
