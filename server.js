@@ -3580,31 +3580,33 @@ if (existingCustomer) {
   customerId = Number(customerResult.lastInsertRowid);
 }
 
-      const vehicleResult = db.prepare(`
-        INSERT INTO vehicles
-        (customer_id, year, make, model, vin, mileage)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(
-        customerId,
-        vehicle?.year || null,
-        vehicle?.make || null,
-        vehicle?.model || null,
-        vehicle?.vin || null,
-        vehicle?.mileage || null
-      );
+     const vehicleResult = db.prepare(`
+  INSERT INTO vehicles
+  (customer_id, year, make, model, vin, mileage, shop_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`).run(
+  customerId,
+  vehicle?.year || null,
+  vehicle?.make || null,
+  vehicle?.model || null,
+  vehicle?.vin || null,
+  vehicle?.mileage || null,
+  req.session.employee.shop_id
+);
 
       const vehicleId = Number(vehicleResult.lastInsertRowid);
 
-      const estimateResult = db.prepare(`
-        INSERT INTO estimates
-        (customer_id, vehicle_id, token, notes)
-        VALUES (?, ?, ?, ?)
-      `).run(
-        customerId,
-        vehicleId,
-        token,
-        notes || null
-      );
+    const estimateResult = db.prepare(`
+  INSERT INTO estimates
+  (customer_id, vehicle_id, token, notes, shop_id)
+  VALUES (?, ?, ?, ?, ?)
+`).run(
+  customerId,
+  vehicleId,
+  token,
+  notes || null,
+  req.session.employee.shop_id
+);
 
       const estimateId = Number(estimateResult.lastInsertRowid);
 
