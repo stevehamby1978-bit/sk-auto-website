@@ -1262,7 +1262,75 @@ VALUES (?, ?, ?, ?, 1, 1)
     });
   }
 });
+// ===== S&K AUTO - RESET EMPLOYEE PASSWORD =====
+app.post("/api/employees/:id/reset-password", async (req, res) => {
+  try {
+    if (
+      !req.session ||
+      !req.session.employee ||
+      req.session.employee.role !== "owner"
+    ) {
+      return res.status(403).json({
+        error: "Only the owner can reset employee passwords."
+      });
+    }
 
+    const employeeId = Number(req.params.id);
+    const { temporaryPassword } = req.body;
+
+    if (!employeeId) {
+      return res.status(400).json({
+        error: "Employee is required."
+      });
+    }
+
+    if (!temporaryPassword || temporaryPassword.length < 8) {
+      return res.status(400).json({
+        error: "Temporary password must be at least 8 characters."
+      });
+    }
+
+    const employee = db.prepare(`
+      SELECT id, name
+      FROM employees
+      WHERE id = ?
+    `).get(employeeId);
+
+    if (!employee) {
+      return res.status(404).json({
+        error: "Employee account not found."
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(
+      temporaryPassword,
+      12
+    );
+
+    db.prepare(`
+      UPDATE employees
+      SET
+        password_hash = ?,
+        must_change_password = 1
+      WHERE id = ?
+    `).run(
+      passwordHash,
+      employeeId
+    );
+
+    res.json({
+      success: true,
+      message: "Temporary password created successfully."
+    });
+
+  } catch (err) {
+    console.error("Reset employee password error:", err);
+
+    res.status(500).json({
+      error: "Unable to reset employee password."
+    });
+  }
+});
 
 // ===== S&K AUTO - ADD CUSTOMER =====
 app.post("/api/customers", (req, res) => {
