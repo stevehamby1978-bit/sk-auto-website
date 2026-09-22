@@ -84,7 +84,29 @@ app.use(session({
     maxAge: 8 * 60 * 60 * 1000
   }
 }));
+// ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
+function requireLogin(req, res, next) {
+  if (req.session && req.session.employee) {
+    return next();
+  }
 
+  return res.redirect('/login.html');
+}
+// ===== S&K AUTO - PROTECTED SHOP PAGES =====
+const protectedPages = [
+  '/dashboard.html',
+  '/customers.html',
+  '/customer.html',
+  '/estimates-admin.html',
+  '/repair-orders.html',
+  '/repair-order.html',
+  '/invoices.html',
+  '/invoice.html',
+  '/appointments.html',
+  '/employees.html'
+];
+
+app.get(protectedPages, requireLogin);
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
