@@ -1077,6 +1077,27 @@ if (primaryShop) {
   `).run(primaryShop.id);
 }
 
+// ===== S&K AUTO SaaS - REPAIR ORDER SHOP MIGRATION =====
+const repairOrderShopColumns = db.prepare(`
+  PRAGMA table_info(repair_orders)
+`).all().map(column => column.name);
+
+if (!repairOrderShopColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
+
+// ===== S&K AUTO SaaS - ASSIGN EXISTING REPAIR ORDERS =====
+if (primaryShop) {
+  db.prepare(`
+    UPDATE repair_orders
+    SET shop_id = ?
+    WHERE shop_id IS NULL
+  `).run(primaryShop.id);
+}
+
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
