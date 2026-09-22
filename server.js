@@ -1097,7 +1097,26 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// ===== S&K AUTO SaaS - BOOKING SHOP MIGRATION =====
+const bookingShopColumns = db.prepare(`
+  PRAGMA table_info(bookings)
+`).all().map(column => column.name);
 
+if (!bookingShopColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE bookings
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
+
+// ===== S&K AUTO SaaS - ASSIGN EXISTING BOOKINGS =====
+if (primaryShop) {
+  db.prepare(`
+    UPDATE bookings
+    SET shop_id = ?
+    WHERE shop_id IS NULL
+  `).run(primaryShop.id);
+}
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
