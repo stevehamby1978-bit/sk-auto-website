@@ -1538,13 +1538,14 @@ app.get("/api/customers", (req, res) => {
         ON v.customer_id = c.id
       LEFT JOIN repair_orders r
         ON r.customer_id = c.id
+        WHERE c.shop_id = ?
       GROUP BY
         c.id,
         c.name,
         c.phone,
         c.email
       ORDER BY c.name ASC
-    `).all();
+    `).all(req.session.employee.shop_id);
 
     res.json(customers);
 
