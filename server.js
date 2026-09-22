@@ -92,6 +92,20 @@ function requireLogin(req, res, next) {
 
   return res.redirect('/login.html');
 }
+// ===== S&K AUTO - REQUIRE OWNER =====
+function requireOwner(req, res, next) {
+  if (
+    req.session &&
+    req.session.employee &&
+    req.session.employee.role === 'owner'
+  ) {
+    return next();
+  }
+
+  return res.status(403).send(
+    'Access denied. Owner permission required.'
+  );
+}
 // ===== S&K AUTO - PROTECTED SHOP PAGES =====
 const protectedPages = [
   '/dashboard.html',
