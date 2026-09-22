@@ -1035,7 +1035,17 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// ===== S&K AUTO SaaS - CUSTOMER SHOP MIGRATION =====
+const customerShopColumns = db.prepare(`
+  PRAGMA table_info(customers)
+`).all().map(column => column.name);
 
+if (!customerShopColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE customers
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
