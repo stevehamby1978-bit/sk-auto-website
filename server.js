@@ -116,11 +116,13 @@ const protectedPages = [
   '/repair-order.html',
   '/invoices.html',
   '/invoice.html',
-  '/appointments.html',
-  '/employees.html'
+  '/appointments.html'
+  
 ];
 
 app.get(protectedPages, requireLogin);
+// ===== S&K AUTO - OWNER ONLY PAGES =====
+app.get('/employees.html', requireLogin, requireOwner);
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
