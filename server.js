@@ -1058,9 +1058,10 @@ app.post("/api/login", async (req, res) => {
         name,
         email,
         password_hash,
-        role,
-        must_change_password,
-        active
+       role,
+must_change_password,
+shop_id,
+active
       FROM employees
       WHERE LOWER(email) = ?
       LIMIT 1
@@ -1094,8 +1095,9 @@ app.post("/api/login", async (req, res) => {
   id: employee.id,
   name: employee.name,
   email: employee.email,
-  role: employee.role,
-  must_change_password: employee.must_change_password
+ role: employee.role,
+shop_id: employee.shop_id,
+must_change_password: employee.must_change_password
 };
     req.session.save(err => {
       if (err) {
@@ -1112,8 +1114,9 @@ app.post("/api/login", async (req, res) => {
   id: employee.id,
   name: employee.name,
   email: employee.email,
-  role: employee.role,
-  must_change_password: employee.must_change_password
+ role: employee.role,
+shop_id: employee.shop_id,
+must_change_password: employee.must_change_password
 }
       });
     });
