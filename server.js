@@ -1021,6 +1021,30 @@ app.post("/api/login", async (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - EMPLOYEE LOGOUT =====
+app.post("/api/logout", (req, res) => {
+  if (!req.session) {
+    return res.json({
+      success: true
+    });
+  }
+
+  req.session.destroy(err => {
+    if (err) {
+      console.error("Employee logout error:", err);
+
+      return res.status(500).json({
+        error: "Unable to log out."
+      });
+    }
+
+    res.clearCookie('skauto_session');
+
+    res.json({
+      success: true
+    });
+  });
+});
 
 
 // ===== S&K AUTO - GET EMPLOYEES =====
