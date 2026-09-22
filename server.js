@@ -313,6 +313,29 @@ db.prepare(`
       ON DELETE CASCADE
   );
 `).run();
+// ===== S&K AUTO SaaS - CREATE PRIMARY SHOP =====
+db.prepare(`
+  INSERT OR IGNORE INTO shops (
+    name,
+    slug,
+    phone,
+    email,
+    address,
+    city,
+    state,
+    zip
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`).run(
+  'S&K Auto',
+  'sk-auto',
+  '(620) 899-0425',
+  null,
+  '3107 Homestead',
+  'Hutchinson',
+  'KS',
+  '67502'
+);
 // ===== S&K AUTO - PAYMENT AMOUNT MIGRATION =====
 if (!repairOrderColumns.includes("amount_paid")) {
   db.prepare(`
