@@ -1008,6 +1008,18 @@ try {
 } catch (err) {
   console.error('Employee password migration error:', err);
 }
+
+// ===== S&K AUTO SaaS - EMPLOYEE SHOP MIGRATION =====
+const employeeShopColumns = db.prepare(`
+  PRAGMA table_info(employees)
+`).all().map(column => column.name);
+
+if (!employeeShopColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE employees
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
