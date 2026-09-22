@@ -1803,11 +1803,16 @@ const duplicateCustomer = db.prepare(`
     const mergeCustomers = db.transaction(() => {
 
       // Move vehicles to the customer being kept
-      db.prepare(`
-        UPDATE vehicles
-        SET customer_id = ?
-        WHERE customer_id = ?
-      `).run(keepCustomerId, duplicateCustomerId);
+     db.prepare(`
+    UPDATE vehicles
+    SET customer_id = ?
+    WHERE customer_id = ?
+      AND shop_id = ?
+`).run(
+    keepCustomerId,
+    duplicateCustomerId,
+    req.session.employee.shop_id
+);
 
       // Move estimates to the customer being kept
       db.prepare(`
@@ -1885,22 +1890,32 @@ app.delete("/api/customers/:id", (req, res) => {
     // Delete estimates belonging to this customer.
     // Estimate items will be removed automatically by ON DELETE CASCADE.
     db.prepare(`
-      DELETE FROM estimates
-      WHERE customer_id = ?
-    `).run(customerId);
-
+    DELETE FROM estimates
+    WHERE customer_id = ?
+      AND shop_id = ?
+`).run(
+    customerId,
+    req.session.employee.shop_id
+);
     // Delete vehicles belonging to this customer
-    db.prepare(`
-      DELETE FROM vehicles
-      WHERE customer_id = ?
-    `).run(customerId);
+  db.prepare(`
+    DELETE FROM vehicles
+    WHERE customer_id = ?
+      AND shop_id = ?
+`).run(
+    customerId,
+    req.session.employee.shop_id
+);
 
     // Delete the customer
-    db.prepare(`
-      DELETE FROM customers
-      WHERE id = ?
-    `).run(customerId);
-
+  db.prepare(`
+    DELETE FROM customers
+    WHERE id = ?
+      AND shop_id = ?
+`).run(
+    customerId,
+    req.session.employee.shop_id
+);
     res.json({
       success: true
     });
@@ -1947,9 +1962,14 @@ WHERE id = ?
         vin,
         mileage
       FROM vehicles
-      WHERE customer_id = ?
-      ORDER BY year DESC, make ASC, model ASC
-    `).all(customer.id);
+     
+WHERE customer_id = ?
+  AND shop_id = ?
+ORDER BY year DESC, make ASC, model ASC
+`).all(
+  customer.id,
+  req.session.employee.shop_id
+);
 
 
     // Get complete repair history
@@ -2031,10 +2051,14 @@ app.delete("/api/vehicles/:id", (req, res) => {
     const vehicleId = req.params.id;
 
     const vehicle = db.prepare(`
-      SELECT id
-      FROM vehicles
-      WHERE id = ?
-    `).get(vehicleId);
+    SELECT id
+    FROM vehicles
+    WHERE id = ?
+      AND shop_id = ?
+`).get(
+    vehicleId,
+    req.session.employee.shop_id
+);
 
     if (!vehicle) {
       return res.status(404).json({
@@ -2064,9 +2088,13 @@ db.prepare(`
 
 // Delete the vehicle
 db.prepare(`
-  DELETE FROM vehicles
-  WHERE id = ?
-`).run(vehicleId);
+    DELETE FROM vehicles
+    WHERE id = ?
+      AND shop_id = ?
+`).run(
+    vehicleId,
+    req.session.employee.shop_id
+);
 
     res.json({
       success: true
