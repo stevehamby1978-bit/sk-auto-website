@@ -388,6 +388,50 @@ async function updateVehicle(vehicleId, vehicleData) {
         alert(error.message || 'Unable to update vehicle.');
     }
 }  
+async function createRepairOrder(vehicleId) {
+    if (!customerId) {
+        alert('Customer ID is missing.');
+        return;
+    }
+
+    const confirmed = confirm(
+        'Create a new repair order for this vehicle?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/repair-orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                customer_id: customerId,
+                vehicle_id: vehicleId
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to create repair order.'
+            );
+        }
+
+        alert('Repair order created successfully.');
+
+        await loadCustomer();
+
+    } catch (error) {
+        console.error('Create repair order error:', error);
+        alert(error.message || 'Unable to create repair order.');
+    }
+}
+  
 async function deleteVehicle(vehicleId) {
   const confirmed = confirm(
     'Are you sure you want to delete this vehicle? This cannot be undone.'
@@ -724,7 +768,11 @@ window.currentCustomer = customer;
     onclick="editVehicle(${vehicle.id})">
     Edit Vehicle
 </button>
-
+<button
+  type="button"
+  onclick="createRepairOrder(${vehicle.id})">
+  Create Repair Order
+</button>
 <button
     type="button"
     class="delete-vehicle-btn"
