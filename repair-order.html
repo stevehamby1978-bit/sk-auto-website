@@ -1052,6 +1052,76 @@ statusBadge.className = 'status ' + status;
 
   }
 });
+
+// ===== S&K AUTO - ADD RECOMMENDED REPAIR =====
+document.getElementById('addRecommendedBtn').addEventListener('click', async () => {
+
+    const params =
+        new URLSearchParams(window.location.search);
+
+    const id = params.get('id');
+
+    const description =
+        document.getElementById('recommendedDescription').value.trim();
+
+    const parts =
+        Number(document.getElementById('recommendedParts').value) || 0;
+
+    const labor =
+        Number(document.getElementById('recommendedLabor').value) || 0;
+
+    const button =
+        document.getElementById('addRecommendedBtn');
+
+    if (!description) {
+        alert('Please enter a recommended repair description.');
+        return;
+    }
+
+    try {
+
+        button.disabled = true;
+        button.textContent = 'Adding...';
+
+        const response = await fetch(
+            '/api/repair-orders/' + encodeURIComponent(id) + '/recommendations',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    description: description,
+                    parts: parts,
+                    labor: labor
+                })
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to add recommended repair'
+            );
+        }
+
+        alert('Recommended repair added.');
+
+        window.location.reload();
+
+    } catch (error) {
+
+        alert(error.message);
+
+    } finally {
+
+        button.disabled = false;
+        button.textContent = '+ Add Recommended Repair';
+
+    }
+});
+  
 // ===== S&K AUTO - SAVE CUSTOMER CONCERN =====
 document.getElementById('saveConcernBtn').addEventListener('click', async () => {
   const params = new URLSearchParams(window.location.search);
