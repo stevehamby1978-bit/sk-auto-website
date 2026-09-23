@@ -337,6 +337,26 @@ button {
       </div>
 
     </div>
+    <!-- ===== S&K AUTO - CUSTOMER CONCERN ===== -->
+<div id="customerConcernSection"
+     style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
+
+  <h3 style="margin-top:0;">Customer Concern</h3>
+
+  <textarea
+    id="customerConcern"
+    rows="5"
+    placeholder="Enter the customer's complaint or reason for bringing the vehicle in..."
+    style="width:100%; box-sizing:border-box; padding:12px; border:1px solid #ccc; border-radius:5px;"></textarea>
+
+  <button
+    id="saveConcernBtn"
+    type="button"
+    style="margin-top:10px; background:#0b4dbb; color:white; border:none; padding:10px 18px; border-radius:5px;">
+    Save Customer Concern
+  </button>
+
+</div>
 <div id="technicianNotesSection"
      style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
 
@@ -522,6 +542,8 @@ if (order.status === 'completed' && order.completed_at) {
 }
 statusSelect.value =
   order.status || 'waiting';
+    document.getElementById('customerConcern').value =
+    order.customer_concern || '';
     document.getElementById('technicianNotes').value =
   order.technician_notes || '';
   document.getElementById('authorizedBy').value =
@@ -953,7 +975,56 @@ statusBadge.className = 'status ' + status;
 
   }
 });
+// ===== S&K AUTO - SAVE CUSTOMER CONCERN =====
+document.getElementById('saveConcernBtn').addEventListener('click', async () => {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
 
+  const customerConcern =
+    document.getElementById('customerConcern').value;
+
+  const button =
+    document.getElementById('saveConcernBtn');
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Saving...';
+
+    const response = await fetch(
+      '/api/repair-orders/' + encodeURIComponent(id) + '/concern',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customer_concern: customerConcern
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to save customer concern'
+      );
+    }
+
+    button.textContent = 'Saved ✓';
+
+    setTimeout(() => {
+      button.textContent = 'Save Customer Concern';
+    }, 1500);
+
+  } catch (error) {
+    alert(error.message);
+    button.textContent = 'Save Customer Concern';
+
+  } finally {
+    button.disabled = false;
+  }
+});
 document.getElementById('saveNotesBtn').addEventListener('click', async () => {
 
   const params =
