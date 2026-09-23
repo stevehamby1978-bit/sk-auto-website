@@ -3763,7 +3763,7 @@ app.post("/api/repair-orders/:id/items", (req, res) => {
 });
 
 // ===== S&K AUTO - ADD RECOMMENDED REPAIR =====
-app.post("/api/repair-orders/:id/recommendations", (req, res) => {
+app.post("/api/repair-orders/:id/recommendations", async (req, res) => {
   try {
     const { description, parts, labor } = req.body;
 
