@@ -3863,13 +3863,36 @@ app.patch("/api/repair-orders/:id/concern", (req, res) => {
 // ===== S&K AUTO - UPDATE TECHNICIAN NOTES =====
 app.patch("/api/repair-orders/:id/notes", (req, res) => {
   try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to update the technician diagnosis."
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
     const { technician_notes } = req.body;
+
+    const notes =
+      typeof technician_notes === "string"
+        ? technician_notes.trim()
+        : "";
 
     const repairOrder = db.prepare(`
       SELECT id
       FROM repair_orders
       WHERE id = ?
-    `).get(req.params.id);
+        AND shop_id = ?
+    `).get(
+      req.params.id,
+      shopId
+    );
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -3877,18 +3900,15 @@ app.patch("/api/repair-orders/:id/notes", (req, res) => {
       });
     }
 
-    const notes =
-      typeof technician_notes === "string"
-        ? technician_notes.trim()
-        : "";
-
     db.prepare(`
       UPDATE repair_orders
       SET technician_notes = ?
       WHERE id = ?
+        AND shop_id = ?
     `).run(
       notes,
-      req.params.id
+      req.params.id,
+      shopId
     );
 
     res.json({
@@ -3897,16 +3917,13 @@ app.patch("/api/repair-orders/:id/notes", (req, res) => {
     });
 
   } catch (err) {
-
     console.error("Update technician notes error:", err);
 
     res.status(500).json({
-      error: "Unable to update technician notes."
+      error: "Unable to update technician diagnosis."
     });
-
   }
 });
-
 // ===== S&K AUTO - UPDATE CUSTOMER AUTHORIZATION =====
 app.patch("/api/repair-orders/:id/authorization", (req, res) => {
   try {
