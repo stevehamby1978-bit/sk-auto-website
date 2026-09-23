@@ -2825,7 +2825,19 @@ app.get("/api/repair-orders/:id", (req, res) => {
       WHERE repair_order_id = ?
       ORDER BY id ASC
     `).all(repairOrder.id);
-
+// ===== S&K AUTO - GET RECOMMENDED REPAIRS =====
+repairOrder.recommendations = db.prepare(`
+  SELECT
+    id,
+    description,
+    parts,
+    labor,
+    status,
+    created_at
+  FROM repair_order_recommendations
+  WHERE repair_order_id = ?
+  ORDER BY id ASC
+`).all(repairOrder.id);
     repairOrder.subtotal = repairOrder.items.reduce(
       (sum, item) =>
         sum +
