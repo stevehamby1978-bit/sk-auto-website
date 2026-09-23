@@ -341,6 +341,25 @@ db.prepare(`
   'KS',
   '67502'
 );
+
+// ===== S&K AUTO SaaS - REPAIR ORDER WORKFLOW MIGRATION =====
+
+// Add shop isolation to repair orders
+if (!repairOrderColumns.includes("shop_id")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN shop_id INTEGER
+  `).run();
+}
+
+// Add customer concern to repair orders
+if (!repairOrderColumns.includes("customer_concern")) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN customer_concern TEXT
+  `).run();
+}
+
 // ===== S&K AUTO - PAYMENT AMOUNT MIGRATION =====
 if (!repairOrderColumns.includes("amount_paid")) {
   db.prepare(`
