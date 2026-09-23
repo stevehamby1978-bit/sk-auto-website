@@ -4052,6 +4052,59 @@ app.patch(
     }
   }
 );
+
+// ===== S&K AUTO - DECLINE RECOMMENDED REPAIR =====
+app.patch(
+  "/api/repair-orders/:repairOrderId/recommendations/:recommendationId/decline",
+  (req, res) => {
+    try {
+      const repairOrderId = req.params.repairOrderId;
+      const recommendationId = req.params.recommendationId;
+
+      const recommendation = db.prepare(`
+        SELECT id
+        FROM repair_order_recommendations
+        WHERE id = ?
+          AND repair_order_id = ?
+      `).get(
+        recommendationId,
+        repairOrderId
+      );
+
+      if (!recommendation) {
+        return res.status(404).json({
+          error: "Recommended repair not found."
+        });
+      }
+
+      db.prepare(`
+        UPDATE repair_order_recommendations
+        SET status = 'declined'
+        WHERE id = ?
+          AND repair_order_id = ?
+      `).run(
+        recommendationId,
+        repairOrderId
+      );
+
+      res.json({
+        success: true,
+        message: "Recommended repair declined."
+      });
+
+    } catch (err) {
+      console.error(
+        "Decline recommended repair error:",
+        err
+      );
+
+      res.status(500).json({
+        error: "Unable to decline recommended repair."
+      });
+    }
+  }
+);
+
 // ===== S&K AUTO - UPDATE CUSTOMER CONCERN =====
 app.patch("/api/repair-orders/:id/concern", (req, res) => {
   try {
