@@ -3773,12 +3773,16 @@ app.post("/api/repair-orders/:id/recommendations", (req, res) => {
       });
     }
 
-    const repairOrder = db.prepare(`
-      SELECT id
-      FROM repair_orders
-      WHERE id = ?
-    `).get(req.params.id);
-
+   const repairOrder = db.prepare(`
+    SELECT
+        ro.id,
+        ro.customer_id,
+        c.name AS customer_name,
+        c.phone AS customer_phone
+    FROM repair_orders ro
+    JOIN customers c ON c.id = ro.customer_id
+    WHERE ro.id = ?
+`).get(req.params.id);
     if (!repairOrder) {
       return res.status(404).json({
         error: "Repair order not found."
@@ -3816,6 +3820,32 @@ const result = db.prepare(`
   laborAmount,
   authorizationToken
 );
+
+ // Send recommended repair authorization text to customer
+try {
+  if (repairOrder.customer_phone) {
+    const authorizationUrl =
+      `https://skautohutch.com/repair-authorization.html?order=${encodeURIComponent(req.params.id)}` +
+      `&repair=${encodeURIComponent(result.lastInsertRowid)}` +
+      `&token=${encodeURIComponent(authorizationToken)}`;
+
+    await twilioClient.messages.create({
+      body:
+        `S&K Auto: Hi ${repairOrder.customer_name}, ` +
+        `we have recommended an additional repair for your vehicle: ` +
+        `${description.trim()}. ` +
+        `Parts: $${partsAmount.toFixed(2)}, Labor: $${laborAmount.toFixed(2)}, ` +
+        `Total: $${(partsAmount + laborAmount).toFixed(2)}. ` +
+        `Please approve or decline the repair here: ${authorizationUrl}`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: repairOrder.customer_phone
+    });
+
+    console.log("Repair authorization SMS sent to customer.");
+  }
+} catch (smsError) {
+  console.error("Repair authorization SMS failed:", smsError);
+}   
 
 res.status(201).json({
   success: true,
