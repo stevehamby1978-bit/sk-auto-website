@@ -422,9 +422,8 @@ async function createRepairOrder(vehicleId) {
             );
         }
 
-        alert('Repair order created successfully.');
-
-        await loadCustomer();
+       window.location.href =
+  '/repair-order.html?id=' + encodeURIComponent(result.repair_order_id);
 
     } catch (error) {
         console.error('Create repair order error:', error);
