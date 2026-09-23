@@ -352,7 +352,77 @@ async function deleteVehicle(vehicleId) {
     alert(error.message || 'Unable to delete vehicle.');
   }
 }
+function showAddVehicleForm() {
+    document.getElementById('addVehicleForm').style.display = 'block';
+    document.getElementById('showAddVehicleBtn').style.display = 'none';
+}
 
+function hideAddVehicleForm() {
+    document.getElementById('addVehicleForm').style.display = 'none';
+    document.getElementById('showAddVehicleBtn').style.display = 'inline-block';
+
+    document.getElementById('vehicleYear').value = '';
+    document.getElementById('vehicleMake').value = '';
+    document.getElementById('vehicleModel').value = '';
+    document.getElementById('vehicleVin').value = '';
+    document.getElementById('vehicleMileage').value = '';
+    document.getElementById('vehicleMessage').textContent = '';
+}
+
+async function saveVehicle() {
+    const message = document.getElementById('vehicleMessage');
+
+    const year = document.getElementById('vehicleYear').value.trim();
+    const make = document.getElementById('vehicleMake').value.trim();
+    const model = document.getElementById('vehicleModel').value.trim();
+    const vin = document.getElementById('vehicleVin').value.trim();
+    const mileage = document.getElementById('vehicleMileage').value.trim();
+
+    if (!customerId) {
+        message.textContent = 'Customer ID is missing.';
+        return;
+    }
+
+    if (!year || !make || !model) {
+        message.textContent = 'Please enter the year, make, and model.';
+        return;
+    }
+
+    try {
+        message.textContent = 'Saving vehicle...';
+
+        const response = await fetch('/api/vehicles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                customer_id: customerId,
+                year: year,
+                make: make,
+                model: model,
+                vin: vin || null,
+                mileage: mileage || null
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to add vehicle.'
+            );
+        }
+
+        hideAddVehicleForm();
+        await loadCustomer();
+
+    } catch (error) {
+        console.error('Add vehicle error:', error);
+        message.textContent =
+            error.message || 'Unable to add vehicle.';
+    }
+}
   async function showMergeCustomer() {
   const customer = window.currentCustomer;
 
@@ -800,7 +870,62 @@ window.currentCustomer = customer;
 
         <h2>Vehicles</h2>
 
-        ${vehicleHtml}
+<button
+    type="button"
+    id="showAddVehicleBtn"
+    onclick="showAddVehicleForm()">
+    + Add Vehicle
+</button>
+
+<div id="addVehicleForm" style="display:none; margin-top:15px; margin-bottom:20px;">
+
+    <h3>Add Vehicle</h3>
+
+    <input
+        type="number"
+        id="vehicleYear"
+        placeholder="Year">
+
+    <input
+        type="text"
+        id="vehicleMake"
+        placeholder="Make">
+
+    <input
+        type="text"
+        id="vehicleModel"
+        placeholder="Model">
+
+    <input
+        type="text"
+        id="vehicleVin"
+        placeholder="VIN"
+        maxlength="17">
+
+    <input
+        type="number"
+        id="vehicleMileage"
+        placeholder="Mileage">
+
+    <br><br>
+
+    <button
+        type="button"
+        onclick="saveVehicle()">
+        Save Vehicle
+    </button>
+
+    <button
+        type="button"
+        onclick="hideAddVehicleForm()">
+        Cancel
+    </button>
+
+    <div id="vehicleMessage" style="margin-top:10px;"></div>
+
+</div>
+
+${vehicleHtml}
 
       </div>
 
