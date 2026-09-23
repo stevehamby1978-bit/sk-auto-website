@@ -2187,6 +2187,92 @@ ORDER BY r.id DESC
   }
 });
 
+// ===== S&K AUTO - ADD VEHICLE =====
+app.post("/api/vehicles", (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        error: "You must be logged in."
+      });
+    }
+
+    const {
+      customer_id,
+      year,
+      make,
+      model,
+      vin,
+      mileage
+    } = req.body;
+
+    if (!customer_id) {
+      return res.status(400).json({
+        error: "Customer is required."
+      });
+    }
+
+    // Make sure the customer belongs to this shop
+    const customer = db.prepare(`
+      SELECT id
+      FROM customers
+      WHERE id = ?
+        AND shop_id = ?
+      LIMIT 1
+    `).get(
+      customer_id,
+      req.session.employee.shop_id
+    );
+
+    if (!customer) {
+      return res.status(404).json({
+        error: "Customer not found."
+      });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO vehicles
+      (
+        customer_id,
+        year,
+        make,
+        model,
+        vin,
+        mileage,
+        shop_id
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      customer_id,
+      year || null,
+      make ? make.trim() : null,
+      model ? model.trim() : null,
+      vin ? vin.trim().toUpperCase() : null,
+      mileage || null,
+      req.session.employee.shop_id
+    );
+
+    res.status(201).json({
+      success: true,
+      vehicle: {
+        id: Number(result.lastInsertRowid),
+        customer_id: Number(customer_id),
+        year: year || null,
+        make: make ? make.trim() : null,
+        model: model ? model.trim() : null,
+        vin: vin ? vin.trim().toUpperCase() : null,
+        mileage: mileage || null
+      }
+    });
+
+  } catch (err) {
+    console.error("Add vehicle error:", err);
+
+    res.status(500).json({
+      error: "Unable to add vehicle."
+    });
+  }
+});
+
 // ===== S&K AUTO - DELETE VEHICLE =====
 app.delete("/api/vehicles/:id", (req, res) => {
   try {
