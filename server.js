@@ -4357,7 +4357,7 @@ try {
 // Customer DECLINES recommended repair
 app.patch(
   "/api/customer-repair-authorization/:repairOrderId/:recommendationId/decline",
-  (req, res) => {
+  async (req, res) => {
     try {
       const { repairOrderId, recommendationId } = req.params;
       const token = req.body.token;
@@ -4405,7 +4405,22 @@ app.patch(
         recommendationId,
         repairOrderId
       );
+// ===== S&K AUTO - SHOP SMS WHEN CUSTOMER DECLINES REPAIR =====
+try {
+  await twilioClient.messages.create({
+    body:
+      `S&K Auto - CUSTOMER DECLINED REPAIR\n\n` +
+      `Repair Order: #${repairOrderId}\n` +
+      `Recommended Repair ID: #${recommendationId}\n\n` +
+      `Customer declined this recommended repair.`,
+    from: process.env.TWILIO_PHONE_NUMBER,
+    to: process.env.SMS_TO_NUMBER
+  });
 
+  console.log("Customer repair decline SMS sent to shop.");
+} catch (smsError) {
+  console.error("Customer repair decline SMS failed:", smsError);
+}
       res.json({
         success: true,
         status: "declined",
