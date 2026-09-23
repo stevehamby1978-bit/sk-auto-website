@@ -620,7 +620,48 @@ statusSelect.value =
     document.getElementById('customerConcern').value =
     order.customer_concern || '';
    document.getElementById('technicianDiagnosis').value =
-  order.technician_diagnosis || ''; 
+  order.technician_diagnosis || '';
+    // ===== S&K AUTO - DISPLAY SAVED RECOMMENDED REPAIRS =====
+const recommendedRepairsList =
+  document.getElementById('recommendedRepairsList');
+
+recommendedRepairsList.innerHTML = '';
+
+const recommendations = Array.isArray(order.recommendations)
+  ? order.recommendations
+  : [];
+
+recommendations.forEach((repair) => {
+  const repairBox = document.createElement('div');
+
+  repairBox.style.cssText =
+    'padding:12px; margin-bottom:10px; border:1px solid #ddd; ' +
+    'border-radius:6px; background:#fff;';
+
+  const description = document.createElement('strong');
+  description.textContent = repair.description || 'Recommended Repair';
+
+  const amounts = document.createElement('div');
+  amounts.style.marginTop = '6px';
+
+  const parts = Number(repair.parts) || 0;
+  const labor = Number(repair.labor) || 0;
+
+  amounts.textContent =
+    'Parts: $' + parts.toFixed(2) +
+    ' | Labor: $' + labor.toFixed(2);
+
+  const status = document.createElement('div');
+  status.style.marginTop = '6px';
+  status.textContent =
+    'Status: ' + (repair.status || 'pending');
+
+  repairBox.appendChild(description);
+  repairBox.appendChild(amounts);
+  repairBox.appendChild(status);
+
+  recommendedRepairsList.appendChild(repairBox);
+});
     document.getElementById('technicianNotes').value =
   order.technician_notes || '';
   document.getElementById('authorizedBy').value =
