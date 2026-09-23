@@ -2273,6 +2273,82 @@ app.post("/api/vehicles", (req, res) => {
   }
 });
 
+// ===== S&K AUTO - UPDATE VEHICLE =====
+app.put("/api/vehicles/:id", (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        error: "You must be logged in."
+      });
+    }
+
+    const vehicleId = req.params.id;
+
+    const {
+      year,
+      make,
+      model,
+      vin,
+      mileage
+    } = req.body;
+
+    if (!year || !make || !model) {
+      return res.status(400).json({
+        error: "Year, make, and model are required."
+      });
+    }
+
+    // Make sure vehicle belongs to this shop
+    const vehicle = db.prepare(`
+      SELECT id
+      FROM vehicles
+      WHERE id = ?
+        AND shop_id = ?
+      LIMIT 1
+    `).get(
+      vehicleId,
+      req.session.employee.shop_id
+    );
+
+    if (!vehicle) {
+      return res.status(404).json({
+        error: "Vehicle not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE vehicles
+      SET
+        year = ?,
+        make = ?,
+        model = ?,
+        vin = ?,
+        mileage = ?
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(
+      year || null,
+      make ? make.trim() : null,
+      model ? model.trim() : null,
+      vin ? vin.trim().toUpperCase() : null,
+      mileage || null,
+      vehicleId,
+      req.session.employee.shop_id
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+    console.error("Update vehicle error:", err);
+
+    res.status(500).json({
+      error: "Unable to update vehicle."
+    });
+  }
+});
+
 // ===== S&K AUTO - DELETE VEHICLE =====
 app.delete("/api/vehicles/:id", (req, res) => {
   try {
