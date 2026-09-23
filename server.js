@@ -360,6 +360,14 @@ if (!repairOrderColumns.includes("customer_concern")) {
   `).run();
 }
 
+// Add technician diagnosis / recommended repairs to repair orders
+if (!repairOrderColumns.includes("technician_diagnosis")) {
+    db.prepare(`
+        ALTER TABLE repair_orders
+        ADD COLUMN technician_diagnosis TEXT
+    `).run();
+}
+
 // ===== S&K AUTO - PAYMENT AMOUNT MIGRATION =====
 if (!repairOrderColumns.includes("amount_paid")) {
   db.prepare(`
@@ -3862,6 +3870,71 @@ app.patch("/api/repair-orders/:id/concern", (req, res) => {
       error: "Unable to update customer concern."
     });
   }
+});
+
+// ===== S&K AUTO - UPDATE TECHNICIAN DIAGNOSIS =====
+app.patch("/api/repair-orders/:id/diagnosis", (req, res) => {
+    try {
+        if (!req.session.employee || !req.session.employee.id) {
+            return res.status(401).json({
+                error: "You must be signed in to update the technician diagnosis."
+            });
+        }
+
+        const shopId = req.session.employee.shop_id;
+
+        if (!shopId) {
+            return res.status(403).json({
+                error: "No shop is associated with this employee."
+            });
+        }
+
+        const { technician_diagnosis } = req.body;
+
+        const diagnosis =
+            typeof technician_diagnosis === "string"
+                ? technician_diagnosis.trim()
+                : "";
+
+        const repairOrder = db.prepare(`
+            SELECT id
+            FROM repair_orders
+            WHERE id = ?
+              AND shop_id = ?
+        `).get(
+            req.params.id,
+            shopId
+        );
+
+        if (!repairOrder) {
+            return res.status(404).json({
+                error: "Repair order not found."
+            });
+        }
+
+        db.prepare(`
+            UPDATE repair_orders
+            SET technician_diagnosis = ?
+            WHERE id = ?
+              AND shop_id = ?
+        `).run(
+            diagnosis,
+            req.params.id,
+            shopId
+        );
+
+        res.json({
+            success: true,
+            technician_diagnosis: diagnosis
+        });
+
+    } catch (err) {
+        console.error("Update technician diagnosis error:", err);
+
+        res.status(500).json({
+            error: "Unable to update technician diagnosis."
+        });
+    }
 });
 
 // ===== S&K AUTO - UPDATE TECHNICIAN NOTES =====
