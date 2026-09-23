@@ -2770,8 +2770,12 @@ app.get("/api/repair-orders/:id", (req, res) => {
       FROM repair_orders r
       LEFT JOIN customers c ON r.customer_id = c.id
       LEFT JOIN vehicles v ON r.vehicle_id = v.id
-      WHERE r.id = ?
-    `).get(req.params.id);
+     WHERE r.id = ?
+  AND r.shop_id = ?
+`).get(
+  req.params.id,
+  req.session.employee.shop_id
+);
 
     if (!repairOrder) {
       return res.status(404).json({
