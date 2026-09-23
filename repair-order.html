@@ -357,7 +357,32 @@ button {
   </button>
 
 </div>
-<div id="technicianNotesSection"
+
+    <!-- ===== S&K AUTO - TECHNICIAN DIAGNOSIS ===== -->
+<div id="technicianDiagnosisSection"
+     style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
+
+    <h3 style="margin-top:0;">
+        Technician Diagnosis / Recommended Repairs
+    </h3>
+
+    <textarea
+        id="technicianDiagnosis"
+        rows="6"
+        placeholder="Enter diagnostic findings and recommended repairs..."
+        style="width:100%; box-sizing:border-box; padding:12px; border:1px solid #ccc; border-radius:5px;">
+    </textarea>
+
+    <button
+        id="saveDiagnosisBtn"
+        type="button"
+        style="margin-top:10px; background:#0b4dbb; color:white; border:none; padding:10px 18px; border-radius:5px; cursor:pointer;">
+        Save Diagnosis
+    </button>
+
+</div>
+    
+    <div id="technicianNotesSection"
      style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
 
   <h3 style="margin-top:0;">Technician / Shop Notes</h3>
@@ -1025,7 +1050,65 @@ document.getElementById('saveConcernBtn').addEventListener('click', async () => 
     button.disabled = false;
   }
 });
-document.getElementById('saveNotesBtn').addEventListener('click', async () => {
+
+// ===== S&K AUTO - SAVE TECHNICIAN DIAGNOSIS =====
+document.getElementById('saveDiagnosisBtn').addEventListener('click', async () => {
+
+    const params =
+        new URLSearchParams(window.location.search);
+
+    const id = params.get('id');
+
+    const technicianDiagnosis =
+        document.getElementById('technicianDiagnosis').value;
+
+    const button =
+        document.getElementById('saveDiagnosisBtn');
+
+    try {
+
+        button.disabled = true;
+        button.textContent = 'Saving...';
+
+        const response = await fetch(
+            '/api/repair-orders/' + encodeURIComponent(id) + '/diagnosis',
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    technician_diagnosis: technicianDiagnosis
+                })
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to save technician diagnosis'
+            );
+        }
+
+        button.textContent = 'Saved ✓';
+
+        setTimeout(() => {
+            button.textContent = 'Save Diagnosis';
+        }, 1500);
+
+    } catch (error) {
+
+        alert(error.message);
+        button.textContent = 'Save Diagnosis';
+
+    } finally {
+
+        button.disabled = false;
+
+    }
+});  
+  document.getElementById('saveNotesBtn').addEventListener('click', async () => {
 
   const params =
     new URLSearchParams(window.location.search);
