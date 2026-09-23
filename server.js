@@ -4233,7 +4233,7 @@ app.get(
 // Customer APPROVES recommended repair
 app.patch(
   "/api/customer-repair-authorization/:repairOrderId/:recommendationId/approve",
-  (req, res) => {
+  async (req, res) => {
     try {
       const { repairOrderId, recommendationId } = req.params;
       const token = req.body.token;
@@ -4308,7 +4308,31 @@ app.patch(
       });
 
       const result = approveRepair();
+// ===== S&K AUTO - SHOP SMS WHEN CUSTOMER APPROVES REPAIR =====
+try {
+  await twilioClient.messages.create({
+    body:
+      `S&K Auto - CUSTOMER APPROVED REPAIR\n\n` +
+      `Repair Order: #${repairOrderId}\n` +
+      `Repair: ${recommendation.description}\n` +
+      `Parts: $${Number(recommendation.parts || 0).toFixed(2)}\n` +
+      `Labor: $${Number(recommendation.labor || 0).toFixed(2)}\n` +
+      `Total: $${(
+        Number(recommendation.parts || 0) +
+        Number(recommendation.labor || 0)
+      ).toFixed(2)}\n\n` +
+      `Customer approved this repair through the authorization link.`,
+    from: process.env.TWILIO_PHONE_NUMBER,
+    to: process.env.SMS_TO_NUMBER
+  });
 
+  console.log("Customer repair approval SMS sent to shop.");
+} catch (smsError) {
+  console.error(
+    "Customer repair approval SMS failed:",
+    smsError
+  );
+}
       res.json({
         success: true,
         status: "approved",
