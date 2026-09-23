@@ -4060,7 +4060,7 @@ app.patch(
 
       // Get the recommended repair
       const recommendation = db.prepare(`
-        SELECT id, description, parts, labor
+       SELECT id, description, parts, labor, status
         FROM repair_order_recommendations
         WHERE id = ?
           AND repair_order_id = ?
@@ -4074,7 +4074,11 @@ app.patch(
           error: "Recommended repair not found."
         });
       }
-
+if ((recommendation.status || '').toLowerCase() === 'approved') {
+    return res.status(409).json({
+        error: "This recommended repair has already been approved."
+    });
+}
       // Add approved recommendation to active repair items
       const result = db.prepare(`
         INSERT INTO repair_order_items (
