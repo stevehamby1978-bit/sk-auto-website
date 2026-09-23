@@ -1146,32 +1146,31 @@ if (primaryShop) {
 // ===== S&K AUTO SaaS - REGISTER NEW SHOP =====
 app.post("/api/register-shop", async (req, res) => {
   try {
-    const {
-      shopName,
-      ownerName,
-      email,
-      password,
-      phone,
-      address,
-      city,
-      state,
-      zip
-    } = req.body;
-
+  const {
+    shopName,
+    ownerName,
+    ownerEmail,
+    shopEmail,
+    password,
+    phone,
+    address,
+    city,
+    state,
+    zip
+} = req.body;
     // Required fields
-    if (!shopName || !ownerName || !email || !password) {
-      return res.status(400).json({
-        error: "Shop name, owner name, email, and password are required."
-      });
-    }
-
+   if (!shopName || !ownerName || !ownerEmail || !password) {
+    return res.status(400).json({
+        error: "Shop name, owner name, owner email, and password are required."
+    });
+}
     if (password.length < 8) {
       return res.status(400).json({
         error: "Password must be at least 8 characters."
       });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = ownerEmail.trim().toLowerCase();
 
     // Make sure this email is not already being used
     const existingEmployee = db.prepare(`
@@ -1225,7 +1224,7 @@ app.post("/api/register-shop", async (req, res) => {
         shopName.trim(),
         slug,
         phone ? phone.trim() : "",
-        cleanEmail,
+        shopEmail ? shopEmail.trim().toLowerCase() : cleanEmail,
         address ? address.trim() : "",
         city ? city.trim() : "",
         state ? state.trim() : "",
