@@ -956,33 +956,30 @@ app.get('/api/estimates/:token', (req, res) => {
       LEFT JOIN vehicles v ON e.vehicle_id = v.id
       WHERE e.token = ?
     `).get(req.params.token);
-const items = estimate
-  ? db.prepare(`
-      SELECT description, parts, labor
-      FROM estimate_items
-      WHERE estimate_id = ?
-      ORDER BY id ASC
-    `).all(estimate.id)
-  : [];
+if (!estimate) {
+    return res.status(404).send("Estimate not found");
+}
 
-if (estimate) {
-  estimate.items = items;
+const items = db.prepare(`
+    SELECT description, parts, labor
+    FROM estimate_items
+    WHERE estimate_id = ?
+    ORDER BY id ASC
+`).all(estimate.id);
 
-  const subtotal = items.reduce((sum, item) => {
+estimate.items = items;
+
+const subtotal = items.reduce((sum, item) => {
     return sum + Number(item.parts || 0) + Number(item.labor || 0);
-  }, 0);
+}, 0);
 
- estimate.subtotal = subtotal;
+estimate.subtotal = subtotal;
 
 const taxRate = 0.075;
 estimate.tax = Math.round(subtotal * taxRate * 100) / 100;
 
 estimate.total =
-  Math.round((subtotal + estimate.tax) * 100) / 100;
-}
-    if (!estimate) {
-      return res.status(404).send('Estimate not found');
-    }
+    Math.round((subtotal + estimate.tax) * 100) / 100;
 
     res.json(estimate);
 
@@ -2133,10 +2130,13 @@ ORDER BY year DESC, make ASC, model ASC
       FROM repair_orders r
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
-      WHERE r.customer_id = ?
-      ORDER BY r.id DESC
-    `).all(customer.id);
-
+    WHERE r.customer_id = ?
+AND r.shop_id = ?
+ORDER BY r.id DESC
+`).all(
+    customer.id,
+    req.session.employee.shop_id
+);
 
     // Add repair items and totals to each repair order
     for (const repairOrder of customer.repair_orders) {
@@ -3811,9 +3811,10 @@ if (existingCustomer) {
   customerId = Number(existingCustomer.id);
 
   db.prepare(`
-    UPDATE customers
-    SET name = ?, email = ?
-    WHERE id = ?
+   UPDATE customers
+SET name = ?, email = ?
+WHERE id = ?
+  AND shop_id = ?
   `).run(
     customer.name.trim(),
     customer.email ? customer.email.trim() : null,
