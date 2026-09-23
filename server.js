@@ -3793,26 +3793,39 @@ app.post("/api/repair-orders/:id/recommendations", (req, res) => {
         error: "Parts and labor cannot be negative."
       });
     }
+const authorizationToken = require("crypto").randomBytes(32).toString("hex");
+   const authorizationToken = require("crypto")
+  .randomBytes(32)
+  .toString("hex");
 
-    const result = db.prepare(`
-      INSERT INTO repair_order_recommendations
-      (repair_order_id, description, parts, labor, status)
-      VALUES (?, ?, ?, ?, 'pending')
-    `).run(
-      req.params.id,
-      description.trim(),
-      partsAmount,
-      laborAmount
-    );
+const result = db.prepare(`
+  INSERT INTO repair_order_recommendations
+    (
+      repair_order_id,
+      description,
+      parts,
+      labor,
+      status,
+      authorization_token
+    )
+  VALUES (?, ?, ?, ?, 'pending', ?)
+`).run(
+  req.params.id,
+  description.trim(),
+  partsAmount,
+  laborAmount,
+  authorizationToken
+);
 
-    res.status(201).json({
-      success: true,
-      id: Number(result.lastInsertRowid),
-      description: description.trim(),
-      parts: partsAmount,
-      labor: laborAmount,
-      status: "pending"
-    });
+res.status(201).json({
+  success: true,
+  id: Number(result.lastInsertRowid),
+  description: description.trim(),
+  parts: partsAmount,
+  labor: laborAmount,
+  status: "pending",
+  authorizationToken: authorizationToken
+});
 
   } catch (err) {
     console.error("Add recommended repair error:", err);
@@ -4125,6 +4138,234 @@ app.patch(
 
       res.status(500).json({
         error: "Unable to decline recommended repair."
+      });
+    }
+  }
+);
+
+// ===== S&K AUTO - CUSTOMER REPAIR AUTHORIZATION =====
+
+// Customer opens secure repair authorization link
+app.get(
+  "/api/customer-repair-authorization/:repairOrderId/:recommendationId",
+  (req, res) => {
+    try {
+      const { repairOrderId, recommendationId } = req.params;
+      const token = req.query.token;
+
+      if (!token) {
+        return res.status(401).json({
+          error: "Authorization token required."
+        });
+      }
+
+      const recommendation = db.prepare(`
+        SELECT
+          id,
+          repair_order_id,
+          description,
+          parts,
+          labor,
+          status,
+          authorized_at
+        FROM repair_order_recommendations
+        WHERE id = ?
+          AND repair_order_id = ?
+          AND authorization_token = ?
+      `).get(
+        recommendationId,
+        repairOrderId,
+        token
+      );
+
+      if (!recommendation) {
+        return res.status(404).json({
+          error: "Repair authorization link is invalid or expired."
+        });
+      }
+
+      res.json(recommendation);
+
+    } catch (err) {
+      console.error(
+        "Customer repair authorization lookup error:",
+        err
+      );
+
+      res.status(500).json({
+        error: "Unable to retrieve repair authorization."
+      });
+    }
+  }
+);
+
+
+// Customer APPROVES recommended repair
+app.patch(
+  "/api/customer-repair-authorization/:repairOrderId/:recommendationId/approve",
+  (req, res) => {
+    try {
+      const { repairOrderId, recommendationId } = req.params;
+      const token = req.body.token;
+
+      if (!token) {
+        return res.status(401).json({
+          error: "Authorization token required."
+        });
+      }
+
+      const recommendation = db.prepare(`
+        SELECT
+          id,
+          description,
+          parts,
+          labor,
+          status
+        FROM repair_order_recommendations
+        WHERE id = ?
+          AND repair_order_id = ?
+          AND authorization_token = ?
+      `).get(
+        recommendationId,
+        repairOrderId,
+        token
+      );
+
+      if (!recommendation) {
+        return res.status(404).json({
+          error: "Repair authorization link is invalid or expired."
+        });
+      }
+
+      if (recommendation.status !== "pending") {
+        return res.status(409).json({
+          error: "This repair has already been approved or declined."
+        });
+      }
+
+      const approveRepair = db.transaction(() => {
+
+        const result = db.prepare(`
+          INSERT INTO repair_order_items (
+            repair_order_id,
+            description,
+            parts,
+            labor
+          )
+          VALUES (?, ?, ?, ?)
+        `).run(
+          repairOrderId,
+          recommendation.description,
+          Number(recommendation.parts) || 0,
+          Number(recommendation.labor) || 0
+        );
+
+        db.prepare(`
+          UPDATE repair_order_recommendations
+          SET
+            status = 'approved',
+            authorized_at = CURRENT_TIMESTAMP,
+            authorization_source = 'customer'
+          WHERE id = ?
+            AND repair_order_id = ?
+            AND status = 'pending'
+        `).run(
+          recommendationId,
+          repairOrderId
+        );
+
+        return result;
+      });
+
+      const result = approveRepair();
+
+      res.json({
+        success: true,
+        status: "approved",
+        message: "Repair authorized successfully.",
+        itemId: result.lastInsertRowid
+      });
+
+    } catch (err) {
+      console.error(
+        "Customer repair approval error:",
+        err
+      );
+
+      res.status(500).json({
+        error: "Unable to authorize repair."
+      });
+    }
+  }
+);
+
+
+// Customer DECLINES recommended repair
+app.patch(
+  "/api/customer-repair-authorization/:repairOrderId/:recommendationId/decline",
+  (req, res) => {
+    try {
+      const { repairOrderId, recommendationId } = req.params;
+      const token = req.body.token;
+
+      if (!token) {
+        return res.status(401).json({
+          error: "Authorization token required."
+        });
+      }
+
+      const recommendation = db.prepare(`
+        SELECT id, status
+        FROM repair_order_recommendations
+        WHERE id = ?
+          AND repair_order_id = ?
+          AND authorization_token = ?
+      `).get(
+        recommendationId,
+        repairOrderId,
+        token
+      );
+
+      if (!recommendation) {
+        return res.status(404).json({
+          error: "Repair authorization link is invalid or expired."
+        });
+      }
+
+      if (recommendation.status !== "pending") {
+        return res.status(409).json({
+          error: "This repair has already been approved or declined."
+        });
+      }
+
+      db.prepare(`
+        UPDATE repair_order_recommendations
+        SET
+          status = 'declined',
+          authorized_at = CURRENT_TIMESTAMP,
+          authorization_source = 'customer'
+        WHERE id = ?
+          AND repair_order_id = ?
+          AND status = 'pending'
+      `).run(
+        recommendationId,
+        repairOrderId
+      );
+
+      res.json({
+        success: true,
+        status: "declined",
+        message: "Repair declined."
+      });
+
+    } catch (err) {
+      console.error(
+        "Customer repair decline error:",
+        err
+      );
+
+      res.status(500).json({
+        error: "Unable to decline repair."
       });
     }
   }
