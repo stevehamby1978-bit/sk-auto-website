@@ -621,9 +621,17 @@ const completedInfo =
 
 const viewInvoiceBtn =
   document.getElementById('viewInvoiceBtn');
+const completeRepairBtn =
+  document.getElementById('completeRepairBtn');
 
+const completedRepairStatus =
+  document.getElementById('completedRepairStatus');
 if (order.status === 'completed' && order.completed_at) {
+completeRepairBtn.style.display = 'none';
 
+completedRepairStatus.textContent =
+  '✓ Repair Completed: ' +
+  new Date(order.completed_at).toLocaleString();
   completedInfo.style.display = 'block';
 
   completedInfo.textContent =
@@ -639,7 +647,8 @@ if (order.status === 'completed' && order.completed_at) {
   };
 
 } else {
-
+completeRepairBtn.style.display = 'inline-block';
+completedRepairStatus.textContent = '';
   completedInfo.style.display = 'none';
   completedInfo.textContent = '';
 
