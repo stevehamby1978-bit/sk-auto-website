@@ -409,7 +409,32 @@ db.prepare(`
     FOREIGN KEY (repair_order_id) REFERENCES repair_orders(id)
   )
 `).run();
+// ===== S&K AUTO - CUSTOMER REPAIR AUTHORIZATION MIGRATION =====
 
+const recommendationColumns = db.prepare(
+  `PRAGMA table_info(repair_order_recommendations)`
+).all().map(column => column.name);
+
+if (!recommendationColumns.includes("authorization_token")) {
+  db.prepare(`
+    ALTER TABLE repair_order_recommendations
+    ADD COLUMN authorization_token TEXT
+  `).run();
+}
+
+if (!recommendationColumns.includes("authorized_at")) {
+  db.prepare(`
+    ALTER TABLE repair_order_recommendations
+    ADD COLUMN authorized_at DATETIME
+  `).run();
+}
+
+if (!recommendationColumns.includes("authorization_source")) {
+  db.prepare(`
+    ALTER TABLE repair_order_recommendations
+    ADD COLUMN authorization_source TEXT
+  `).run();
+}
 // ===== S&K AUTO - REPAIR ORDER PAYMENT MIGRATION =====
 
 if (!repairOrderColumns.includes("payment_status")) {
