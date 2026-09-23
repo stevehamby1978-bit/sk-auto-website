@@ -1200,6 +1200,62 @@ const amountPaid =
     button.textContent = 'Email Invoice';
   }
 }
+
+// ===== S&K AUTO - TEXT INVOICE =====
+const textInvoiceBtn = document.getElementById('textInvoiceBtn');
+
+if (textInvoiceBtn) {
+    textInvoiceBtn.addEventListener('click', async () => {
+
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+
+        if (!id) {
+            alert('Invoice ID not found.');
+            return;
+        }
+
+        const originalText = textInvoiceBtn.textContent;
+
+        try {
+            textInvoiceBtn.disabled = true;
+            textInvoiceBtn.textContent = 'Sending...';
+
+            const response = await fetch(
+                '/api/invoices/' + encodeURIComponent(id) + '/text',
+                {
+                    method: 'POST'
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || 'Unable to text invoice.'
+                );
+            }
+
+            alert('Invoice text sent successfully!');
+
+        } catch (error) {
+            console.error('Text invoice error:', error);
+
+            alert(
+                error.message ||
+                'Unable to text invoice.'
+            );
+
+        } finally {
+            textInvoiceBtn.disabled = false;
+            textInvoiceBtn.textContent = originalText;
+        }
+    });
+}
+
+// Keep this line
+loadInvoice();
+  
 loadInvoice();
 
 </script>
