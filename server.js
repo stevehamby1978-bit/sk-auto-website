@@ -1257,12 +1257,13 @@ app.post("/api/change-password", async (req, res) => {
       SET
         password_hash = ?,
         must_change_password = 0
-      WHERE id = ?
-    `).run(
-      passwordHash,
-      employeeId
-    );
-
+    WHERE id = ?
+  AND shop_id = ?
+`).run(
+    passwordHash,
+    employeeId,
+    req.session.employee.shop_id
+);
     if (result.changes === 0) {
       return res.status(404).json({
         error: "Employee account not found."
