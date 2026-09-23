@@ -395,6 +395,21 @@ if (!repairOrderColumns.includes("authorization_notes")) {
     ADD COLUMN authorization_notes TEXT
   `).run();
 }
+
+// ===== S&K AUTO - RECOMMENDED REPAIRS MIGRATION =====
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS repair_order_recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repair_order_id INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    parts REAL NOT NULL DEFAULT 0,
+    labor REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repair_order_id) REFERENCES repair_orders(id)
+  )
+`).run();
+
 // ===== S&K AUTO - REPAIR ORDER PAYMENT MIGRATION =====
 
 if (!repairOrderColumns.includes("payment_status")) {
@@ -3693,6 +3708,67 @@ app.post("/api/repair-orders/:id/items", (req, res) => {
 
     res.status(500).json({
       error: "Unable to add repair item."
+    });
+  }
+});
+
+// ===== S&K AUTO - ADD RECOMMENDED REPAIR =====
+app.post("/api/repair-orders/:id/recommendations", (req, res) => {
+  try {
+    const { description, parts, labor } = req.body;
+
+    if (!description || !description.trim()) {
+      return res.status(400).json({
+        error: "Recommended repair description is required."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+    `).get(req.params.id);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    const partsAmount = Number(parts) || 0;
+    const laborAmount = Number(labor) || 0;
+
+    if (partsAmount < 0 || laborAmount < 0) {
+      return res.status(400).json({
+        error: "Parts and labor cannot be negative."
+      });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO repair_order_recommendations
+      (repair_order_id, description, parts, labor, status)
+      VALUES (?, ?, ?, ?, 'pending')
+    `).run(
+      req.params.id,
+      description.trim(),
+      partsAmount,
+      laborAmount
+    );
+
+    res.status(201).json({
+      success: true,
+      id: Number(result.lastInsertRowid),
+      description: description.trim(),
+      parts: partsAmount,
+      labor: laborAmount,
+      status: "pending"
+    });
+
+  } catch (err) {
+    console.error("Add recommended repair error:", err);
+
+    res.status(500).json({
+      error: "Unable to add recommended repair."
     });
   }
 });
