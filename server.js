@@ -1138,6 +1138,143 @@ if (primaryShop) {
   `).run(primaryShop.id);
 }
 
+// ===== S&K AUTO SaaS - REGISTER NEW SHOP =====
+app.post("/api/register-shop", async (req, res) => {
+  try {
+    const {
+      shopName,
+      ownerName,
+      email,
+      password,
+      phone,
+      address,
+      city,
+      state,
+      zip
+    } = req.body;
+
+    // Required fields
+    if (!shopName || !ownerName || !email || !password) {
+      return res.status(400).json({
+        error: "Shop name, owner name, email, and password are required."
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        error: "Password must be at least 8 characters."
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Make sure this email is not already being used
+    const existingEmployee = db.prepare(`
+      SELECT id
+      FROM employees
+      WHERE LOWER(email) = ?
+      LIMIT 1
+    `).get(cleanEmail);
+
+    if (existingEmployee) {
+      return res.status(409).json({
+        error: "An account with this email already exists."
+      });
+    }
+
+    // Create a URL-safe unique shop slug
+    const baseSlug = shopName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "shop";
+
+    let slug = baseSlug;
+    let counter = 2;
+
+    while (db.prepare(`
+      SELECT id FROM shops WHERE slug = ?
+    `).get(slug)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create the shop and its owner together
+    const createShop = db.transaction(() => {
+      const shopResult = db.prepare(`
+        INSERT INTO shops
+        (
+          name,
+          slug,
+          phone,
+          email,
+          address,
+          city,
+          state,
+          zip
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        shopName.trim(),
+        slug,
+        phone ? phone.trim() : "",
+        cleanEmail,
+        address ? address.trim() : "",
+        city ? city.trim() : "",
+        state ? state.trim() : "",
+        zip ? zip.trim() : ""
+      );
+
+      const shopId = Number(shopResult.lastInsertRowid);
+
+      const employeeResult = db.prepare(`
+        INSERT INTO employees
+        (
+          name,
+          email,
+          password_hash,
+          role,
+          active,
+          shop_id,
+          must_change_password
+        )
+        VALUES (?, ?, ?, 'owner', 1, ?, 0)
+      `).run(
+        ownerName.trim(),
+        cleanEmail,
+        passwordHash,
+        shopId
+      );
+
+      return {
+        shopId,
+        employeeId: Number(employeeResult.lastInsertRowid)
+      };
+    });
+
+    const newAccount = createShop();
+
+    return res.status(201).json({
+      success: true,
+      message: "Shop account created successfully.",
+      shop: {
+        id: newAccount.shopId,
+        name: shopName.trim(),
+        slug
+      }
+    });
+
+  } catch (err) {
+    console.error("Register shop error:", err);
+
+    return res.status(500).json({
+      error: "Unable to create shop account."
+    });
+  }
+});
+
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
