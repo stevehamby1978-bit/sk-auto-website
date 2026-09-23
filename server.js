@@ -3533,6 +3533,21 @@ app.get("/api/repair-orders/:id/invoice-email-history", (req, res) => {
 // ===== S&K AUTO - CREATE REPAIR ORDER =====
 app.post("/api/repair-orders", (req, res) => {
   try {
+    // Require a logged-in employee
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to create a repair order."
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
     const { customer_id, vehicle_id, estimate_id } = req.body;
 
     if (!customer_id) {
@@ -3541,11 +3556,16 @@ app.post("/api/repair-orders", (req, res) => {
       });
     }
 
+    // Make sure the customer belongs to the logged-in shop
     const customer = db.prepare(`
       SELECT id
       FROM customers
       WHERE id = ?
-    `).get(customer_id);
+        AND shop_id = ?
+    `).get(
+      customer_id,
+      shopId
+    );
 
     if (!customer) {
       return res.status(404).json({
@@ -3553,13 +3573,20 @@ app.post("/api/repair-orders", (req, res) => {
       });
     }
 
+    // If a vehicle was supplied, make sure it belongs
+    // to this customer AND this shop
     if (vehicle_id) {
       const vehicle = db.prepare(`
         SELECT id
         FROM vehicles
         WHERE id = ?
           AND customer_id = ?
-      `).get(vehicle_id, customer_id);
+          AND shop_id = ?
+      `).get(
+        vehicle_id,
+        customer_id,
+        shopId
+      );
 
       if (!vehicle) {
         return res.status(404).json({
@@ -3574,13 +3601,15 @@ app.post("/api/repair-orders", (req, res) => {
         customer_id,
         vehicle_id,
         status,
-        payment_status
+        payment_status,
+        shop_id
       )
-      VALUES (?, ?, ?, 'waiting', 'unpaid')
+      VALUES (?, ?, ?, 'waiting', 'unpaid', ?)
     `).run(
       estimate_id || null,
       customer_id,
-      vehicle_id || null
+      vehicle_id || null,
+      shopId
     );
 
     res.json({
@@ -3596,7 +3625,6 @@ app.post("/api/repair-orders", (req, res) => {
     });
   }
 });
-
 // ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
 app.post("/api/repair-orders/:id/items", (req, res) => {
   try {
