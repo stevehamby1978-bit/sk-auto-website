@@ -721,6 +721,63 @@ if ((repair.status || 'pending').toLowerCase() === 'pending') {
   });
 
   repairBox.appendChild(approveBtn);
+  // ===== S&K AUTO - DECLINE RECOMMENDED REPAIR BUTTON =====
+const declineBtn = document.createElement('button');
+
+declineBtn.type = 'button';
+declineBtn.textContent = '✕ Decline Repair';
+
+declineBtn.style.cssText =
+  'margin-top:10px; margin-left:10px; padding:8px 14px; ' +
+  'background:#dc3545; color:white; border:none; ' +
+  'border-radius:5px; cursor:pointer; font-weight:bold;';
+
+declineBtn.addEventListener('click', async () => {
+
+  if (!confirm(
+    'Decline this recommended repair?'
+  )) {
+    return;
+  }
+
+  declineBtn.disabled = true;
+  declineBtn.textContent = 'Declining...';
+
+  try {
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(order.id) +
+      '/recommendations/' +
+      encodeURIComponent(repair.id) +
+      '/decline',
+      {
+        method: 'PATCH'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to decline repair.'
+      );
+    }
+
+    alert('Recommended repair declined.');
+
+    window.location.reload();
+
+  } catch (error) {
+
+    alert(error.message);
+
+    declineBtn.disabled = false;
+    declineBtn.textContent = '✕ Decline Repair';
+  }
+});
+
+repairBox.appendChild(declineBtn);
 }
   recommendedRepairsList.appendChild(repairBox);
 });
