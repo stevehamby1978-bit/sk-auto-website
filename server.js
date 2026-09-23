@@ -3969,7 +3969,89 @@ app.delete("/api/repair-orders/:repairOrderId/recommendations/:recommendationId"
     });
   }
 });
+// ===== S&K AUTO - APPROVE RECOMMENDED REPAIR =====
+app.patch(
+  "/api/repair-orders/:repairOrderId/recommendations/:recommendationId/approve",
+  (req, res) => {
+    try {
+      const repairOrderId = req.params.repairOrderId;
+      const recommendationId = req.params.recommendationId;
 
+      // Make sure the repair order exists
+      const repairOrder = db.prepare(`
+        SELECT id
+        FROM repair_orders
+        WHERE id = ?
+      `).get(repairOrderId);
+
+      if (!repairOrder) {
+        return res.status(404).json({
+          error: "Repair order not found."
+        });
+      }
+
+      // Get the recommended repair
+      const recommendation = db.prepare(`
+        SELECT id, description, parts, labor
+        FROM repair_order_recommendations
+        WHERE id = ?
+          AND repair_order_id = ?
+      `).get(
+        recommendationId,
+        repairOrderId
+      );
+
+      if (!recommendation) {
+        return res.status(404).json({
+          error: "Recommended repair not found."
+        });
+      }
+
+      // Add approved recommendation to active repair items
+      const result = db.prepare(`
+        INSERT INTO repair_order_items (
+          repair_order_id,
+          description,
+          parts,
+          labor
+        )
+        VALUES (?, ?, ?, ?)
+      `).run(
+        repairOrderId,
+        recommendation.description,
+        Number(recommendation.parts) || 0,
+        Number(recommendation.labor) || 0
+      );
+
+      // Mark recommendation approved
+      db.prepare(`
+        UPDATE repair_order_recommendations
+        SET status = 'approved'
+        WHERE id = ?
+          AND repair_order_id = ?
+      `).run(
+        recommendationId,
+        repairOrderId
+      );
+
+      res.json({
+        success: true,
+        message: "Recommended repair approved and added to repair order.",
+        itemId: result.lastInsertRowid
+      });
+
+    } catch (err) {
+      console.error(
+        "Approve recommended repair error:",
+        err
+      );
+
+      res.status(500).json({
+        error: "Unable to approve recommended repair."
+      });
+    }
+  }
+);
 // ===== S&K AUTO - UPDATE CUSTOMER CONCERN =====
 app.patch("/api/repair-orders/:id/concern", (req, res) => {
   try {
