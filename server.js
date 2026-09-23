@@ -3793,7 +3793,7 @@ app.post("/api/repair-orders/:id/recommendations", (req, res) => {
         error: "Parts and labor cannot be negative."
       });
     }
-const authorizationToken = require("crypto").randomBytes(32).toString("hex");
+
    const authorizationToken = require("crypto")
   .randomBytes(32)
   .toString("hex");
