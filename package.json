@@ -17,6 +17,7 @@
 "twilio": "^5.10.4",
 "multer": "^2.2.0",
 "bcryptjs": "^3.0.2",
-"express-session": "^1.18.2"
+"express-session": "^1.18.2",
+"connect-sqlite3": "^0.9.16"
 }
 }
