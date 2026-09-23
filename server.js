@@ -4504,7 +4504,65 @@ app.patch("/api/repair-orders/:id/concern", (req, res) => {
     });
   }
 });
+// ===== S&K AUTO - MARK REPAIR ORDER COMPLETED =====
+app.patch("/api/repair-orders/:id/complete", (req, res) => {
+  try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to complete a repair order."
+      });
+    }
 
+    const shopId = req.session.employee.shop_id;
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id, status
+      FROM repair_orders
+      WHERE id = ?
+        AND shop_id = ?
+    `).get(req.params.id, shopId);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    if (repairOrder.status === "completed") {
+      return res.status(409).json({
+        error: "This repair order has already been completed."
+      });
+    }
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET
+        status = 'completed',
+        completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(req.params.id, shopId);
+
+    res.json({
+      success: true,
+      status: "completed",
+      message: "Repair order marked completed."
+    });
+
+  } catch (err) {
+    console.error("Complete repair order error:", err);
+
+    res.status(500).json({
+      error: "Unable to complete repair order."
+    });
+  }
+});
 // ===== S&K AUTO - UPDATE TECHNICIAN DIAGNOSIS =====
 app.patch("/api/repair-orders/:id/diagnosis", (req, res) => {
     try {
