@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Create Shop Account | S&K Auto Shop Management</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at top, #25395c 0%, #111827 35%, #070b12 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 15px;
+    }
+
+    .register-container {
+      width: 100%;
+      max-width: 720px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid #334155;
+      border-radius: 18px;
+      padding: 35px;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, 0.45);
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 32px;
+    }
+
+    .brand p {
+      margin: 8px 0 0;
+      color: #94a3b8;
+    }
+
+    .section-title {
+      margin: 25px 0 15px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #334155;
+      font-size: 17px;
+      color: #e2e8f0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #cbd5e1;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 13px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+    }
+
+    button {
+      width: 100%;
+      margin-top: 25px;
+      padding: 14px;
+      border: none;
+      border-radius: 9px;
+      background: #2563eb;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #message {
+      display: none;
+      margin-top: 18px;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .success {
+      display: block !important;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid #22c55e;
+      color: #86efac;
+    }
+
+    .error {
+      display: block !important;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+    }
+
+    .login-link {
+      text-align: center;
+      margin-top: 22px;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .login-link a {
+      color: #60a5fa;
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .full {
+        grid-column: auto;
+      }
+
+      .register-container {
+        padding: 24px 18px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="register-container">
+
+    <div class="brand">
+      <h1>S&K Auto</h1>
+      <p>Shop Management System</p>
+    </div>
+
+    <form id="registerForm">
+
+      <div class="section-title">Shop Information</div>
+
+      <div class="grid">
+
+        <div class="full">
+          <label for="shopName">Shop Name *</label>
+          <input
+            id="shopName"
+            name="shopName"
+            type="text"
+            required
+            autocomplete="organization"
+          >
+        </div>
+
+        <div>
+          <label for="phone">Shop Phone</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            autocomplete="tel"
+          >
+        </div>
+
+        <div>
+          <label for="shopEmail">Shop Email</label>
+          <input
+            id="shopEmail"
+            name="shopEmail"
+            type="email"
+            autocomplete="email"
+          >
+        </div>
+
+        <div class="full">
+          <label for="address">Address</label>
+          <input
+            id="address"
+            name="address"
+            type="text"
+            autocomplete="street-address"
+          >
+        </div>
+
+        <div>
+          <label for="city">City</label>
+          <input
+            id="city"
+            name="city"
+            type="text"
+            autocomplete="address-level2"
+          >
+        </div>
+
+        <div>
+          <label for="state">State</label>
+          <input
+            id="state"
+            name="state"
+            type="text"
+            maxlength="2"
+            placeholder="KS"
+            autocomplete="address-level1"
+          >
+        </div>
+
+        <div>
+          <label for="zip">ZIP Code</label>
+          <input
+            id="zip"
+            name="zip"
+            type="text"
+            autocomplete="postal-code"
+          >
+        </div>
+
+      </div>
+
+      <div class="section-title">Owner Account</div>
+
+      <div class="grid">
+
+        <div class="full">
+          <label for="ownerName">Owner Name *</label>
+          <input
+            id="ownerName"
+            name="ownerName"
+            type="text"
+            required
+            autocomplete="name"
+          >
+        </div>
+
+        <div class="full">
+          <label for="ownerEmail">Owner Login Email *</label>
+          <input
+            id="ownerEmail"
+            name="ownerEmail"
+            type="email"
+            required
+            autocomplete="username"
+          >
+        </div>
+
+        <div>
+          <label for="password">Password *</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="new-password"
+          >
+        </div>
+
+        <div>
+          <label for="confirmPassword">Confirm Password *</label>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="new-password"
+          >
+        </div>
+
+      </div>
+
+      <button id="submitButton" type="submit">
+        Create Shop Account
+      </button>
+
+      <div id="message"></div>
+
+    </form>
+
+    <div class="login-link">
+      Already have an account?
+      <a href="/login.html">Sign in</a>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById('registerForm');
+    const message = document.getElementById('message');
+    const submitButton = document.getElementById('submitButton');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      message.className = '';
+      message.style.display = 'none';
+      message.textContent = '';
+
+      const password =
+        document.getElementById('password').value;
+
+      const confirmPassword =
+        document.getElementById('confirmPassword').value;
+
+      if (password !== confirmPassword) {
+        message.textContent = 'Passwords do not match.';
+        message.className = 'error';
+        return;
+      }
+
+      const registration = {
+        shopName:
+          document.getElementById('shopName').value.trim(),
+
+        phone:
+          document.getElementById('phone').value.trim(),
+
+        shopEmail:
+          document.getElementById('shopEmail').value.trim(),
+
+        address:
+          document.getElementById('address').value.trim(),
+
+        city:
+          document.getElementById('city').value.trim(),
+
+        state:
+          document.getElementById('state').value.trim().toUpperCase(),
+
+        zip:
+          document.getElementById('zip').value.trim(),
+
+        ownerName:
+          document.getElementById('ownerName').value.trim(),
+
+        ownerEmail:
+          document.getElementById('ownerEmail').value.trim().toLowerCase(),
+
+        password
+      };
+
+      try {
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Creating Account...';
+
+        const response = await fetch('/api/register-shop', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(registration)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || 'Unable to create shop account.'
+          );
+        }
+
+        message.textContent =
+          'Shop account created successfully. Redirecting to login...';
+
+        message.className = 'success';
+
+        form.reset();
+
+        setTimeout(() => {
+          window.location.href = '/login.html';
+        }, 1500);
+
+      } catch (error) {
+
+        message.textContent =
+          error.message || 'Unable to create shop account.';
+
+        message.className = 'error';
+
+      } finally {
+
+        submitButton.disabled = false;
+        submitButton.textContent = 'Create Shop Account';
+
+      }
+    });
+  </script>
+
+</body>
+</html>
