@@ -388,6 +388,184 @@ button {
 
     </div>
 
+<!-- ===== S&K AUTO - PAYMENT SECTION ===== -->
+<div id="paymentSection"
+     style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
+
+  <h3 style="margin-top:0;">Payment</h3>
+
+  <div style="
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+      margin-bottom:15px;
+  ">
+
+    <div>
+      <label for="paymentAmount">
+        <strong>Payment Amount</strong>
+      </label>
+
+      <input
+        id="paymentAmount"
+        type="number"
+        min="0.01"
+        step="0.01"
+        placeholder="0.00"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:10px;
+          margin-top:5px;
+        ">
+    </div>
+
+    <div>
+      <label for="paymentMethod">
+        <strong>Payment Method</strong>
+      </label>
+
+      <select
+        id="paymentMethod"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:10px;
+          margin-top:5px;
+        ">
+        <option value="">Select payment method</option>
+        <option value="Cash">Cash</option>
+        <option value="Credit Card">Credit Card</option>
+        <option value="Debit Card">Debit Card</option>
+        <option value="Check">Check</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+
+  </div>
+
+  <button
+    id="recordPaymentBtn"
+    type="button"
+    style="
+      background:#0b4dbb;
+      color:white;
+      border:none;
+      padding:10px 18px;
+      border-radius:5px;
+      font-weight:bold;
+      cursor:pointer;
+    ">
+    Record Payment
+  </button>
+
+  <div style="
+      margin-top:20px;
+      border-top:1px solid #ccc;
+      padding-top:15px;
+  ">
+
+    <div class="total-row">
+      <span>Amount Paid:</span>
+      <strong id="amountPaid">$0.00</strong>
+    </div>
+
+    <div class="total-row">
+      <span>Balance Due:</span>
+      <strong id="balanceDue">$0.00</strong>
+    </div>
+
+  </div>
+
+  <h4 style="margin-bottom:8px;">Payment History</h4>
+
+  <div id="paymentHistory">
+    No payments recorded.
+  </div>
+
+</div>
+
+// ===== S&K AUTO - RECORD PAYMENT =====
+document.getElementById('recordPaymentBtn').addEventListener('click', async () => {
+
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  const amount =
+    Number(document.getElementById('paymentAmount').value);
+
+  const paymentMethod =
+    document.getElementById('paymentMethod').value;
+
+  const button =
+    document.getElementById('recordPaymentBtn');
+
+  if (!amount || amount <= 0) {
+    alert('Please enter a valid payment amount.');
+    return;
+  }
+
+  if (!paymentMethod) {
+    alert('Please select a payment method.');
+    return;
+  }
+
+  if (!confirm(
+    'Record a payment of $' +
+    amount.toFixed(2) +
+    ' by ' +
+    paymentMethod +
+    '?'
+  )) {
+    return;
+  }
+
+  try {
+
+    button.disabled = true;
+    button.textContent = 'Recording...';
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(id) +
+      '/payments',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: amount,
+          payment_method: paymentMethod
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to record payment.'
+      );
+    }
+
+    alert(
+      'Payment of $' +
+      amount.toFixed(2) +
+      ' recorded successfully.'
+    );
+
+    window.location.reload();
+
+  } catch (error) {
+
+    alert(error.message);
+
+    button.disabled = false;
+    button.textContent = 'Record Payment';
+  }
+});
+    
 <!-- ===== S&K AUTO - COMPLETE REPAIR ORDER ===== -->
 <div style="margin-top:20px; text-align:right;">
 
