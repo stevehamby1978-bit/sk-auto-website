@@ -4563,6 +4563,89 @@ app.patch("/api/repair-orders/:id/complete", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - PAYMENT ROUTE =====
+
+// ===== S&K AUTO - RECORD PAYMENT =====
+app.post("/api/repair-orders/:id/payments", (req, res) => {
+  try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to record a payment."
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
+    const amount = Number(req.body.amount);
+    const paymentMethod =
+      typeof req.body.payment_method === "string"
+        ? req.body.payment_method.trim()
+        : "";
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({
+        error: "Enter a valid payment amount."
+      });
+    }
+
+    if (!paymentMethod) {
+      return res.status(400).json({
+        error: "Select a payment method."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+        AND shop_id = ?
+    `).get(
+      req.params.id,
+      shopId
+    );
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO repair_order_payments (
+        repair_order_id,
+        amount,
+        payment_method
+      )
+      VALUES (?, ?, ?)
+    `).run(
+      req.params.id,
+      amount,
+      paymentMethod
+    );
+
+    res.status(201).json({
+      success: true,
+      id: Number(result.lastInsertRowid),
+      amount: amount,
+      payment_method: paymentMethod,
+      message: "Payment recorded successfully."
+    });
+
+  } catch (err) {
+    console.error("Record payment error:", err);
+
+    res.status(500).json({
+      error: "Unable to record payment."
+    });
+  }
+});
 // ===== S&K AUTO - UPDATE TECHNICIAN DIAGNOSIS =====
 app.patch("/api/repair-orders/:id/diagnosis", (req, res) => {
     try {
