@@ -1266,9 +1266,24 @@ document.getElementById('addRecommendedBtn').addEventListener('click', async () 
             );
         }
 
-        alert('Recommended repair added.');
+    const authorizationLink =
+    window.location.origin +
+    '/repair-authorization.html?order=' +
+    encodeURIComponent(id) +
+    '&repair=' +
+    encodeURIComponent(result.id) +
+    '&token=' +
+    encodeURIComponent(result.authorizationToken);
 
-        window.location.reload();
+await navigator.clipboard.writeText(authorizationLink);
+
+alert(
+    'Recommended repair added!\n\n' +
+    'Customer authorization link copied to clipboard:\n\n' +
+    authorizationLink
+);
+
+window.location.reload();
 
     } catch (error) {
 
