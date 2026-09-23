@@ -320,6 +320,74 @@ if (!response.ok) {
 
   }
 }
+function editVehicle(vehicleId) {
+    const customer = window.currentCustomer;
+
+    if (!customer || !customer.vehicles) {
+        alert('Unable to find vehicle information.');
+        return;
+    }
+
+    const vehicle = customer.vehicles.find(
+        v => Number(v.id) === Number(vehicleId)
+    );
+
+    if (!vehicle) {
+        alert('Vehicle not found.');
+        return;
+    }
+
+    const year = prompt('Year:', vehicle.year || '');
+    if (year === null) return;
+
+    const make = prompt('Make:', vehicle.make || '');
+    if (make === null) return;
+
+    const model = prompt('Model:', vehicle.model || '');
+    if (model === null) return;
+
+    const vin = prompt('VIN:', vehicle.vin || '');
+    if (vin === null) return;
+
+    const mileage = prompt('Mileage:', vehicle.mileage || '');
+    if (mileage === null) return;
+
+    updateVehicle(vehicleId, {
+        year: year.trim(),
+        make: make.trim(),
+        model: model.trim(),
+        vin: vin.trim(),
+        mileage: mileage.trim()
+    });
+}
+async function updateVehicle(vehicleId, vehicleData) {
+    try {
+        const response = await fetch(
+            '/api/vehicles/' + encodeURIComponent(vehicleId),
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(vehicleData)
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to update vehicle.'
+            );
+        }
+
+        await loadCustomer();
+
+    } catch (error) {
+        console.error('Update vehicle error:', error);
+        alert(error.message || 'Unable to update vehicle.');
+    }
+}  
 async function deleteVehicle(vehicleId) {
   const confirmed = confirm(
     'Are you sure you want to delete this vehicle? This cannot be undone.'
@@ -652,10 +720,16 @@ window.currentCustomer = customer;
             ${escapeHtml(vehicle.mileage || 'Not entered')}
           </p>
 <button
-  type="button"
-  class="delete-vehicle-btn"
-  onclick="deleteVehicle(${vehicle.id})">
-  Delete Vehicle
+    type="button"
+    onclick="editVehicle(${vehicle.id})">
+    Edit Vehicle
+</button>
+
+<button
+    type="button"
+    class="delete-vehicle-btn"
+    onclick="deleteVehicle(${vehicle.id})">
+    Delete Vehicle
 </button>
 
         </div>
