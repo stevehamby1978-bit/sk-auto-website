@@ -3795,6 +3795,71 @@ app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
   }
 });
 
+// ===== S&K AUTO - UPDATE CUSTOMER CONCERN =====
+app.patch("/api/repair-orders/:id/concern", (req, res) => {
+  try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to update the customer concern."
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
+    const { customer_concern } = req.body;
+
+    const concern =
+      typeof customer_concern === "string"
+        ? customer_concern.trim()
+        : "";
+
+    const repairOrder = db.prepare(`
+      SELECT id
+      FROM repair_orders
+      WHERE id = ?
+        AND shop_id = ?
+    `).get(
+      req.params.id,
+      shopId
+    );
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET customer_concern = ?
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(
+      concern,
+      req.params.id,
+      shopId
+    );
+
+    res.json({
+      success: true,
+      customer_concern: concern
+    });
+
+  } catch (err) {
+    console.error("Update customer concern error:", err);
+
+    res.status(500).json({
+      error: "Unable to update customer concern."
+    });
+  }
+});
+
 // ===== S&K AUTO - UPDATE TECHNICIAN NOTES =====
 app.patch("/api/repair-orders/:id/notes", (req, res) => {
   try {
