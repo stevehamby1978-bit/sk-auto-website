@@ -387,6 +387,37 @@ button {
       </div>
 
     </div>
+
+<!-- ===== S&K AUTO - COMPLETE REPAIR ORDER ===== -->
+<div style="margin-top:20px; text-align:right;">
+
+    <button
+        id="completeRepairBtn"
+        type="button"
+        style="
+            background:#198754;
+            color:white;
+            border:none;
+            padding:12px 22px;
+            border-radius:6px;
+            font-size:16px;
+            font-weight:bold;
+            cursor:pointer;
+        ">
+        ✓ Mark Repair Complete
+    </button>
+
+    <div
+        id="completedRepairStatus"
+        style="
+            margin-top:8px;
+            font-weight:bold;
+            color:#198754;
+        ">
+    </div>
+
+</div>
+    
     <!-- ===== S&K AUTO - CUSTOMER CONCERN ===== -->
 <div id="customerConcernSection"
      style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
@@ -1296,8 +1327,57 @@ window.location.reload();
 
     }
 });
+
+// ===== S&K AUTO - MARK REPAIR ORDER COMPLETE =====
+document.getElementById('completeRepairBtn').addEventListener('click', async () => {
+
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  const button =
+    document.getElementById('completeRepairBtn');
+
+  if (!confirm('Mark this repair order as completed?')) {
+    return;
+  }
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Completing...';
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(id) +
+      '/complete',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to complete repair order.'
+      );
+    }
+
+    alert('Repair order marked completed.');
+    window.location.reload();
+
+  } catch (error) {
+    alert(error.message);
+
+    button.disabled = false;
+    button.textContent = '✓ Mark Repair Complete';
+  }
+});
+
   
-// ===== S&K AUTO - SAVE CUSTOMER CONCERN =====
+// ===== S&K AUTO - SAVE CUSTOMER CONCERN ===== 
 document.getElementById('saveConcernBtn').addEventListener('click', async () => {
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
