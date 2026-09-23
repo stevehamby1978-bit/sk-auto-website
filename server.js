@@ -3883,6 +3883,68 @@ app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
   }
 });
 
+// ===== S&K AUTO - GET RECOMMENDED REPAIRS =====
+app.get("/api/repair-orders/:id/recommendations", (req, res) => {
+  try {
+    const recommendations = db.prepare(`
+      SELECT id, repair_order_id, description, parts, labor, status, created_at
+      FROM repair_order_recommendations
+      WHERE repair_order_id = ?
+      ORDER BY id ASC
+    `).all(req.params.id);
+
+    res.json(recommendations);
+
+  } catch (err) {
+    console.error("Get recommended repairs error:", err);
+
+    res.status(500).json({
+      error: "Unable to load recommended repairs."
+    });
+  }
+});
+
+// ===== S&K AUTO - DELETE RECOMMENDED REPAIR =====
+app.delete("/api/repair-orders/:repairOrderId/recommendations/:recommendationId", (req, res) => {
+  try {
+    const recommendation = db.prepare(`
+      SELECT id
+      FROM repair_order_recommendations
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).get(
+      req.params.recommendationId,
+      req.params.repairOrderId
+    );
+
+    if (!recommendation) {
+      return res.status(404).json({
+        error: "Recommended repair not found."
+      });
+    }
+
+    db.prepare(`
+      DELETE FROM repair_order_recommendations
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).run(
+      req.params.recommendationId,
+      req.params.repairOrderId
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+    console.error("Delete recommended repair error:", err);
+
+    res.status(500).json({
+      error: "Unable to delete recommended repair."
+    });
+  }
+});
+
 // ===== S&K AUTO - UPDATE CUSTOMER CONCERN =====
 app.patch("/api/repair-orders/:id/concern", (req, res) => {
   try {
