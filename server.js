@@ -2193,7 +2193,20 @@ ORDER BY r.id DESC
         WHERE repair_order_id = ?
         ORDER BY id ASC
       `).all(repairOrder.id);
-
+// Load recommended repairs for this repair order
+repairOrder.recommendations = db.prepare(`
+  SELECT
+    id,
+    description,
+    parts,
+    labor,
+    status,
+    created_at
+  FROM repair_order_recommendations
+  WHERE repair_order_id = ?
+  ORDER BY id ASC
+`).all(repairOrder.id);
+      
       repairOrder.subtotal =
         repairOrder.items.reduce(
           (sum, item) =>
