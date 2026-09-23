@@ -319,6 +319,56 @@ button {
   </button>
 
 </div>
+<!-- ===== S&K AUTO - RECOMMENDED REPAIRS / CUSTOMER APPROVAL ===== -->
+
+<div id="recommendedRepairsSection"
+     style="margin-top:25px; padding:18px; background:#f3f4f6; border-radius:7px;">
+
+    <h3 style="margin-top:0;">Recommended Repairs</h3>
+
+    <p style="margin-top:0; color:#555;">
+        Add repairs that have been recommended but are waiting for customer approval.
+    </p>
+
+    <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px;">
+
+        <input
+            id="recommendedDescription"
+            type="text"
+            placeholder="Recommended repair"
+            style="padding:10px;">
+
+        <input
+            id="recommendedParts"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Parts $"
+            style="padding:10px;">
+
+        <input
+            id="recommendedLabor"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Labor $"
+            style="padding:10px;">
+
+    </div>
+
+    <button
+        id="addRecommendedBtn"
+        type="button"
+        style="margin-top:12px; background:#ef8b23; color:white; border:none; padding:10px 18px; border-radius:5px; font-weight:bold;">
+        + Add Recommended Repair
+    </button>
+
+    <div id="recommendedRepairsList"
+         style="margin-top:15px;">
+    </div>
+
+</div>
+    
     <div class="totals">
 
       <div class="total-row">
