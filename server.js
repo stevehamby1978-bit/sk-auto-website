@@ -3510,6 +3510,74 @@ app.get("/api/repair-orders/:id/invoice-email-history", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - CREATE REPAIR ORDER =====
+app.post("/api/repair-orders", (req, res) => {
+  try {
+    const { customer_id, vehicle_id, estimate_id } = req.body;
+
+    if (!customer_id) {
+      return res.status(400).json({
+        error: "Customer ID is required."
+      });
+    }
+
+    const customer = db.prepare(`
+      SELECT id
+      FROM customers
+      WHERE id = ?
+    `).get(customer_id);
+
+    if (!customer) {
+      return res.status(404).json({
+        error: "Customer not found."
+      });
+    }
+
+    if (vehicle_id) {
+      const vehicle = db.prepare(`
+        SELECT id
+        FROM vehicles
+        WHERE id = ?
+          AND customer_id = ?
+      `).get(vehicle_id, customer_id);
+
+      if (!vehicle) {
+        return res.status(404).json({
+          error: "Vehicle not found for this customer."
+        });
+      }
+    }
+
+    const result = db.prepare(`
+      INSERT INTO repair_orders (
+        estimate_id,
+        customer_id,
+        vehicle_id,
+        status,
+        payment_status
+      )
+      VALUES (?, ?, ?, 'waiting', 'unpaid')
+    `).run(
+      estimate_id || null,
+      customer_id,
+      vehicle_id || null
+    );
+
+    res.json({
+      success: true,
+      repair_order_id: Number(result.lastInsertRowid)
+    });
+
+  } catch (err) {
+    console.error("Create repair order error:", err);
+
+    res.status(500).json({
+      error: "Unable to create repair order."
+    });
+  }
+});
+
 // ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
 app.post("/api/repair-orders/:id/items", (req, res) => {
   try {
