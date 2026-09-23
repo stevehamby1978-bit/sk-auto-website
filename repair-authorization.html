@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Repair Authorization</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f2f4f7;
+      color: #222;
+    }
+
+    .header {
+      background: #102d57;
+      color: white;
+      text-align: center;
+      padding: 25px 15px;
+    }
+
+    .header img {
+      max-width: 220px;
+      margin-bottom: 10px;
+    }
+
+    .header h1 {
+      margin: 5px 0;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 30px auto;
+      padding: 0 15px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 25px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.12);
+    }
+
+    .repair {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 20px;
+    }
+
+    .repair h2 {
+      margin-top: 0;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+
+    .total {
+      font-size: 20px;
+      font-weight: bold;
+      border-top: 1px solid #ddd;
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    button {
+      flex: 1;
+      border: none;
+      border-radius: 6px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .approve {
+      background: #28a745;
+      color: white;
+    }
+
+    .decline {
+      background: #dc3545;
+      color: white;
+    }
+
+    .status {
+      text-align: center;
+      font-weight: bold;
+      margin-top: 20px;
+      font-size: 18px;
+    }
+
+    .footer {
+      text-align: center;
+      color: #666;
+      margin-top: 25px;
+      line-height: 1.5;
+    }
+
+    #loading {
+      text-align: center;
+      padding: 30px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="header">
+  <img src="/sk-auto-logo.jpg" alt="S&K Auto">
+  <h1>Repair Authorization</h1>
+  <div>The Art of Automotive Repair</div>
+</div>
+
+<div class="container">
+
+  <div class="card">
+
+    <div id="loading">
+      Loading recommended repair...
+    </div>
+
+    <div id="content" style="display:none;">
+
+      <p>
+        S&K Auto has recommended the following repair for your vehicle.
+        Please review the repair and choose whether you authorize the work.
+      </p>
+
+      <div class="repair">
+
+        <h2 id="description"></h2>
+
+        <div class="price-row">
+          <span>Parts:</span>
+          <strong id="parts"></strong>
+        </div>
+
+        <div class="price-row">
+          <span>Labor:</span>
+          <strong id="labor"></strong>
+        </div>
+
+        <div class="price-row total">
+          <span>Repair Total:</span>
+          <span id="total"></span>
+        </div>
+
+        <div id="buttons" class="buttons">
+
+          <button
+            class="approve"
+            onclick="authorizeRepair('approve')">
+            ✓ Approve Repair
+          </button>
+
+          <button
+            class="decline"
+            onclick="authorizeRepair('decline')">
+            ✕ Decline Repair
+          </button>
+
+        </div>
+
+        <div id="status" class="status"></div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="footer">
+    S&K Auto<br>
+    3107 Homestead<br>
+    Hutchinson, KS 67502<br>
+    (620) 899-0425
+  </div>
+
+</div>
+
+<script>
+
+const params = new URLSearchParams(window.location.search);
+
+const repairOrderId = params.get('order');
+const recommendationId = params.get('repair');
+const token = params.get('token');
+
+let repairData = null;
+
+async function loadRepair() {
+
+  if (!repairOrderId || !recommendationId || !token) {
+
+    document.getElementById('loading').textContent =
+      'Invalid or expired repair authorization link.';
+
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      '/api/customer-repair-authorization/' +
+      encodeURIComponent(repairOrderId) +
+      '/' +
+      encodeURIComponent(recommendationId) +
+      '?token=' +
+      encodeURIComponent(token)
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to load recommended repair.'
+      );
+    }
+
+    repairData = result;
+
+    document.getElementById('description').textContent =
+      result.description || 'Recommended Repair';
+
+    const parts = Number(result.parts) || 0;
+    const labor = Number(result.labor) || 0;
+
+    document.getElementById('parts').textContent =
+      '$' + parts.toFixed(2);
+
+    document.getElementById('labor').textContent =
+      '$' + labor.toFixed(2);
+
+    document.getElementById('total').textContent =
+      '$' + (parts + labor).toFixed(2);
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    if (result.status === 'approved') {
+
+      document.getElementById('buttons').style.display = 'none';
+
+      document.getElementById('status').textContent =
+        '✓ This repair has been approved.';
+
+    }
+
+    if (result.status === 'declined') {
+
+      document.getElementById('buttons').style.display = 'none';
+
+      document.getElementById('status').textContent =
+        '✕ This repair has been declined.';
+
+    }
+
+  } catch (error) {
+
+    document.getElementById('loading').textContent =
+      error.message;
+
+  }
+
+}
+
+
+async function authorizeRepair(action) {
+
+  const word =
+    action === 'approve' ? 'approve' : 'decline';
+
+  if (!confirm(
+    'Are you sure you want to ' +
+    word +
+    ' this repair?'
+  )) {
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      '/api/customer-repair-authorization/' +
+      encodeURIComponent(repairOrderId) +
+      '/' +
+      encodeURIComponent(recommendationId) +
+      '/' +
+      action,
+      {
+        method: 'PATCH',
+
+        headers: {
+          'Content-Type': 'application/json'
+        },
+
+        body: JSON.stringify({
+          token: token
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to update repair authorization.'
+      );
+    }
+
+    document.getElementById('buttons').style.display = 'none';
+
+    if (action === 'approve') {
+
+      document.getElementById('status').textContent =
+        '✓ Thank you. This repair has been authorized.';
+
+    } else {
+
+      document.getElementById('status').textContent =
+        'This repair has been declined.';
+
+    }
+
+  } catch (error) {
+
+    alert(error.message);
+
+  }
+
+}
+
+loadRepair();
+
+</script>
+
+</body>
+</html>
