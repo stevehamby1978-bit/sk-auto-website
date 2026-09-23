@@ -659,7 +659,69 @@ recommendations.forEach((repair) => {
   repairBox.appendChild(description);
   repairBox.appendChild(amounts);
   repairBox.appendChild(status);
+// ===== S&K AUTO - APPROVE RECOMMENDED REPAIR BUTTON =====
+if ((repair.status || 'pending').toLowerCase() === 'pending') {
 
+  const approveBtn = document.createElement('button');
+
+  approveBtn.type = 'button';
+  approveBtn.textContent = '✓ Approve Repair';
+
+  approveBtn.style.cssText =
+    'margin-top:10px; padding:8px 14px; ' +
+    'background:#28a745; color:white; border:none; ' +
+    'border-radius:5px; cursor:pointer; font-weight:bold;';
+
+  approveBtn.addEventListener('click', async () => {
+
+    if (!confirm(
+      'Approve this repair and add it to the repair order?'
+    )) {
+      return;
+    }
+
+    approveBtn.disabled = true;
+    approveBtn.textContent = 'Approving...';
+
+    try {
+
+      const response = await fetch(
+        '/api/repair-orders/' +
+        encodeURIComponent(order.id) +
+        '/recommendations/' +
+        encodeURIComponent(repair.id) +
+        '/approve',
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || 'Unable to approve repair.'
+        );
+      }
+
+      alert('Repair approved and added to repair order.');
+
+      window.location.reload();
+
+    } catch (error) {
+
+      alert(error.message);
+
+      approveBtn.disabled = false;
+      approveBtn.textContent = '✓ Approve Repair';
+    }
+  });
+
+  repairBox.appendChild(approveBtn);
+}
   recommendedRepairsList.appendChild(repairBox);
 });
     document.getElementById('technicianNotes').value =
