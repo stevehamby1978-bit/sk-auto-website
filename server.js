@@ -15,6 +15,7 @@ const twilio = require('twilio');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
@@ -73,16 +74,20 @@ app.use(express.json());
 app.set('trust proxy', 1);
 
 app.use(session({
-  name: 'skauto_session',
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 8 * 60 * 60 * 1000
-  }
+    store: new SQLiteStore({
+        db: 'sessions.db',
+        dir: dataDir
+    }),
+    name: 'skauto_session',
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: 8 * 60 * 60 * 1000
+    }
 }));
 // ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
 function requireLogin(req, res, next) {
