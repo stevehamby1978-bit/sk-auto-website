@@ -605,8 +605,8 @@ function formatAuthorizationMethod(method) {
 }
 
 
+let currentInvoice = null;
 async function loadInvoice() {
-
   const params =
     new URLSearchParams(window.location.search);
 
@@ -654,6 +654,7 @@ async function loadInvoice() {
     const order =
       await response.json();
 
+    currentInvoice = order;
 
     document.getElementById('invoiceNumber').textContent =
       'SK-' + String(order.id).padStart(5, '0');
@@ -1206,27 +1207,30 @@ const textInvoiceBtn = document.getElementById('textInvoiceBtn');
 
 if (textInvoiceBtn) {
     textInvoiceBtn.addEventListener('click', async () => {
-
-        const params = new URLSearchParams(window.location.search);
-        const id = params.get('id');
-
-        if (!id) {
-            alert('Invoice ID not found.');
-            return;
-        }
-
         const originalText = textInvoiceBtn.textContent;
 
         try {
+            if (!currentInvoice) {
+                throw new Error('Invoice information is not loaded.');
+            }
+
             textInvoiceBtn.disabled = true;
             textInvoiceBtn.textContent = 'Sending...';
 
-            const response = await fetch(
-                '/api/invoices/' + encodeURIComponent(id) + '/text',
-                {
-                    method: 'POST'
-                }
-            );
+            const response = await fetch('/api/text-invoice', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    phone: currentInvoice.phone,
+                    customerName: currentInvoice.customer_name,
+                    invoiceNumber: currentInvoice.invoice_number,
+                    total: currentInvoice.total,
+                    balanceDue: currentInvoice.balance_due,
+                    invoiceUrl: window.location.href
+                })
+            });
 
             const result = await response.json();
 
@@ -1242,8 +1246,7 @@ if (textInvoiceBtn) {
             console.error('Text invoice error:', error);
 
             alert(
-                error.message ||
-                'Unable to text invoice.'
+                error.message || 'Unable to text invoice.'
             );
 
         } finally {
@@ -1253,8 +1256,6 @@ if (textInvoiceBtn) {
     });
 }
 
-// Keep this line
-loadInvoice();
   
 loadInvoice();
 
