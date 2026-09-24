@@ -444,12 +444,9 @@ async function loadReceipt() {
         }
 
 
-        const total =
-            Number(
-                order.total ||
-                order.subtotal ||
-                0
-            );
+      const total =
+    Number(order.subtotal || 0) +
+    Number(order.tax || 0);
 
 
         /*
