@@ -2087,6 +2087,61 @@ document.getElementById('viewServiceHistoryBtn').addEventListener('click', async
   }
 
 });
+
+  // ===== S&K AUTO - VOID PAYMENT =====
+async function voidPayment(paymentId) {
+    try {
+        const reason = prompt("Enter reason for voiding this payment:");
+
+        // Cancel if user presses Cancel
+        if (reason === null) {
+            return;
+        }
+
+        // Require a reason
+        if (!reason.trim()) {
+            alert("Please enter a reason for voiding the payment.");
+            return;
+        }
+
+        const confirmed = confirm(
+            "Are you sure you want to void this payment?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        const response = await fetch(
+            `/api/repair-order-payments/${paymentId}/void`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    reason: reason.trim()
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Unable to void payment.");
+        }
+
+        alert("Payment voided successfully.");
+
+        // Reload repair order so totals and history update
+        await loadRepairOrder();
+
+    } catch (error) {
+        console.error("Void payment error:", error);
+        alert("Unable to void payment: " + error.message);
+    }
+}
+  
 loadRepairOrder();
 
 </script>
