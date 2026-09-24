@@ -3007,17 +3007,26 @@ repairOrder.recommendations = db.prepare(`
     );
 // ===== S&K AUTO - GET PAYMENT HISTORY =====
 repairOrder.payments = db.prepare(`
-  SELECT id, amount, payment_method, paid_at
-  FROM repair_order_payments
-  WHERE repair_order_id = ?
-  ORDER BY id ASC
+    SELECT
+        id,
+        amount,
+        payment_method,
+        paid_at,
+        voided,
+        voided_at,
+        void_reason
+    FROM repair_order_payments
+    WHERE repair_order_id = ?
+    ORDER BY id ASC
 `).all(repairOrder.id);
- // ===== S&K AUTO - CALCULATE PAYMENT TOTALS =====
+// ===== S&K AUTO - CALCULATE ACTIVE PAYMENT TOTAL =====
 repairOrder.amount_paid = repairOrder.payments.reduce(
-  (sum, payment) => sum + Number(payment.amount || 0),
-  0
+    (sum, payment) =>
+        payment.voided
+            ? sum
+            : sum + Number(payment.amount || 0),
+    0
 );
-
 repairOrder.balance_due = Math.max(
   0,
   Number(repairOrder.total || repairOrder.subtotal || 0) -
