@@ -3503,6 +3503,79 @@ if (
   }
 });
 
+// ===== S&K AUTO - VOID PAYMENT =====
+app.post("/api/repair-orders/:id/payments/:paymentId/void", (req, res) => {
+  try {
+    const repairOrderId = Number(req.params.id);
+    const paymentId = Number(req.params.paymentId);
+    const reason = String(req.body.reason || "").trim();
+
+    if (!reason) {
+      return res.status(400).json({
+        error: "A reason is required to void a payment."
+      });
+    }
+
+    const payment = db.prepare(`
+      SELECT id, repair_order_id, amount, payment_method, paid_at, voided
+      FROM repair_order_payments
+      WHERE id = ? AND repair_order_id = ?
+    `).get(paymentId, repairOrderId);
+
+    if (!payment) {
+      return res.status(404).json({
+        error: "Payment not found."
+      });
+    }
+
+    if (payment.voided) {
+      return res.status(400).json({
+        error: "This payment has already been voided."
+      });
+    }
+
+    db.prepare(`
+      UPDATE repair_order_payments
+      SET
+        voided = 1,
+        voided_at = CURRENT_TIMESTAMP,
+        void_reason = ?
+      WHERE id = ? AND repair_order_id = ?
+    `).run(reason, paymentId, repairOrderId);
+
+    const activePayments = db.prepare(`
+      SELECT amount
+      FROM repair_order_payments
+      WHERE repair_order_id = ?
+        AND (voided = 0 OR voided IS NULL)
+    `).all(repairOrderId);
+
+    const amountPaid = activePayments.reduce(
+      (sum, row) => sum + Number(row.amount || 0),
+      0
+    );
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET amount_paid = ?
+      WHERE id = ?
+    `).run(amountPaid, repairOrderId);
+
+    res.json({
+      success: true,
+      message: "Payment voided successfully.",
+      amount_paid: amountPaid
+    });
+
+  } catch (err) {
+    console.error("Void payment error:", err);
+
+    res.status(500).json({
+      error: "Unable to void payment."
+    });
+  }
+});
+
 // ===== S&K AUTO - EMAIL INVOICE =====
 app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
   try {
