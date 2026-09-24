@@ -770,17 +770,8 @@ if (balanceDue <= 0 && total > 0) {
 
     }
 // ===== S&K AUTO - DISPLAY PAYMENT STATUS =====
-const paymentMethod =
-  document.getElementById('paymentMethod');
-
-const paymentSavedInfo =
-  document.getElementById('paymentSavedInfo');
-
-paymentMethod.value =
-  order.payment_method || '';
   window.currentAmountPaid = amountPaid;  
 
-document.getElementById('amountPaid').value = '';
 const paymentBadge =
   document.getElementById('paymentBadge');
 
