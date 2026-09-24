@@ -365,9 +365,13 @@ function formatPaymentMethod(method) {
 
     method = String(method || '').toLowerCase();
 
-    if (method === 'card') {
-        return 'Credit / Debit Card';
-    }
+    if (
+    method === 'card' ||
+    method === 'credit card' ||
+    method === 'credit_card'
+) {
+    return 'Credit Card';
+}
 
     if (method === 'cash') {
         return 'Cash';
