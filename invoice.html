@@ -1155,22 +1155,20 @@ const amountPaid =
     button.textContent = 'Saving...';
 
     const response = await fetch(
-      '/api/repair-orders/' +
-      encodeURIComponent(id) +
-      '/payment',
-      {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-      body: JSON.stringify({
-  payment_status: paymentStatus,
-  payment_method: paymentMethod,
-  amount_paid: amountPaid,
-  payment_amount: newPayment
-})
-      }
-    );
+  '/api/repair-orders/' +
+  encodeURIComponent(id) +
+  '/payments',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      amount: newPayment,
+      payment_method: paymentMethod
+    })
+  }
+);
 
     const result = await response.json();
 
