@@ -867,8 +867,16 @@ if (paymentControls) paymentControls.style.display = 'none';
   paymentBadge.textContent = '✓ PAID';
   paymentBadge.style.background = '#28a745';
 
-  let methodText =
-    order.payment_method || '';
+let methodText = '';
+
+const validPayments = (order.payments || []).filter(
+    payment => !payment.voided
+);
+
+if (validPayments.length > 0) {
+    methodText =
+        validPayments[validPayments.length - 1].payment_method || '';
+}
 
   if (methodText === 'card') {
     methodText = 'Credit / Debit Card';
