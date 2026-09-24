@@ -5240,7 +5240,45 @@ app.post("/api/repair-orders/:id/payments", (req, res) => {
         error: "Repair order not found."
       });
     }
+// ===== S&K AUTO - PREVENT OVERPAYMENT =====
+const totals = db.prepare(`
+  SELECT
+    COALESCE((
+      SELECT SUM(parts + labor)
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+    ), 0) AS subtotal,
 
+    COALESCE((
+      SELECT SUM(amount)
+      FROM repair_order_payments
+      WHERE repair_order_id = ?
+        AND (voided = 0 OR voided IS NULL)
+    ), 0) AS amount_paid
+`).get(req.params.id, req.params.id);
+
+const subtotal = Number(totals.subtotal || 0);
+
+const tax = Math.round(
+  subtotal * 0.075 * 100
+) / 100;
+
+const total = Math.round(
+  (subtotal + tax) * 100
+) / 100;
+
+const amountPaid = Number(totals.amount_paid || 0);
+
+const balanceDue = Math.max(
+  0,
+  Math.round((total - amountPaid) * 100) / 100
+);
+
+if (amount > balanceDue + 0.001) {
+  return res.status(400).json({
+    error: `Payment cannot exceed the remaining balance of $${balanceDue.toFixed(2)}.`
+  });
+}
     const result = db.prepare(`
       INSERT INTO repair_order_payments (
         repair_order_id,
