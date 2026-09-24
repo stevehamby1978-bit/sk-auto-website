@@ -2112,8 +2112,11 @@ async function voidPayment(paymentId) {
             return;
         }
 
-        const response = await fetch(
-            `/api/repair-order-payments/${paymentId}/void`,
+       const params = new URLSearchParams(window.location.search);
+const repairOrderId = params.get('id');
+
+const response = await fetch(
+    `/api/repair-orders/${repairOrderId}/payments/${paymentId}/void`,
             {
                 method: "POST",
                 headers: {
