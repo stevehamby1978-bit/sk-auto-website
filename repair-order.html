@@ -834,6 +834,44 @@ document.getElementById('amountPaid').textContent =
 
 document.getElementById('balanceDue').textContent =
   money(balanceDue);
+    // ===== S&K AUTO - DISPLAY PAYMENT HISTORY =====
+const paymentHistory = document.getElementById('paymentHistory');
+
+if (Array.isArray(order.payments) && order.payments.length > 0) {
+
+    paymentHistory.innerHTML = order.payments.map(payment => {
+
+        const amount = Number(payment.amount || 0);
+
+        const method = payment.payment_method || 'Unknown';
+
+        const date = payment.paid_at
+            ? new Date(payment.paid_at + ' UTC').toLocaleString()
+            : '';
+
+        return `
+            <div style="
+                padding:10px 0;
+                border-bottom:1px solid #ddd;
+                display:flex;
+                justify-content:space-between;
+                gap:20px;
+            ">
+                <div>
+                    <strong>${method}</strong>
+                    <div style="font-size:13px; color:#666;">
+                        ${date}
+                    </div>
+                </div>
+
+                <strong>${money(amount)}</strong>
+            </div>
+        `;
+    }).join('');
+
+} else {
+    paymentHistory.innerHTML = 'No payments recorded.';
+}
     document.getElementById('orderNumber').textContent =
       order.id;
 
