@@ -873,11 +873,16 @@ return `
                 ${date}
             </div>
 
-            ${isVoided && payment.void_reason
-                ? `<div style="font-size:13px; color:#dc3545;">
-                       Reason: ${payment.void_reason}
-                   </div>`
-                : ''}
+           ${isVoided
+    ? `<div style="font-size:13px; color:#dc3545; margin-top:3px;">
+         ${payment.voided_at
+           ? `Voided: ${new Date(payment.voided_at + ' UTC').toLocaleString()}<br>`
+           : ''}
+         ${payment.void_reason
+           ? `Reason: ${payment.void_reason}`
+           : ''}
+       </div>`
+    : ''}
         </div>
 
         <div style="text-align:right;">
