@@ -263,11 +263,71 @@ button {
         <div>
           VIN:
           <span id="vin"></span>
-        </div>
-      </div>
+   <div class="top-row">
 
+  <div class="info-box">
+    <h3>Customer</h3>
+
+    <div id="customerName"></div>
+    <div id="customerPhone"></div>
+    <div id="customerEmail"></div>
+  </div>
+
+  <div class="info-box">
+    <h3>Vehicle</h3>
+
+    <div id="vehicle"></div>
+
+    <div>
+      Mileage:
+      <span id="mileage"></span>
     </div>
 
+    <div>
+      VIN:
+      <span id="vin"></span>
+    </div>
+
+    <button
+      id="viewServiceHistoryBtn"
+      type="button"
+      style="
+        margin-top:12px;
+        background:#0b4dbb;
+        color:white;
+        border:none;
+        padding:10px 16px;
+        border-radius:5px;
+        font-weight:bold;
+        cursor:pointer;
+      ">
+      View Service History
+    </button>
+
+  </div>
+
+</div>
+<!-- ===== S&K AUTO - VEHICLE SERVICE HISTORY ===== -->
+<div
+  id="serviceHistorySection"
+  style="
+    display:none;
+    margin-top:20px;
+    margin-bottom:20px;
+    padding:18px;
+    background:#f3f4f6;
+    border-radius:7px;
+  ">
+
+  <h3 style="margin-top:0;">
+    Vehicle Service History
+  </h3>
+
+  <div id="serviceHistoryList">
+    Loading service history...
+  </div>
+
+</div>
     <table>
       <thead>
         <tr>
@@ -752,7 +812,7 @@ document.getElementById('recordPaymentBtn').addEventListener('click', async () =
 </div>
 
 <script>
-
+let currentVehicleId = null;
 function money(value) {
   return '$' + (Number(value) || 0).toFixed(2);
 }
@@ -784,7 +844,7 @@ const order = await response.json();
     if (!order) {
       throw new Error('Repair order not found');
     }
-
+currentVehicleId = order.vehicle_id;
     document.getElementById('orderNumber').textContent =
       order.id;
 
@@ -1835,6 +1895,120 @@ authorizationSavedInfo.innerHTML = `
 
     button.disabled = false;
     button.textContent = 'Save Customer Authorization';
+
+  }
+
+});
+  // ===== S&K AUTO - VIEW VEHICLE SERVICE HISTORY =====
+document.getElementById('viewServiceHistoryBtn').addEventListener('click', async () => {
+
+  const section =
+    document.getElementById('serviceHistorySection');
+
+  const list =
+    document.getElementById('serviceHistoryList');
+
+  // If already open, close it
+  if (section.style.display === 'block') {
+    section.style.display = 'none';
+    return;
+  }
+
+  if (!currentVehicleId) {
+    alert('No vehicle is associated with this repair order.');
+    return;
+  }
+
+  section.style.display = 'block';
+  list.innerHTML = 'Loading service history...';
+
+  try {
+
+    const response = await fetch(
+      '/api/vehicles/' +
+      encodeURIComponent(currentVehicleId) +
+      '/service-history'
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to retrieve service history.'
+      );
+    }
+
+    const history = result.history || [];
+
+    if (history.length === 0) {
+      list.innerHTML =
+        '<p>No completed service history found for this vehicle.</p>';
+      return;
+    }
+
+    list.innerHTML = history.map(order => {
+
+      const completedDate = order.completed_at
+        ? new Date(order.completed_at).toLocaleString()
+        : 'Date unavailable';
+
+      const items = (order.items || []).map(item => {
+
+        const parts = Number(item.parts) || 0;
+        const labor = Number(item.labor) || 0;
+        const total = parts + labor;
+
+        return `
+          <div style="
+            padding:8px 0;
+            border-bottom:1px solid #ddd;
+          ">
+            <strong>${item.description}</strong><br>
+            Parts: ${money(parts)} |
+            Labor: ${money(labor)} |
+            Total: ${money(total)}
+          </div>
+        `;
+
+      }).join('');
+
+      return `
+        <div style="
+          background:white;
+          padding:15px;
+          margin-bottom:12px;
+          border-radius:6px;
+          border:1px solid #ddd;
+        ">
+
+          <div style="font-weight:bold; margin-bottom:8px;">
+            Repair Order #${order.id}
+          </div>
+
+          <div style="margin-bottom:8px;">
+            Completed: ${completedDate}
+          </div>
+
+          ${items}
+
+          <div style="
+            margin-top:10px;
+            font-weight:bold;
+          ">
+            Order Total: ${money(order.subtotal)}
+          </div>
+
+        </div>
+      `;
+
+    }).join('');
+
+  } catch (error) {
+
+    list.innerHTML =
+      '<p style="color:#b91c1c;">' +
+      error.message +
+      '</p>';
 
   }
 
