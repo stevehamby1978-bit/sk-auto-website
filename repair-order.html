@@ -1335,7 +1335,15 @@ deleteButton.addEventListener('click', async () => {
 
     document.getElementById('total').textContent =
       money(total);
+// ===== S&K AUTO - UPDATE PAYMENT BALANCE WITH TAX =====
+const paidForBalance = Number(order.amount_paid || 0);
+const remainingBalance = Math.max(0, total - paidForBalance);
 
+document.getElementById('amountPaid').textContent =
+  money(paidForBalance);
+
+document.getElementById('balanceDue').textContent =
+  money(remainingBalance);
     document.getElementById('loading').style.display =
       'none';
 
