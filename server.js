@@ -2814,6 +2814,112 @@ app.get("/api/repair-orders", (req, res) => {
     });
   }
 });
+
+// ===== S&K AUTO - VEHICLE SERVICE HISTORY =====
+app.get("/api/vehicles/:vehicleId/service-history", (req, res) => {
+  try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to view service history."
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+    const vehicleId = Number(req.params.vehicleId);
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
+    if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
+      return res.status(400).json({
+        error: "Invalid vehicle ID."
+      });
+    }
+
+    // Verify this vehicle belongs to a repair order for this shop.
+    const vehicle = db.prepare(`
+      SELECT
+        v.id,
+        v.year,
+        v.make,
+        v.model,
+        v.vin,
+        v.mileage
+      FROM vehicles v
+      INNER JOIN repair_orders r
+        ON r.vehicle_id = v.id
+      WHERE v.id = ?
+        AND r.shop_id = ?
+      LIMIT 1
+    `).get(vehicleId, shopId);
+
+    if (!vehicle) {
+      return res.status(404).json({
+        error: "Vehicle not found."
+      });
+    }
+
+    const history = db.prepare(`
+      SELECT
+        r.id,
+        r.customer_id,
+        r.vehicle_id,
+        r.status,
+        r.technician_notes,
+        r.payment_status,
+        r.payment_method,
+        r.paid_at,
+        r.created_at,
+        r.completed_at,
+        c.name AS customer_name
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      WHERE r.vehicle_id = ?
+        AND r.shop_id = ?
+        AND r.status = 'completed'
+      ORDER BY r.completed_at DESC, r.id DESC
+    `).all(vehicleId, shopId);
+
+    for (const repairOrder of history) {
+
+      repairOrder.items = db.prepare(`
+        SELECT
+          id,
+          description,
+          parts,
+          labor
+        FROM repair_order_items
+        WHERE repair_order_id = ?
+        ORDER BY id ASC
+      `).all(repairOrder.id);
+
+      repairOrder.subtotal = repairOrder.items.reduce(
+        (sum, item) =>
+          sum +
+          (Number(item.parts) || 0) +
+          (Number(item.labor) || 0),
+        0
+      );
+    }
+
+    res.json({
+      vehicle: vehicle,
+      history: history
+    });
+
+  } catch (err) {
+    console.error("Vehicle service history error:", err);
+
+    res.status(500).json({
+      error: "Unable to retrieve vehicle service history."
+    });
+  }
+});
+
 // ===== S&K AUTO - GET ONE REPAIR ORDER =====
 app.get("/api/repair-orders/:id", (req, res) => {
   try {
