@@ -306,6 +306,35 @@ db.exec(`
       ON DELETE CASCADE
   );
 `);
+
+// ===== S&K AUTO - PAYMENT VOID SUPPORT =====
+const paymentColumns = db.prepare(
+    `PRAGMA table_info(repair_order_payments)`
+).all();
+
+const paymentColumnNames = paymentColumns.map(column => column.name);
+
+if (!paymentColumnNames.includes('voided')) {
+    db.prepare(`
+        ALTER TABLE repair_order_payments
+        ADD COLUMN voided INTEGER NOT NULL DEFAULT 0
+    `).run();
+}
+
+if (!paymentColumnNames.includes('voided_at')) {
+    db.prepare(`
+        ALTER TABLE repair_order_payments
+        ADD COLUMN voided_at TEXT
+    `).run();
+}
+
+if (!paymentColumnNames.includes('void_reason')) {
+    db.prepare(`
+        ALTER TABLE repair_order_payments
+        ADD COLUMN void_reason TEXT
+    `).run();
+}
+
 // ===== S&K AUTO - INVOICE EMAIL HISTORY =====
 db.prepare(`
   CREATE TABLE IF NOT EXISTS invoice_email_history (
