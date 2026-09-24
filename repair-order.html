@@ -823,6 +823,17 @@ const order = await response.json();
       throw new Error('Repair order not found');
     }
 currentVehicleId = order.vehicle_id;
+    // ===== S&K AUTO - PAYMENT TOTALS =====
+
+const orderTotal = Number(order.total || order.subtotal || 0);
+const amountPaid = Number(order.amount_paid || 0);
+const balanceDue = Math.max(0, orderTotal - amountPaid);
+
+document.getElementById('amountPaid').textContent =
+  money(amountPaid);
+
+document.getElementById('balanceDue').textContent =
+  money(balanceDue);
     document.getElementById('orderNumber').textContent =
       order.id;
 
