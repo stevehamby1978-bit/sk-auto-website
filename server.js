@@ -3207,6 +3207,106 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
   }
 });
 
+// ===== S&K AUTO - TEXT PAYMENT RECEIPT =====
+app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, res) => {
+  try {
+    const repairOrderId = Number(req.params.id);
+    const paymentId = Number(req.params.paymentId);
+
+    const repairOrder = db.prepare(`
+      SELECT
+        r.id,
+        c.name AS customer_name,
+        c.phone AS customer_phone
+      FROM repair_orders r
+      LEFT JOIN customers c ON r.customer_id = c.id
+      WHERE r.id = ?
+    `).get(repairOrderId);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    if (!repairOrder.customer_phone) {
+      return res.status(400).json({
+        error: "This customer does not have a phone number."
+      });
+    }
+
+    const payment = db.prepare(`
+      SELECT
+        id,
+        amount,
+        payment_method,
+        paid_at,
+        voided
+      FROM repair_order_payments
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).get(paymentId, repairOrderId);
+
+    if (!payment) {
+      return res.status(404).json({
+        error: "Payment not found."
+      });
+    }
+
+    if (payment.voided) {
+      return res.status(400).json({
+        error: "A voided payment receipt cannot be texted."
+      });
+    }
+
+    const digits = String(repairOrder.customer_phone).replace(/\D/g, "");
+
+    const customerPhone =
+      digits.length === 10
+        ? "+1" + digits
+        : digits.length === 11 && digits.startsWith("1")
+        ? "+" + digits
+        : null;
+
+    if (!customerPhone) {
+      return res.status(400).json({
+        error: "Customer phone number is invalid."
+      });
+    }
+
+    const receiptUrl =
+      `https://skautohutch.com/receipt.html?orderId=${encodeURIComponent(repairOrderId)}` +
+      `&paymentId=${encodeURIComponent(paymentId)}`;
+
+    const messageBody =
+      `S&K Auto: Hi ${repairOrder.customer_name || "Customer"}, ` +
+      `thank you for your payment of $${Number(payment.amount || 0).toFixed(2)}. ` +
+      `Payment method: ${payment.payment_method || "Not listed"}. ` +
+      `View your receipt: ${receiptUrl}`;
+
+    const message = await twilioClient.messages.create({
+      body: messageBody,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: customerPhone
+    });
+
+    console.log("Payment receipt SMS sent:", message.sid);
+
+    res.json({
+      success: true,
+      phone: repairOrder.customer_phone,
+      message: "Payment receipt texted successfully."
+    });
+
+  } catch (err) {
+    console.error("Text payment receipt error:", err);
+
+    res.status(500).json({
+      error: "Unable to text payment receipt."
+    });
+  }
+});
+
 // ===== S&K AUTO - UPDATE REPAIR ORDER STATUS =====
 app.patch("/api/repair-orders/:id/status", (req, res) => {
   try {
