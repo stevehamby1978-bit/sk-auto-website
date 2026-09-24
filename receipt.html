@@ -334,7 +334,15 @@
 >
     Email Receipt
 </button>
-        <button
+<button
+  type="button"
+  class="print-btn"
+  id="textReceiptBtn"
+  onclick="textReceipt()"
+>
+  📱 Text Receipt
+</button>
+       <button
             class="back-btn"
             onclick="goBack()"
         >
@@ -680,6 +688,67 @@ async function emailReceipt() {
     );
   }
 }
+
+async function textReceipt() {
+  const params = new URLSearchParams(window.location.search);
+
+  const repairOrderId =
+    params.get('orderId') || params.get('repairOrderId');
+
+  const paymentId = params.get('paymentId');
+
+  if (!repairOrderId || !paymentId) {
+    alert('Unable to identify this payment receipt.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Text this payment receipt to the customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const button = document.getElementById('textReceiptBtn');
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Sending...';
+
+    const response = await fetch(
+      `/api/repair-orders/${encodeURIComponent(repairOrderId)}/payments/${encodeURIComponent(paymentId)}/text-receipt`,
+      {
+        method: 'POST'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to text payment receipt.'
+      );
+    }
+
+    alert(
+      `Payment receipt texted successfully to ${result.phone}`
+    );
+
+  } catch (error) {
+    console.error('Text receipt error:', error);
+
+    alert(
+      'Unable to text payment receipt: ' +
+      error.message
+    );
+
+  } finally {
+    button.disabled = false;
+    button.textContent = '📱 Text Receipt';
+  }
+}
+   
 loadReceipt();
 
 </script>
