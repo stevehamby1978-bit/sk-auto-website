@@ -852,11 +852,13 @@ const paymentHistorySection =
 const paymentHistory =
   document.getElementById('paymentHistory');
 
-if (order.payments && order.payments.length > 0) {
+const activePayments = (order.payments || []).filter(payment => !payment.voided);
 
-  paymentHistorySection.style.display = 'block';
+if (activePayments.length > 0) {
 
-  paymentHistory.innerHTML = order.payments.map(payment => {
+    paymentHistorySection.style.display = 'block';
+
+    paymentHistory.innerHTML = activePayments.map(payment => {
 
     let method = payment.payment_method || '';
 
