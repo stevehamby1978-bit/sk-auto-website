@@ -334,7 +334,25 @@ if (!paymentColumnNames.includes('void_reason')) {
         ADD COLUMN void_reason TEXT
     `).run();
 }
+// ===== S&K AUTO - BALANCE REMINDER SUPPORT =====
+const balanceReminderColumns = db
+    .prepare(`PRAGMA table_info(repair_orders)`)
+    .all()
+    .map(column => column.name);
 
+if (!balanceReminderColumns.includes('balance_reminder_sent_at')) {
+    db.prepare(`
+        ALTER TABLE repair_orders
+        ADD COLUMN balance_reminder_sent_at TEXT
+    `).run();
+}
+
+if (!balanceReminderColumns.includes('balance_reminder_count')) {
+    db.prepare(`
+        ALTER TABLE repair_orders
+        ADD COLUMN balance_reminder_count INTEGER NOT NULL DEFAULT 0
+    `).run();
+}
 // ===== S&K AUTO - INVOICE EMAIL HISTORY =====
 db.prepare(`
   CREATE TABLE IF NOT EXISTS invoice_email_history (
