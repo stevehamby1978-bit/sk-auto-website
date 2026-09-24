@@ -1136,18 +1136,18 @@ document.getElementById('savePaymentBtn').addEventListener('click', async () => 
 const newPayment =
   Number(document.getElementById('amountPaid').value) || 0;
 
-const previousAmountPaid =
-  Number(window.currentAmountPaid) || 0;
-
-const amountPaid =
-  previousAmountPaid + newPayment;
   const button =
     document.getElementById('savePaymentBtn');
 
-  if (paymentStatus === 'paid' && !paymentMethod) {
+ if (newPayment <= 0) {
+    alert('Please enter a payment amount greater than $0.00.');
+    return;
+}
+
+if (!paymentMethod) {
     alert('Please select a payment method.');
     return;
-  }
+}
 
   try {
 
