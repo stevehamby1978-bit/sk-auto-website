@@ -632,7 +632,54 @@ const total =
     }
 }
 
+async function emailReceipt() {
+  const params = new URLSearchParams(window.location.search);
 
+  const repairOrderId = params.get('id');
+  const paymentId = params.get('paymentId');
+
+  if (!repairOrderId || !paymentId) {
+    alert('Unable to identify this payment receipt.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Email this payment receipt to the customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/repair-orders/${encodeURIComponent(repairOrderId)}/payments/${encodeURIComponent(paymentId)}/email-receipt`,
+      {
+        method: 'POST'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to email payment receipt.'
+      );
+    }
+
+    alert(
+      `Payment receipt emailed successfully to ${result.email}`
+    );
+
+  } catch (error) {
+    console.error('Email receipt error:', error);
+
+    alert(
+      'Unable to email payment receipt: ' +
+      error.message
+    );
+  }
+}
 loadReceipt();
 
 </script>
