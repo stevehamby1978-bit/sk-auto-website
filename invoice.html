@@ -872,7 +872,7 @@ if (activePayments.length > 0) {
 const paymentControls =
   document.getElementById('paymentControls');
 
-paymentControls.style.display = 'none';
+if (paymentControls) paymentControls.style.display = 'none';
   paymentBadge.textContent = '✓ PAID';
   paymentBadge.style.background = '#28a745';
 
