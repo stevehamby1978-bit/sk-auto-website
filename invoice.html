@@ -461,17 +461,6 @@
   <div id="paymentControls" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
 
     <div>
-      <label><strong>Payment Status:</strong></label>
-      <select
-        id="paymentStatus"
-        style="width:100%; padding:9px; margin-top:5px;">
-       <option value="unpaid">Unpaid</option>
-<option value="partial">Partially Paid</option>
-<option value="paid">Paid</option>
-      </select>
-    </div>
-
-    <div>
       <label><strong>Payment Method:</strong></label>
       <select
         id="paymentMethod"
@@ -819,21 +808,11 @@ if (balanceDue <= 0 && total > 0) {
 
     }
 // ===== S&K AUTO - DISPLAY PAYMENT STATUS =====
-const paymentStatus =
-  document.getElementById('paymentStatus');
-
 const paymentMethod =
   document.getElementById('paymentMethod');
 
 const paymentSavedInfo =
   document.getElementById('paymentSavedInfo');
-
-paymentStatus.value =
-  amountPaid >= total
-    ? 'paid'
-    : amountPaid > 0
-      ? 'partial'
-      : 'unpaid';
 
 paymentMethod.value =
   order.payment_method || '';
@@ -1127,9 +1106,6 @@ document.getElementById('savePaymentBtn').addEventListener('click', async () => 
     new URLSearchParams(window.location.search);
 
   const id = params.get('id');
-
-  const paymentStatus =
-    document.getElementById('paymentStatus').value;
 
   const paymentMethod =
     document.getElementById('paymentMethod').value;
