@@ -2983,7 +2983,17 @@ repairOrder.payments = db.prepare(`
   WHERE repair_order_id = ?
   ORDER BY id ASC
 `).all(repairOrder.id);
-   
+ // ===== S&K AUTO - CALCULATE PAYMENT TOTALS =====
+repairOrder.amount_paid = repairOrder.payments.reduce(
+  (sum, payment) => sum + Number(payment.amount || 0),
+  0
+);
+
+repairOrder.balance_due = Math.max(
+  0,
+  Number(repairOrder.total || repairOrder.subtotal || 0) -
+    repairOrder.amount_paid
+);  
   console.log("PAYMENT HISTORY:", repairOrder.payments);  
     
     res.json(repairOrder);
