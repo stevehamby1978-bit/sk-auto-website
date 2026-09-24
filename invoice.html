@@ -886,16 +886,42 @@ if (activePayments.length > 0) {
     })
   : '';
 
-    return `
-      <div style="padding:3px 0; border-bottom:1px solid #ddd;">
-        <strong>${money(Number(payment.amount) || 0)}</strong>
-        &nbsp;—&nbsp; ${method}
-        <br>
-        <span style="font-size:13px;">${paidDate}</span>
-      </div>
-    `;
+  return `
+    <div style="
+        padding:8px 0;
+        border-bottom:1px solid #ddd;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:15px;
+    ">
+        <div>
+            <strong>${money(Number(payment.amount) || 0)}</strong>
+            &nbsp;–&nbsp; ${method}
+            <br>
+            <span style="font-size:13px;">${paidDate}</span>
+        </div>
 
-  }).join('');
+        <button
+            type="button"
+            onclick="window.location.href='/receipt.html?orderId=${order.id}&paymentId=${payment.id}'"
+            style="
+                background:#28a745;
+                color:white;
+                border:none;
+                border-radius:5px;
+                padding:7px 12px;
+                font-weight:bold;
+                cursor:pointer;
+                white-space:nowrap;
+            "
+        >
+            View Receipt
+        </button>
+    </div>
+`;
+
+}).join('');
 
 }
 
