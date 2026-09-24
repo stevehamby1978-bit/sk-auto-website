@@ -407,6 +407,33 @@
         <span>TOTAL:</span>
         <span id="total">$0.00</span>
       </div>
+
+<div class="total-row" style="margin-top:10px;">
+  <span>Amount Paid:</span>
+  <strong id="amountPaid">$0.00</strong>
+</div>
+
+<div class="total-row" style="font-size:18px; font-weight:bold;">
+  <span>Balance Due:</span>
+  <strong id="balanceDue">$0.00</strong>
+</div>
+
+<div
+  id="paidStatus"
+  style="
+    display:none;
+    margin-top:12px;
+    padding:10px;
+    text-align:center;
+    font-size:22px;
+    font-weight:bold;
+    border:2px solid #28a745;
+    border-radius:5px;
+  "
+>
+  ✓ PAID IN FULL
+</div>
+      
 <div class="total-row">
   <span>Amount Paid:</span>
   <strong id="displayAmountPaid">$0.00</strong>
@@ -763,12 +790,18 @@ const amountPaid =
 const balanceDue =
   Math.max(0, total - amountPaid);
 
-document.getElementById('displayAmountPaid').textContent =
+document.getElementById('amountPaid').textContent =
   money(amountPaid);
 
 document.getElementById('balanceDue').textContent =
   money(balanceDue);
+const paidStatus = document.getElementById('paidStatus');
 
+if (balanceDue <= 0 && total > 0) {
+  paidStatus.style.display = 'block';
+} else {
+  paidStatus.style.display = 'none';
+}
     if (order.completed_at) {
 
       const completedDate =
