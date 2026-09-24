@@ -3660,12 +3660,40 @@ app.post("/api/repair-orders/:id/payments/:paymentId/void", (req, res) => {
       SET amount_paid = ?
       WHERE id = ?
     `).run(amountPaid, repairOrderId);
+// Recalculate payment status after voiding a payment
+const orderTotals = db.prepare(`
+  SELECT
+    COALESCE(SUM(parts), 0) AS parts_total,
+    COALESCE(SUM(labor), 0) AS labor_total
+  FROM repair_order_items
+  WHERE repair_order_id = ?
+`).get(repairOrderId);
 
-    res.json({
-      success: true,
-      message: "Payment voided successfully.",
-      amount_paid: amountPaid
-    });
+const subtotal =
+  Number(orderTotals.parts_total || 0) +
+  Number(orderTotals.labor_total || 0);
+
+const total = subtotal + (subtotal * 0.075);
+
+let paymentStatus = "unpaid";
+
+if (amountPaid > 0 && amountPaid < total) {
+  paymentStatus = "partial";
+} else if (amountPaid >= total && total > 0) {
+  paymentStatus = "paid";
+}
+
+db.prepare(`
+  UPDATE repair_orders
+  SET payment_status = ?
+  WHERE id = ?
+`).run(paymentStatus, repairOrderId);
+ res.json({
+  success: true,
+  message: "Payment voided successfully.",
+  amount_paid: amountPaid,
+  payment_status: paymentStatus
+});
 
   } catch (err) {
     console.error("Void payment error:", err);
