@@ -458,45 +458,7 @@
   id="paymentDetails"
   style="display:none; margin-bottom:15px; line-height:1.6;">
 </div>
-  <div id="paymentControls" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
 
-    <div>
-      <label><strong>Payment Method:</strong></label>
-      <select
-        id="paymentMethod"
-        style="width:100%; padding:9px; margin-top:5px;">
-        <option value="">Select Method</option>
-        <option value="cash">Cash</option>
-        <option value="card">Credit / Debit Card</option>
-        <option value="check">Check</option>
-        <option value="other">Other</option>
-      </select>
-    </div>
-<div style="margin-top:12px;">
-  <label for="paymentAmount"><strong>Amount Paid:</strong></label>
-<input
-  id="paymentAmount"
-    type="number"
-    min="0"
-    step="0.01"
-    placeholder="0.00"
-    style="width:100%; padding:9px; margin-top:5px; box-sizing:border-box;">
-</div>
-  
-
-  <button
-    id="savePaymentBtn"
-    type="button"
-    style="margin-top:12px; background:#28a745; color:white; border:none; padding:10px 18px; border-radius:5px; font-weight:bold; cursor:pointer;">
-    Save Payment
-  </button>
-
-  <div
-    id="paymentSavedInfo"
-    style="display:none; margin-top:12px; font-weight:bold; color:#28a745;">
-  </div>
-
-</div>
 <!-- ===== S&K AUTO - PAYMENT HISTORY ===== -->
 <div
   id="paymentHistorySection"
@@ -1099,75 +1061,6 @@ try {
 
 }
 
-// ===== S&K AUTO - SAVE PAYMENT =====
-document.getElementById('savePaymentBtn').addEventListener('click', async () => {
-
-  const params =
-    new URLSearchParams(window.location.search);
-
-  const id = params.get('id');
-
-  const paymentMethod =
-    document.getElementById('paymentMethod').value;
-const newPayment =
-  Number(document.getElementById('paymentAmount').value) || 0;
-
-  const button =
-    document.getElementById('savePaymentBtn');
-
- if (newPayment <= 0) {
-    alert('Please enter a payment amount greater than $0.00.');
-    return;
-}
-
-if (!paymentMethod) {
-    alert('Please select a payment method.');
-    return;
-}
-
-  try {
-
-    button.disabled = true;
-    button.textContent = 'Saving...';
-
-    const response = await fetch(
-  '/api/repair-orders/' +
-  encodeURIComponent(id) +
-  '/payments',
-  {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      amount: newPayment,
-      payment_method: paymentMethod
-    })
-  }
-);
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        result.error || 'Unable to save payment'
-      );
-    }
-
-    alert('Payment information saved.');
-
-    window.location.reload();
-
-  } catch (error) {
-
-    alert(error.message);
-
-  } finally {
-
-    button.disabled = false;
-    button.textContent = 'Save Payment';
-
-  }
 });
   async function emailInvoice() {
   const params =
