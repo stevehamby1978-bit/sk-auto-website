@@ -849,24 +849,63 @@ if (Array.isArray(order.payments) && order.payments.length > 0) {
             ? new Date(payment.paid_at + ' UTC').toLocaleString()
             : '';
 
-        return `
-            <div style="
-                padding:10px 0;
-                border-bottom:1px solid #ddd;
-                display:flex;
-                justify-content:space-between;
-                gap:20px;
-            ">
-                <div>
-                    <strong>${method}</strong>
-                    <div style="font-size:13px; color:#666;">
-                        ${date}
-                    </div>
-                </div>
+     const isVoided = Number(payment.voided) === 1;
 
-                <strong>${money(amount)}</strong>
+return `
+    <div style="
+        padding:10px 0;
+        border-bottom:1px solid #ddd;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:20px;
+        ${isVoided ? 'opacity:0.65;' : ''}
+    ">
+        <div>
+            <strong>
+                ${method}
+                ${isVoided
+                    ? '<span style="color:#dc3545; margin-left:8px;">VOIDED</span>'
+                    : ''}
+            </strong>
+
+            <div style="font-size:13px; color:#666;">
+                ${date}
             </div>
-        `;
+
+            ${isVoided && payment.void_reason
+                ? `<div style="font-size:13px; color:#dc3545;">
+                       Reason: ${payment.void_reason}
+                   </div>`
+                : ''}
+        </div>
+
+        <div style="text-align:right;">
+            <strong style="${isVoided ? 'text-decoration:line-through;' : ''}">
+                ${money(amount)}
+            </strong>
+
+            ${!isVoided
+                ? `<div style="margin-top:6px;">
+                       <button
+                           type="button"
+                           onclick="voidPayment(${payment.id})"
+                           style="
+                               background:#dc3545;
+                               color:white;
+                               border:none;
+                               border-radius:4px;
+                               padding:5px 10px;
+                               cursor:pointer;
+                           "
+                       >
+                           Void Payment
+                       </button>
+                   </div>`
+                : ''}
+        </div>
+    </div>
+`;
     }).join('');
 
 } else {
