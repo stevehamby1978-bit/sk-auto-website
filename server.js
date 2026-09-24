@@ -3808,6 +3808,271 @@ db.prepare(`
     });
   }
 });
+
+// ===== S&K AUTO - EMAIL PAYMENT RECEIPT =====
+app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req, res) => {
+  try {
+    const repairOrderId = Number(req.params.id);
+    const paymentId = Number(req.params.paymentId);
+
+    const repairOrder = db.prepare(`
+      SELECT
+        r.id,
+        c.name AS customer_name,
+        c.email AS customer_email,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      LEFT JOIN vehicles v
+        ON r.vehicle_id = v.id
+      WHERE r.id = ?
+    `).get(repairOrderId);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    if (!repairOrder.customer_email) {
+      return res.status(400).json({
+        error: "This customer does not have an email address."
+      });
+    }
+
+    const payment = db.prepare(`
+      SELECT
+        id,
+        amount,
+        payment_method,
+        paid_at,
+        voided
+      FROM repair_order_payments
+      WHERE id = ?
+        AND repair_order_id = ?
+    `).get(paymentId, repairOrderId);
+
+    if (!payment) {
+      return res.status(404).json({
+        error: "Payment not found."
+      });
+    }
+
+    if (payment.voided) {
+      return res.status(400).json({
+        error: "A receipt cannot be emailed for a voided payment."
+      });
+    }
+
+    const items = db.prepare(`
+      SELECT
+        parts,
+        labor
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+    `).all(repairOrderId);
+
+    const subtotal = items.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.parts || 0) +
+        Number(item.labor || 0),
+      0
+    );
+
+    const tax =
+      Math.round(subtotal * 0.075 * 100) / 100;
+
+    const total =
+      Math.round((subtotal + tax) * 100) / 100;
+
+    const previousPayments = db.prepare(`
+      SELECT amount
+      FROM repair_order_payments
+      WHERE repair_order_id = ?
+        AND voided = 0
+        AND id < ?
+    `).all(repairOrderId, paymentId);
+
+    const paidBefore = previousPayments.reduce(
+      (sum, p) => sum + Number(p.amount || 0),
+      0
+    );
+
+    const previousBalance =
+      Math.max(0, total - paidBefore);
+
+    const remainingBalance =
+      Math.max(
+        0,
+        previousBalance - Number(payment.amount || 0)
+      );
+
+    const vehicleDescription = [
+      repairOrder.vehicle_year,
+      repairOrder.vehicle_make,
+      repairOrder.vehicle_model
+    ].filter(Boolean).join(" ");
+
+    const paymentDate = payment.paid_at
+      ? new Date(payment.paid_at + " UTC").toLocaleString("en-US")
+      : "";
+
+    const receiptNumber =
+      `R-${String(repairOrderId).padStart(5, "0")}-${String(paymentId).padStart(4, "0")}`;
+
+    await resend.emails.send({
+      from: "S&K Auto <appointments@skautohutch.com>",
+      to: [repairOrder.customer_email],
+      subject: `S&K Auto Payment Receipt ${receiptNumber}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
+          <div style="max-width:650px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;">
+
+            <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
+              <img
+                src="https://skautohutch.com/sk-auto-invoice-logo.png"
+                alt="S&K Auto"
+                style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto 8px auto;"
+              >
+              <p style="margin:5px 0;color:#cccccc;">
+                The Art of Automotive Repair
+              </p>
+            </div>
+
+            <div style="padding:25px;">
+              <h2 style="margin-top:0;color:#d32f2f;">
+                PAYMENT RECEIPT
+              </h2>
+
+              <p>
+                Thank you, ${repairOrder.customer_name || "Customer"}.
+              </p>
+
+              <p>
+                We received your payment to S&K Auto.
+              </p>
+
+              <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Receipt #
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;font-weight:bold;">
+                    ${receiptNumber}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Repair Order #
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">
+                    ${repairOrderId}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Vehicle
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">
+                    ${vehicleDescription || "Not listed"}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Payment Amount
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;font-weight:bold;">
+                    $${Number(payment.amount || 0).toFixed(2)}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Payment Method
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">
+                    ${payment.payment_method || "Not listed"}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Payment Date
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">
+                    ${paymentDate}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Invoice Total
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">
+                    $${total.toFixed(2)}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;">
+                    Previous Balance
+                  </td>
+                  <td style="padding:10px;border-bottom:1px solid #ddd;text-align:right;">
+                    $${previousBalance.toFixed(2)}
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:12px;font-size:18px;font-weight:bold;">
+                    Remaining Balance
+                  </td>
+                  <td style="padding:12px;text-align:right;font-size:18px;font-weight:bold;">
+                    $${remainingBalance.toFixed(2)}
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin-top:25px;color:#666;">
+                Thank you for choosing S&K Auto.
+              </p>
+
+              <p style="color:#666;">
+                3107 Homestead<br>
+                Hutchinson, KS 67502<br>
+                (620) 899-0425
+              </p>
+            </div>
+          </div>
+        </div>
+      `
+    });
+
+    console.log(
+      `Payment receipt ${receiptNumber} emailed to ${repairOrder.customer_email}`
+    );
+
+    res.json({
+      success: true,
+      email: repairOrder.customer_email,
+      receipt_number: receiptNumber
+    });
+
+  } catch (err) {
+    console.error("Email payment receipt error:", err);
+
+    res.status(500).json({
+      error: "Unable to email payment receipt."
+    });
+  }
+});
+
 // ===== S&K AUTO - GET INVOICE EMAIL HISTORY =====
 app.get("/api/repair-orders/:id/invoice-email-history", (req, res) => {
   try {
