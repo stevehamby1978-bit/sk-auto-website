@@ -635,7 +635,7 @@ const total =
 async function emailReceipt() {
   const params = new URLSearchParams(window.location.search);
 
-  const repairOrderId = params.get('id');
+  const repairOrderId = params.get('repairOrderId');
   const paymentId = params.get('paymentId');
 
   if (!repairOrderId || !paymentId) {
