@@ -401,7 +401,7 @@ CREATE TABLE IF NOT EXISTS shops (
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
+`);
 // ===== QUICKBOOKS SHOP COLUMNS =====
 const quickBooksShopColumns = [
     ['quickbooks_realm_id', 'TEXT'],
@@ -434,7 +434,7 @@ db.all(`PRAGMA table_info(shops)`, [], (err, columns) => {
         }
     });
 });
-
+db.exec(`
   -- ===== S&K AUTO - EMPLOYEES =====
   CREATE TABLE IF NOT EXISTS employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
