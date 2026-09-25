@@ -762,7 +762,23 @@ ${item.days_outstanding || 0}
 >
   View Invoice
 </a>
-
+<button
+  type="button"
+  onclick="sendBalanceReminder(${item.id}, this)"
+  style="
+    display:inline-block;
+    margin-left:8px;
+    padding:8px 14px;
+    background:#0d6efd;
+    color:white;
+    border:none;
+    border-radius:6px;
+    font-weight:bold;
+    cursor:pointer;
+  "
+>
+  📱 Send Reminder
+</button>
 </div>
             
           `;
@@ -836,6 +852,64 @@ async function logoutEmployee() {
   }
 }
 
+// ===== S&K AUTO - SEND BALANCE REMINDER =====
+async function sendBalanceReminder(repairOrderId, button) {
+  const originalText = button.innerHTML;
+
+  const confirmed = confirm(
+    'Send an outstanding balance reminder to this customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    button.disabled = true;
+    button.innerHTML = 'Sending...';
+
+    const response = await fetch(
+      `/api/repair-orders/${repairOrderId}/balance-reminder`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || 'Unable to send balance reminder.'
+      );
+    }
+
+    alert(
+      `Balance reminder sent successfully.\n\nBalance Due: $${Number(
+        data.balance_due || 0
+      ).toFixed(2)}`
+    );
+
+    button.innerHTML = '✓ Reminder Sent';
+
+    // Refresh dashboard so reminder information updates
+    await loadDashboard();
+
+  } catch (error) {
+    console.error('Balance reminder error:', error);
+
+    alert(
+      error.message ||
+      'Unable to send balance reminder. Please try again.'
+    );
+
+    button.disabled = false;
+    button.innerHTML = originalText;
+  }
+}
+  
 loadCurrentEmployee();
 loadDashboard();
 
