@@ -732,7 +732,17 @@ if (daysOutstanding >= 91) {
 <strong>Days Outstanding:</strong>
 ${item.days_outstanding || 0}
 <br>
+<strong>Reminders Sent:</strong>
+${Number(item.balance_reminder_count || 0)}
+<br>
 
+<strong>Last Reminder:</strong>
+${
+  item.balance_reminder_sent_at
+    ? new Date(item.balance_reminder_sent_at).toLocaleString()
+    : 'Never'
+}
+<br>
 <span style="
     display:inline-block;
     margin-top:6px;
