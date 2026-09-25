@@ -120,7 +120,6 @@ const protectedPages = [
   '/repair-orders.html',
   '/repair-order.html',
   '/invoices.html',
-  '/invoice.html',
   '/appointments.html'
   
 ];
