@@ -142,6 +142,62 @@ app.get('/quickbooks/connect', (req, res) => {
 });
 
 });
+
+// ===== S&K AUTO - QUICKBOOKS CONNECTION STATUS =====
+app.get('/api/quickbooks/status', (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        connected: false,
+        error: 'Not logged in.'
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    const shop = db.prepare(`
+      SELECT
+        quickbooks_realm_id,
+        quickbooks_access_token,
+        quickbooks_refresh_token,
+        quickbooks_access_token_expires_at,
+        quickbooks_refresh_token_expires_at
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
+
+    if (!shop) {
+      return res.status(404).json({
+        connected: false,
+        error: 'Shop not found.'
+      });
+    }
+
+    const connected = Boolean(
+      shop.quickbooks_realm_id &&
+      shop.quickbooks_refresh_token
+    );
+
+    return res.json({
+      connected,
+      realmId: shop.quickbooks_realm_id || null,
+      accessTokenExpiresAt:
+        shop.quickbooks_access_token_expires_at || null,
+      refreshTokenExpiresAt:
+        shop.quickbooks_refresh_token_expires_at || null
+    });
+
+  } catch (err) {
+    console.error('QuickBooks status error:', err);
+
+    return res.status(500).json({
+      connected: false,
+      error: 'Could not check QuickBooks connection.'
+    });
+  }
+});
+// ===== END QUICKBOOKS CONNECTION STATUS =====
+
 // ===== END QUICKBOOKS CONNECT =====
 // ===== S&K AUTO - QUICKBOOKS CALLBACK =====
 app.get('/quickbooks/callback', async (req, res) => {
