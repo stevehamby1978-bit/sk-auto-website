@@ -402,6 +402,39 @@ CREATE TABLE IF NOT EXISTS shops (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+// ===== QUICKBOOKS SHOP COLUMNS =====
+const quickBooksShopColumns = [
+    ['quickbooks_realm_id', 'TEXT'],
+    ['quickbooks_access_token', 'TEXT'],
+    ['quickbooks_refresh_token', 'TEXT'],
+    ['quickbooks_access_token_expires_at', 'INTEGER'],
+    ['quickbooks_refresh_token_expires_at', 'INTEGER']
+];
+
+db.all(`PRAGMA table_info(shops)`, [], (err, columns) => {
+    if (err) {
+        console.error('Could not inspect shops table for QuickBooks columns:', err);
+        return;
+    }
+
+    const existingColumns = new Set(columns.map(column => column.name));
+
+    quickBooksShopColumns.forEach(([name, type]) => {
+        if (!existingColumns.has(name)) {
+            db.run(
+                `ALTER TABLE shops ADD COLUMN ${name} ${type}`,
+                (alterErr) => {
+                    if (alterErr) {
+                        console.error(`Could not add ${name}:`, alterErr);
+                    } else {
+                        console.log(`Added shops.${name}`);
+                    }
+                }
+            );
+        }
+    });
+});
+
   -- ===== S&K AUTO - EMPLOYEES =====
   CREATE TABLE IF NOT EXISTS employees (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
