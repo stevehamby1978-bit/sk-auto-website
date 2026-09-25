@@ -1173,6 +1173,37 @@ const total =
   }
 }
 
+// ===== S&K AUTO - TEST BALANCE REMINDER =====
+app.get('/api/test-balance-reminder', async (req, res) => {
+  try {
+    const testPhone = process.env.SMS_TO_NUMBER;
+
+    if (!testPhone) {
+      return res.status(500).json({
+        error: 'SMS_TO_NUMBER is not configured.'
+      });
+    }
+
+    await twilioClient.messages.create({
+      body:
+        'S&K Auto TEST: This is a test of the automatic outstanding balance reminder system. No customer was contacted. Reply STOP to opt out.',
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: normalizePhoneNumber(testPhone)
+    });
+
+    res.json({
+      success: true,
+      message: 'Test balance reminder sent.'
+    });
+  } catch (err) {
+    console.error('Test balance reminder failed:', err);
+
+    res.status(500).json({
+      error: 'Unable to send test balance reminder.'
+    });
+  }
+});
+
 // sendBalanceReminders();
 
 // setInterval(sendBalanceReminders, 15 * 60 * 1000);
