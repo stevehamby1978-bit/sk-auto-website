@@ -941,6 +941,32 @@ if (!repairOrderColumns.includes('invoice_token')) {
   console.log('Added invoice_token column to repair_orders');
 }
 
+// ===== S&K AUTO - QUICKBOOKS INVOICE MIGRATION =====
+
+if (!repairOrderColumns.includes('quickbooks_invoice_id')) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN quickbooks_invoice_id TEXT
+  `).run();
+
+  console.log(
+    'Added quickbooks_invoice_id column to repair_orders'
+  );
+}
+
+if (!repairOrderColumns.includes('quickbooks_invoice_url')) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN quickbooks_invoice_url TEXT
+  `).run();
+
+  console.log(
+    'Added quickbooks_invoice_url column to repair_orders'
+  );
+}
+
+// ===== END QUICKBOOKS INVOICE MIGRATION =====
+
 // ===== S&K AUTO - PAYMENT HISTORY TABLE =====
 db.exec(`
   CREATE TABLE IF NOT EXISTS repair_order_payments (
