@@ -280,8 +280,7 @@
 }
 
 #paymentControls {
-  display: none !important;
-}
+    display: block !important;
 }
   </style>
 
@@ -459,6 +458,30 @@
   style="display:none; margin-bottom:15px; line-height:1.6;">
 </div>
 
+<!-- ===== S&K AUTO - CUSTOMER PAYMENT CONTROLS ===== -->
+<div
+    id="paymentControls"
+    style="margin-top:15px; margin-bottom:15px;"
+>
+    <button
+        type="button"
+        id="payInvoiceBtn"
+        style="
+            width:100%;
+            padding:14px 18px;
+            background:#28a745;
+            color:white;
+            border:none;
+            border-radius:6px;
+            font-size:16px;
+            font-weight:bold;
+            cursor:pointer;
+        "
+    >
+        Pay Invoice
+    </button>
+</div>
+  
 <!-- ===== S&K AUTO - PAYMENT HISTORY ===== -->
 <div
   id="paymentHistorySection"
@@ -739,6 +762,19 @@ document.getElementById('amountPaid').textContent =
 
 document.getElementById('balanceDue').textContent =
   money(balanceDue);
+    const paymentControls =
+  document.getElementById('paymentControls');
+
+const payInvoiceBtn =
+  document.getElementById('payInvoiceBtn');
+
+if (balanceDue > 0) {
+  paymentControls.style.display = 'block';
+  payInvoiceBtn.textContent =
+    'Pay ' + money(balanceDue);
+} else {
+  paymentControls.style.display = 'none';
+}
 const paidStatus = document.getElementById('paidStatus');
 
 if (balanceDue <= 0 && total > 0) {
