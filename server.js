@@ -652,6 +652,44 @@ console.log('QuickBooks connection saved for shop:', shopId);
 
 });
 // ===== END QUICKBOOKS CALLBACK =====
+
+// ===== TEMP QUICKBOOKS REALM TEST =====
+app.get('/api/quickbooks/test-realm', (req, res) => {
+    try {
+        if (!req.session || !req.session.employee) {
+            return res.status(401).json({
+                success: false,
+                error: 'Not logged in.'
+            });
+        }
+
+        const shopId = req.session.employee.shop_id;
+
+        const shop = db.prepare(`
+            SELECT
+                id,
+                quickbooks_realm_id
+            FROM shops
+            WHERE id = ?
+        `).get(shopId);
+
+        return res.json({
+            success: true,
+            shopId: shopId,
+            realmId: shop ? shop.quickbooks_realm_id : null
+        });
+
+    } catch (err) {
+        console.error('QuickBooks realm test error:', err);
+
+        return res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+// ===== END TEMP QUICKBOOKS REALM TEST =====
+
 // ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
 function requireLogin(req, res, next) {
   if (req.session && req.session.employee) {
