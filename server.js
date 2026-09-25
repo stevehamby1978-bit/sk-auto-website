@@ -4391,7 +4391,7 @@ app.get("/api/customer-invoice/:token", (req, res) => {
       0
     );
 
-    const tax = subtotal * 0.0795;
+    const tax = subtotal * 0.075;
     const total = subtotal + tax;
     const amountPaid = Number(repairOrder.amount_paid || 0);
     const balance = Math.max(0, total - amountPaid);
