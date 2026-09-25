@@ -411,28 +411,15 @@ const quickBooksShopColumns = [
     ['quickbooks_refresh_token_expires_at', 'INTEGER']
 ];
 
-db.all(`PRAGMA table_info(shops)`, [], (err, columns) => {
-    if (err) {
-        console.error('Could not inspect shops table for QuickBooks columns:', err);
-        return;
+const existingShopColumns = new Set(
+    db.prepare(`PRAGMA table_info(shops)`).all().map(column => column.name)
+);
+
+quickBooksShopColumns.forEach(([name, type]) => {
+    if (!existingShopColumns.has(name)) {
+        db.exec(`ALTER TABLE shops ADD COLUMN ${name} ${type}`);
+        console.log(`Added shops.${name}`);
     }
-
-    const existingColumns = new Set(columns.map(column => column.name));
-
-    quickBooksShopColumns.forEach(([name, type]) => {
-        if (!existingColumns.has(name)) {
-            db.run(
-                `ALTER TABLE shops ADD COLUMN ${name} ${type}`,
-                (alterErr) => {
-                    if (alterErr) {
-                        console.error(`Could not add ${name}:`, alterErr);
-                    } else {
-                        console.log(`Added shops.${name}`);
-                    }
-                }
-            );
-        }
-    });
 });
 db.exec(`
   -- ===== S&K AUTO - EMPLOYEES =====
