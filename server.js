@@ -215,7 +215,40 @@ app.get('/api/quickbooks/test-token', async (req, res) => {
     }
 });
 // ===== END TEMP QUICKBOOKS TOKEN TEST =====
+// ===== TEMP QUICKBOOKS CUSTOMER COLUMN TEST =====
+app.get('/api/quickbooks/test-customer-column', (req, res) => {
+    try {
+        if (!req.session || !req.session.employee) {
+            return res.status(401).json({
+                success: false,
+                error: 'Not logged in.'
+            });
+        }
 
+        const columns = db.prepare(`
+            PRAGMA table_info(customers)
+        `).all();
+
+        const quickbooksColumn = columns.find(
+            column => column.name === 'quickbooks_customer_id'
+        );
+
+        return res.json({
+            success: true,
+            quickbooksCustomerColumnExists: Boolean(quickbooksColumn),
+            column: quickbooksColumn || null
+        });
+
+    } catch (err) {
+        console.error('QuickBooks customer column test error:', err);
+
+        return res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+// ===== END TEMP QUICKBOOKS CUSTOMER COLUMN TEST =====
 // ===== S&K AUTO - QUICKBOOKS CONNECT =====
 app.get('/quickbooks/connect', (req, res) => {
 
