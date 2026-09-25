@@ -275,6 +275,64 @@ async function syncCustomerToQuickBooks(shopId, customer) {
   }
 }
 // ===== END QUICKBOOKS CUSTOMER SYNC =====
+
+// ===== TEMP QUICKBOOKS COMPANY TEST =====
+app.get('/api/quickbooks/test-company', async (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not logged in.'
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    const shop = db.prepare(`
+      SELECT quickbooks_realm_id
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
+
+    if (!shop || !shop.quickbooks_realm_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'QuickBooks Realm ID not found.'
+      });
+    }
+
+    const accessToken = await refreshQuickBooksToken(shopId);
+
+    const url =
+      `https://quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/companyinfo/${shop.quickbooks_realm_id}?minorversion=75`;
+
+    const qbResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const responseText = await qbResponse.text();
+
+    return res.status(qbResponse.status).json({
+      success: qbResponse.ok,
+      quickbooksStatus: qbResponse.status,
+      response: responseText
+    });
+
+  } catch (err) {
+    console.error('QuickBooks company test error:', err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+// ===== END TEMP QUICKBOOKS COMPANY TEST =====
+
 // ===== TEMP QUICKBOOKS TOKEN TEST =====
 app.get('/api/quickbooks/test-token', async (req, res) => {
     try {
