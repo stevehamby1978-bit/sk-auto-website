@@ -1459,8 +1459,6 @@ app.post('/api/repair-orders/:id/balance-reminder', async (req, res) => {
 
 // ===== S&K AUTO - AUTOMATIC BALANCE REMINDERS =====
 
-const AUTO_BALANCE_REMINDER_DAYS = [7, 14, 30, 60, 90];
-
 async function runAutomaticBalanceReminders() {
   console.log('Checking for automatic balance reminders...');
 
@@ -1549,10 +1547,16 @@ async function runAutomaticBalanceReminders() {
           )
         );
 
-        // Only send on our selected reminder days.
-        if (!AUTO_BALANCE_REMINDER_DAYS.includes(daysOutstanding)) {
-          continue;
-        }
+       // Send at 7 days, 14 days, 30 days,
+// then every 30 days after that.
+const isAutomaticReminderDay =
+    daysOutstanding === 7 ||
+    daysOutstanding === 14 ||
+    (daysOutstanding >= 30 && daysOutstanding % 30 === 0);
+
+if (!isAutomaticReminderDay) {
+    continue;
+}
 
         // Prevent duplicate automatic reminders on the same day.
         if (repairOrder.balance_reminder_sent_at) {
