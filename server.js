@@ -297,7 +297,31 @@ app.get('/quickbooks/callback', async (req, res) => {
       'QuickBooks connected. Realm ID:',
       realmId
     );
+// ===== SAVE QUICKBOOKS CONNECTION TO SHOP =====
+if (!req.session.employee || !req.session.employee.shop_id) {
+    return res.status(401).send('Shop session not found.');
+}
 
+const shopId = req.session.employee.shop_id;
+
+db.prepare(`
+    UPDATE shops
+    SET quickbooks_realm_id = ?,
+        quickbooks_access_token = ?,
+        quickbooks_refresh_token = ?,
+        quickbooks_access_token_expires_at = ?,
+        quickbooks_refresh_token_expires_at = ?
+    WHERE id = ?
+`).run(
+    realmId,
+    tokenData.access_token,
+    tokenData.refresh_token,
+    Date.now() + (Number(tokenData.expires_in) * 1000),
+    Date.now() + (Number(tokenData.x_refresh_token_expires_in) * 1000),
+    shopId
+);
+
+console.log('QuickBooks connection saved for shop:', shopId);
     return res.send(`
       <!DOCTYPE html>
       <html>
