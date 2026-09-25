@@ -333,6 +333,49 @@ app.get('/api/quickbooks/test-company', async (req, res) => {
 });
 // ===== END TEMP QUICKBOOKS COMPANY TEST =====
 
+// ===== TEMP QUICKBOOKS PAYMENTS AUTH TEST =====
+app.get('/api/quickbooks/test-payments', async (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not logged in.'
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    const accessToken =
+      await refreshQuickBooksToken(shopId);
+
+    if (!accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'QuickBooks access token not available.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'QuickBooks Payments authorization is configured.',
+      paymentScopeRequested: true,
+      tokenAvailable: true
+    });
+
+  } catch (err) {
+    console.error(
+      'QuickBooks Payments authorization test error:',
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+// ===== END TEMP QUICKBOOKS PAYMENTS AUTH TEST =====
+
 // ===== TEMP QUICKBOOKS TOKEN TEST =====
 app.get('/api/quickbooks/test-token', async (req, res) => {
     try {
