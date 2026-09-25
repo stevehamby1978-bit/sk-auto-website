@@ -1176,6 +1176,150 @@ const total =
 
  setInterval(sendBalanceReminders, 15 * 60 * 1000);
 
+// ===== S&K AUTO - GET OUTSTANDING BALANCES =====
+app.get('/api/outstanding-balances', (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+
+    if (!shopId) {
+      return res.status(401).json({
+        error: 'Not authorized.'
+      });
+    }
+
+    const repairOrders = db.prepare(`
+      SELECT
+        r.id,
+        r.completed_at,
+        r.balance_reminder_sent_at,
+        r.balance_reminder_count,
+        c.name AS customer_name,
+        c.phone AS customer_phone,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      LEFT JOIN vehicles v
+        ON r.vehicle_id = v.id
+      WHERE r.shop_id = ?
+        AND r.status = 'completed'
+        AND r.completed_at IS NOT NULL
+      ORDER BY r.completed_at ASC
+    `).all(shopId);
+
+    const outstandingBalances = [];
+
+    for (const repairOrder of repairOrders) {
+
+      // Calculate repair order subtotal
+      const items = db.prepare(`
+        SELECT parts, labor
+        FROM repair_order_items
+        WHERE repair_order_id = ?
+      `).all(repairOrder.id);
+
+      const subtotal = items.reduce(
+        (sum, item) =>
+          sum +
+          Number(item.parts || 0) +
+          Number(item.labor || 0),
+        0
+      );
+
+      // Same tax calculation used by the invoice system
+      const tax =
+        Math.round(subtotal * 0.075 * 100) / 100;
+
+      const total =
+        Math.round((subtotal + tax) * 100) / 100;
+
+      // Count only payments that have NOT been voided
+      const paymentRow = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) AS amount_paid
+        FROM repair_order_payments
+        WHERE repair_order_id = ?
+          AND COALESCE(voided, 0) = 0
+      `).get(repairOrder.id);
+
+      const amountPaid =
+        Math.round(Number(paymentRow.amount_paid || 0) * 100) / 100;
+
+      const balanceDue =
+        Math.max(
+          0,
+          Math.round((total - amountPaid) * 100) / 100
+        );
+
+      // Paid invoices do not belong on this list
+      if (balanceDue <= 0.009) {
+        continue;
+      }
+
+      const completedAt =
+        new Date(repairOrder.completed_at);
+
+      let daysOutstanding = 0;
+
+      if (!Number.isNaN(completedAt.getTime())) {
+        daysOutstanding = Math.max(
+          0,
+          Math.floor(
+            (Date.now() - completedAt.getTime()) /
+            (24 * 60 * 60 * 1000)
+          )
+        );
+      }
+
+      outstandingBalances.push({
+        id: repairOrder.id,
+        customer_name:
+          repairOrder.customer_name || 'Unknown Customer',
+        customer_phone:
+          repairOrder.customer_phone || '',
+        vehicle_year:
+          repairOrder.vehicle_year || '',
+        vehicle_make:
+          repairOrder.vehicle_make || '',
+        vehicle_model:
+          repairOrder.vehicle_model || '',
+        completed_at:
+          repairOrder.completed_at,
+        subtotal,
+        tax,
+        total,
+        amount_paid: amountPaid,
+        balance_due: balanceDue,
+        days_outstanding: daysOutstanding,
+        balance_reminder_sent_at:
+          repairOrder.balance_reminder_sent_at,
+        balance_reminder_count:
+          Number(repairOrder.balance_reminder_count || 0)
+      });
+    }
+
+    outstandingBalances.sort(
+      (a, b) =>
+        b.days_outstanding - a.days_outstanding
+    );
+
+    res.json({
+      outstandingBalances
+    });
+
+  } catch (err) {
+    console.error(
+      'Get outstanding balances error:',
+      err
+    );
+
+    res.status(500).json({
+      error: 'Unable to retrieve outstanding balances.'
+    });
+  }
+});
+
 // ===== S&K AUTO - GET ALL ESTIMATES =====
 app.get("/api/estimates", (req, res) => {
   try {
