@@ -1140,7 +1140,7 @@ if (textInvoiceBtn) {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    phone: currentInvoice.phone,
+                    phone: currentInvoice.customer_phone,
                     customerName: currentInvoice.customer_name,
                     invoiceNumber: currentInvoice.invoice_number,
                     total: currentInvoice.total,
