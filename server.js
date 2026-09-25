@@ -375,7 +375,47 @@ app.get('/api/quickbooks/test-payments', async (req, res) => {
   }
 });
 // ===== END TEMP QUICKBOOKS PAYMENTS AUTH TEST =====
+// ===== TEMP QUICKBOOKS INVOICE COLUMN TEST =====
+app.get('/api/quickbooks/test-invoice-columns', (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not logged in.'
+      });
+    }
 
+    const columns = db.prepare(`
+      PRAGMA table_info(repair_orders)
+    `).all();
+
+    const invoiceIdColumn = columns.find(
+      column => column.name === 'quickbooks_invoice_id'
+    );
+
+    const invoiceUrlColumn = columns.find(
+      column => column.name === 'quickbooks_invoice_url'
+    );
+
+    return res.json({
+      success: true,
+      quickbooksInvoiceIdExists: Boolean(invoiceIdColumn),
+      quickbooksInvoiceUrlExists: Boolean(invoiceUrlColumn)
+    });
+
+  } catch (err) {
+    console.error(
+      'QuickBooks invoice column test error:',
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+// ===== END TEMP QUICKBOOKS INVOICE COLUMN TEST =====
 // ===== TEMP QUICKBOOKS TOKEN TEST =====
 app.get('/api/quickbooks/test-token', async (req, res) => {
     try {
