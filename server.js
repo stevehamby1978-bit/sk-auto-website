@@ -107,6 +107,36 @@ app.use(session({
         maxAge: 8 * 60 * 60 * 1000
     }
 }));
+
+// ===== S&K AUTO - QUICKBOOKS CONNECT =====
+app.get('/quickbooks/connect', (req, res) => {
+
+  if (!QUICKBOOKS_CLIENT_ID || !QUICKBOOKS_REDIRECT_URI) {
+    return res.status(500).send(
+      'QuickBooks configuration is missing.'
+    );
+  }
+
+  const state = crypto.randomBytes(32).toString('hex');
+
+  req.session.quickbooksOAuthState = state;
+
+  const params = new URLSearchParams({
+    client_id: QUICKBOOKS_CLIENT_ID,
+    response_type: 'code',
+    scope: QUICKBOOKS_SCOPE,
+    redirect_uri: QUICKBOOKS_REDIRECT_URI,
+    state
+  });
+
+  const authorizationUrl =
+    QUICKBOOKS_AUTH_URL + '?' + params.toString();
+
+  res.redirect(authorizationUrl);
+
+});
+// ===== END QUICKBOOKS CONNECT =====
+
 // ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
 function requireLogin(req, res, next) {
   if (req.session && req.session.employee) {
