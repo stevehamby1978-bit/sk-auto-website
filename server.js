@@ -42,7 +42,7 @@ const QUICKBOOKS_TOKEN_URL =
   'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
 
 const QUICKBOOKS_SCOPE =
-  'com.intuit.quickbooks.accounting';
+  'com.intuit.quickbooks.accounting com.intuit.quickbooks.payment';
 // ===== END QUICKBOOKS CONFIGURATION =====
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
