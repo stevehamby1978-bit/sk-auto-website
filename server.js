@@ -186,7 +186,95 @@ async function refreshQuickBooksToken(shopId) {
     return tokenData.access_token;
 }
 // ===== END QUICKBOOKS TOKEN REFRESH =====
+// ===== QUICKBOOKS CUSTOMER SYNC =====
+async function syncCustomerToQuickBooks(shopId, customer) {
+  try {
+    // Get this shop's QuickBooks connection information
+    const shop = db.prepare(`
+      SELECT
+        quickbooks_realm_id
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
 
+    if (!shop || !shop.quickbooks_realm_id) {
+      throw new Error('This shop is not connected to QuickBooks.');
+    }
+
+    const realmId = shop.quickbooks_realm_id;
+
+    // Get a valid access token (refreshes automatically if needed)
+    const accessToken = await refreshQuickBooksToken(shopId);
+
+    if (!accessToken) {
+      throw new Error('Unable to obtain QuickBooks access token.');
+    }
+
+    // Build the QuickBooks customer
+    const quickBooksCustomer = {
+      DisplayName: customer.name
+    };
+
+    if (customer.email) {
+      quickBooksCustomer.PrimaryEmailAddr = {
+        Address: customer.email
+      };
+    }
+
+    if (customer.phone) {
+      quickBooksCustomer.PrimaryPhone = {
+        FreeFormNumber: customer.phone
+      };
+    }
+
+    // Create customer in QuickBooks
+    const response = await fetch(
+      `https://quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(quickBooksCustomer)
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(
+        'QuickBooks customer sync failed:',
+        JSON.stringify(data)
+      );
+
+      throw new Error(
+        data?.Fault?.Error?.[0]?.Message ||
+        'QuickBooks customer creation failed.'
+      );
+    }
+
+    const quickBooksCustomerId = data?.Customer?.Id;
+
+    if (!quickBooksCustomerId) {
+      throw new Error(
+        'QuickBooks did not return a customer ID.'
+      );
+    }
+
+    console.log(
+      `QuickBooks customer synced. Customer ID: ${quickBooksCustomerId}`
+    );
+
+    return quickBooksCustomerId;
+
+  } catch (err) {
+    console.error('QuickBooks customer sync error:', err);
+    throw err;
+  }
+}
+// ===== END QUICKBOOKS CUSTOMER SYNC =====
 // ===== TEMP QUICKBOOKS TOKEN TEST =====
 app.get('/api/quickbooks/test-token', async (req, res) => {
     try {
