@@ -136,7 +136,148 @@ app.get('/quickbooks/connect', (req, res) => {
 
 });
 // ===== END QUICKBOOKS CONNECT =====
+// ===== S&K AUTO - QUICKBOOKS CALLBACK =====
+app.get('/quickbooks/callback', async (req, res) => {
 
+  try {
+
+    const { code, state, realmId, error } = req.query;
+
+    if (error) {
+      console.error('QuickBooks authorization error:', error);
+      return res.status(400).send(
+        'QuickBooks authorization was cancelled or failed.'
+      );
+    }
+
+    if (!code || !state || !realmId) {
+      return res.status(400).send(
+        'Missing QuickBooks authorization information.'
+      );
+    }
+
+    if (
+      !req.session.quickbooksOAuthState ||
+      state !== req.session.quickbooksOAuthState
+    ) {
+      return res.status(403).send(
+        'Invalid QuickBooks authorization state.'
+      );
+    }
+
+    // State can only be used once.
+    delete req.session.quickbooksOAuthState;
+
+    const credentials = Buffer.from(
+      QUICKBOOKS_CLIENT_ID +
+      ':' +
+      QUICKBOOKS_CLIENT_SECRET
+    ).toString('base64');
+
+    const tokenResponse = await fetch(
+      QUICKBOOKS_TOKEN_URL,
+      {
+        method: 'POST',
+
+        headers: {
+          'Authorization':
+            'Basic ' + credentials,
+
+          'Accept':
+            'application/json',
+
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        },
+
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code,
+          redirect_uri: QUICKBOOKS_REDIRECT_URI
+        })
+      }
+    );
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+
+      console.error(
+        'QuickBooks token exchange failed:',
+        tokenData
+      );
+
+      return res.status(500).send(
+        'QuickBooks connection failed during token exchange.'
+      );
+    }
+
+    req.session.quickbooks = {
+      realmId: realmId,
+
+      accessToken:
+        tokenData.access_token,
+
+      refreshToken:
+        tokenData.refresh_token,
+
+      accessTokenExpiresAt:
+        Date.now() +
+        (Number(tokenData.expires_in) * 1000),
+
+      refreshTokenExpiresAt:
+        Date.now() +
+        (Number(tokenData.x_refresh_token_expires_in) * 1000)
+    };
+
+    console.log(
+      'QuickBooks connected. Realm ID:',
+      realmId
+    );
+
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QuickBooks Connected</title>
+      </head>
+
+      <body style="
+        font-family:Arial,sans-serif;
+        text-align:center;
+        padding:60px;
+      ">
+
+        <h1>✓ QuickBooks Connected</h1>
+
+        <p>
+          S&K Auto Management is now connected
+          to QuickBooks.
+        </p>
+
+        <p>
+          You can close this page.
+        </p>
+
+      </body>
+      </html>
+    `);
+
+  } catch (error) {
+
+    console.error(
+      'QuickBooks callback error:',
+      error
+    );
+
+    return res.status(500).send(
+      'An error occurred while connecting QuickBooks.'
+    );
+
+  }
+
+});
+// ===== END QUICKBOOKS CALLBACK =====
 // ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
 function requireLogin(req, res, next) {
   if (req.session && req.session.employee) {
