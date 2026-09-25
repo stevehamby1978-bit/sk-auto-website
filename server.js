@@ -2923,7 +2923,7 @@ app.post("/api/employees/:id/reset-password", async (req, res) => {
 });
 
 // ===== S&K AUTO - ADD CUSTOMER =====
-app.post("/api/customers", (req, res) => {
+app.post("/api/customers", async (req, res) => {
   try {
 
     const {
@@ -2990,7 +2990,41 @@ if (duplicateCustomer) {
   email ? email.trim() : "",
   req.session.employee.shop_id
 );
+// ===== SYNC NEW CUSTOMER TO QUICKBOOKS =====
+let quickbooksCustomerId = null;
 
+try {
+  quickbooksCustomerId = await syncCustomerToQuickBooks(
+    req.session.employee.shop_id,
+    {
+      name: name.trim(),
+      phone: phone ? phone.trim() : "",
+      email: email ? email.trim() : ""
+    }
+  );
+
+  db.prepare(`
+    UPDATE customers
+    SET quickbooks_customer_id = ?
+    WHERE id = ?
+      AND shop_id = ?
+  `).run(
+    quickbooksCustomerId,
+    result.lastInsertRowid,
+    req.session.employee.shop_id
+  );
+
+  console.log(
+    `Customer ${result.lastInsertRowid} linked to QuickBooks customer ${quickbooksCustomerId}`
+  );
+
+} catch (quickbooksError) {
+  console.error(
+    "QuickBooks customer sync failed:",
+    quickbooksError
+  );
+}
+// ===== END QUICKBOOKS CUSTOMER SYNC =====
     res.status(201).json({
       success: true,
       id: Number(result.lastInsertRowid),
