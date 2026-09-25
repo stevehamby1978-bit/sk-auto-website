@@ -416,6 +416,79 @@ app.get('/api/quickbooks/test-invoice-columns', (req, res) => {
   }
 });
 // ===== END TEMP QUICKBOOKS INVOICE COLUMN TEST =====
+
+// ===== TEMP QUICKBOOKS ITEMS TEST =====
+app.get('/api/quickbooks/test-items', async (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not logged in.'
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+
+    const shop = db.prepare(`
+      SELECT quickbooks_realm_id
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
+
+    if (!shop || !shop.quickbooks_realm_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'QuickBooks is not connected.'
+      });
+    }
+
+    const accessToken =
+      await refreshQuickBooksToken(shopId);
+
+    const query =
+      "SELECT Id, Name, Type, Active FROM Item WHERE Active = true";
+
+    const url =
+      'https://sandbox-quickbooks.api.intuit.com/v3/company/' +
+      shop.quickbooks_realm_id +
+      '/query?query=' +
+      encodeURIComponent(query) +
+      '&minorversion=75';
+
+    const qbResponse = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    });
+
+    const data = await qbResponse.json();
+
+    if (!qbResponse.ok) {
+      return res.status(qbResponse.status).json({
+        success: false,
+        quickbooksStatus: qbResponse.status,
+        response: data
+      });
+    }
+
+    return res.json({
+      success: true,
+      items: data?.QueryResponse?.Item || []
+    });
+
+  } catch (err) {
+    console.error('QuickBooks item test error:', err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+// ===== END TEMP QUICKBOOKS ITEMS TEST =====
+
 // ===== TEMP QUICKBOOKS TOKEN TEST =====
 app.get('/api/quickbooks/test-token', async (req, res) => {
     try {
