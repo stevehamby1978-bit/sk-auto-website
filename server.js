@@ -5757,7 +5757,7 @@ app.patch("/api/repair-orders/:id/concern", (req, res) => {
   }
 });
 // ===== S&K AUTO - MARK REPAIR ORDER COMPLETED =====
-app.patch("/api/repair-orders/:id/complete", (req, res) => {
+app.patch("/api/repair-orders/:id/complete", async (req, res) => {
   try {
     if (!req.session.employee || !req.session.employee.id) {
       return res.status(401).json({
@@ -5800,7 +5800,67 @@ app.patch("/api/repair-orders/:id/complete", (req, res) => {
       WHERE id = ?
         AND shop_id = ?
     `).run(req.params.id, shopId);
+// ===== S&K AUTO - AUTOMATIC VEHICLE READY SMS =====
+try {
+    const readyInfo = db.prepare(`
+        SELECT
+            r.id,
+            c.name AS customer_name,
+            c.phone AS customer_phone,
+            v.year AS vehicle_year,
+            v.make AS vehicle_make,
+            v.model AS vehicle_model
+        FROM repair_orders r
+        LEFT JOIN customers c
+            ON r.customer_id = c.id
+        LEFT JOIN vehicles v
+            ON r.vehicle_id = v.id
+        WHERE r.id = ?
+          AND r.shop_id = ?
+    `).get(req.params.id, shopId);
 
+    if (readyInfo && readyInfo.customer_phone) {
+        const customerPhone =
+            normalizePhoneNumber(readyInfo.customer_phone);
+
+        if (customerPhone) {
+            const customerFirstName =
+                String(readyInfo.customer_name || "")
+                    .trim()
+                    .split(/\s+/)[0];
+
+            const vehicleDescription = [
+                readyInfo.vehicle_year,
+                readyInfo.vehicle_make,
+                readyInfo.vehicle_model
+            ]
+                .filter(Boolean)
+                .join(" ");
+
+            await twilioClient.messages.create({
+                body:
+                    `S&K Auto: ` +
+                    `${customerFirstName ? customerFirstName + ", " : ""}` +
+                    `your ${vehicleDescription || "vehicle"} is ready! ` +
+                    `Your repairs have been completed. ` +
+                    `Please contact S&K Auto if you have any questions. ` +
+                    `Thank you for choosing S&K Auto!`,
+                from: process.env.TWILIO_PHONE_NUMBER,
+                to: customerPhone
+            });
+
+            console.log(
+                `Vehicle ready SMS sent for repair order ${req.params.id}`
+            );
+        }
+    }
+} catch (smsError) {
+    console.error(
+        "Vehicle ready SMS error:",
+        smsError
+    );
+}
+// ===== END AUTOMATIC VEHICLE READY SMS =====
     res.json({
       success: true,
       status: "completed",
