@@ -25,7 +25,25 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const fs = require('fs');
+// ===== S&K AUTO - QUICKBOOKS CONFIGURATION =====
+const QUICKBOOKS_CLIENT_ID =
+  process.env.QUICKBOOKS_CLIENT_ID;
 
+const QUICKBOOKS_CLIENT_SECRET =
+  process.env.QUICKBOOKS_CLIENT_SECRET;
+
+const QUICKBOOKS_REDIRECT_URI =
+  process.env.QUICKBOOKS_REDIRECT_URI;
+
+const QUICKBOOKS_AUTH_URL =
+  'https://appcenter.intuit.com/connect/oauth2';
+
+const QUICKBOOKS_TOKEN_URL =
+  'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+
+const QUICKBOOKS_SCOPE =
+  'com.intuit.quickbooks.accounting';
+// ===== END QUICKBOOKS CONFIGURATION =====
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 const uploadsDir = path.join(dataDir, 'uploads');
