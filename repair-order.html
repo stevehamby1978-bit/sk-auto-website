@@ -1632,14 +1632,31 @@ document.getElementById('addRecommendedBtn').addEventListener('click', async () 
     '&token=' +
     encodeURIComponent(result.authorizationToken);
 
-await navigator.clipboard.writeText(authorizationLink);
+const textResponse = await fetch('/api/text-authorization', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+        phone: currentRepairOrder.customer_phone,
+        customerName: currentRepairOrder.customer_name,
+        description: description,
+        authorizationUrl: authorizationLink
+    })
+});
+
+const textResult = await textResponse.json();
+
+if (!textResponse.ok) {
+    throw new Error(
+        textResult.error || 'Unable to text authorization request.'
+    );
+}
 
 alert(
     'Recommended repair added!\n\n' +
-    'Customer authorization link copied to clipboard:\n\n' +
-    authorizationLink
+    'Authorization request texted to customer.'
 );
-
 window.location.reload();
 
     } catch (error) {
