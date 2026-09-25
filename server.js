@@ -271,7 +271,8 @@ db.exec(`
     payment_status TEXT NOT NULL DEFAULT 'unpaid',
 payment_method TEXT,
 paid_at TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+invoice_token TEXT,
+created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT,
     FOREIGN KEY (estimate_id) REFERENCES estimates(id),
     FOREIGN KEY (customer_id) REFERENCES customers(id),
@@ -293,6 +294,17 @@ const repairOrderColumns = db
   .prepare(`PRAGMA table_info(repair_orders)`)
   .all()
   .map(column => column.name);
+
+// ===== S&K AUTO - INVOICE TOKEN MIGRATION =====
+if (!repairOrderColumns.includes('invoice_token')) {
+  db.prepare(`
+    ALTER TABLE repair_orders
+    ADD COLUMN invoice_token TEXT
+  `).run();
+
+  console.log('Added invoice_token column to repair_orders');
+}
+
 // ===== S&K AUTO - PAYMENT HISTORY TABLE =====
 db.exec(`
   CREATE TABLE IF NOT EXISTS repair_order_payments (
