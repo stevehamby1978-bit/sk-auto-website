@@ -577,23 +577,14 @@ function formatAuthorizationMethod(method) {
 
 let currentInvoice = null;
 async function loadInvoice() {
-  const params =
-    new URLSearchParams(window.location.search);
+ const id = params.get('id');
+const token = params.get('token');
 
-  const id =
-    params.get('id');
-
-
-  if (!id) {
-
-    document.getElementById('loading').style.display =
-      'none';
-
-    document.getElementById('error').style.display =
-      'block';
-
+if (!id && !token) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
     return;
-  }
+}
 
 
   document.getElementById('backBtn').onclick = () => {
@@ -607,11 +598,11 @@ async function loadInvoice() {
 
   try {
 
-    const response =
-      await fetch(
-        '/api/repair-orders/' +
-        encodeURIComponent(id)
-      );
+    const apiUrl = token
+    ? '/api/customer-invoice/' + encodeURIComponent(token)
+    : '/api/repair-orders/' + encodeURIComponent(id);
+
+const response = await fetch(apiUrl);
 
 
     if (!response.ok) {
@@ -621,10 +612,19 @@ async function loadInvoice() {
     }
 
 
-    const order =
-      await response.json();
+  const data = await response.json();
 
-    currentInvoice = order;
+// Employee API returns the order directly.
+// Secure customer API returns { success: true, invoice: {...} }.
+const order = data.invoice || data;
+if (order.vehicle) {
+    order.vehicle_year = order.vehicle.year;
+    order.vehicle_make = order.vehicle.make;
+    order.vehicle_model = order.vehicle.model;
+    order.vehicle_vin = order.vehicle.vin;
+    order.vehicle_mileage = order.vehicle.mileage;
+}
+currentInvoice = order;
 
     document.getElementById('invoiceNumber').textContent =
       'SK-' + String(order.id).padStart(5, '0');
