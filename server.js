@@ -2185,6 +2185,22 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+
+// ===== S&K AUTO - QUICKBOOKS CUSTOMER ID MIGRATION =====
+const customerQuickBooksColumns = db.prepare(`
+    PRAGMA table_info(customers)
+`).all().map(column => column.name);
+
+if (!customerQuickBooksColumns.includes("quickbooks_customer_id")) {
+    db.prepare(`
+        ALTER TABLE customers
+        ADD COLUMN quickbooks_customer_id TEXT
+    `).run();
+
+    console.log("Added customers.quickbooks_customer_id");
+}
+// ===== END QUICKBOOKS CUSTOMER ID MIGRATION =====
+
 // ===== S&K AUTO SaaS - VEHICLE SHOP MIGRATION =====
 const vehicleShopColumns = db.prepare(`
   PRAGMA table_info(vehicles)
