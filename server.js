@@ -4332,6 +4332,111 @@ db.prepare(`
   }
 });
 
+// ===== S&K AUTO - SECURE CUSTOMER INVOICE =====
+app.get("/api/customer-invoice/:token", (req, res) => {
+  try {
+    const token = String(req.params.token || "").trim();
+
+    if (!token) {
+      return res.status(400).json({
+        error: "Invoice token is required."
+      });
+    }
+
+    const repairOrder = db.prepare(`
+      SELECT
+        r.id,
+        r.status,
+        r.payment_status,
+        r.payment_method,
+        r.amount_paid,
+        r.created_at,
+        r.completed_at,
+        c.name AS customer_name,
+        v.year AS vehicle_year,
+        v.make AS vehicle_make,
+        v.model AS vehicle_model,
+        v.vin AS vehicle_vin,
+        v.mileage AS vehicle_mileage
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      LEFT JOIN vehicles v
+        ON r.vehicle_id = v.id
+      WHERE r.invoice_token = ?
+      LIMIT 1
+    `).get(token);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Invoice not found or link is invalid."
+      });
+    }
+
+    const items = db.prepare(`
+      SELECT
+        id,
+        description,
+        parts,
+        labor
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+      ORDER BY id ASC
+    `).all(repairOrder.id);
+
+    const subtotal = items.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.parts || 0) +
+        Number(item.labor || 0),
+      0
+    );
+
+    const tax = subtotal * 0.0795;
+    const total = subtotal + tax;
+    const amountPaid = Number(repairOrder.amount_paid || 0);
+    const balance = Math.max(0, total - amountPaid);
+
+    res.json({
+      success: true,
+
+      invoice: {
+        id: repairOrder.id,
+        status: repairOrder.status,
+        payment_status: repairOrder.payment_status,
+        payment_method: repairOrder.payment_method,
+        created_at: repairOrder.created_at,
+        completed_at: repairOrder.completed_at,
+
+        customer_name: repairOrder.customer_name,
+
+        vehicle: {
+          year: repairOrder.vehicle_year,
+          make: repairOrder.vehicle_make,
+          model: repairOrder.vehicle_model,
+          vin: repairOrder.vehicle_vin,
+          mileage: repairOrder.vehicle_mileage
+        },
+
+        items,
+
+        subtotal: Number(subtotal.toFixed(2)),
+        tax: Number(tax.toFixed(2)),
+        total: Number(total.toFixed(2)),
+        amount_paid: Number(amountPaid.toFixed(2)),
+        balance: Number(balance.toFixed(2))
+      }
+    });
+
+  } catch (err) {
+    console.error("Customer invoice error:", err);
+
+    res.status(500).json({
+      error: "Unable to load invoice."
+    });
+  }
+});
+
 // ===== S&K AUTO - EMAIL INVOICE =====
 app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
   try {
