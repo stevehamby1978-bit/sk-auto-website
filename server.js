@@ -4450,6 +4450,7 @@ app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
         r.payment_method,
         r.amount_paid,
         r.created_at,
+        r.invoice_token,
         c.name AS customer_name,
         c.email AS customer_email,
         c.phone AS customer_phone,
@@ -4477,7 +4478,21 @@ app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
         error: "This customer does not have an email address."
       });
     }
+// ===== S&K AUTO - CREATE SECURE INVOICE LINK =====
+let invoiceToken = repairOrder.invoice_token;
 
+if (!invoiceToken) {
+    invoiceToken = require("crypto").randomBytes(32).toString("hex");
+
+    db.prepare(`
+        UPDATE repair_orders
+        SET invoice_token = ?
+        WHERE id = ?
+    `).run(invoiceToken, repairOrder.id);
+}
+
+const invoiceUrl =
+    `https://skautohutch.com/invoice.html?token=${encodeURIComponent(invoiceToken)}`;
     const items = db.prepare(`
       SELECT
         description,
