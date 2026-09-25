@@ -1022,6 +1022,161 @@ if (
 sendAppointmentReminders();
 
 setInterval(sendAppointmentReminders, 15 * 60 * 1000);
+
+// ===== S&K AUTO - AUTOMATIC BALANCE REMINDERS =====
+async function sendBalanceReminders() {
+  try {
+    const now = new Date();
+
+    const repairOrders = db.prepare(`
+      SELECT
+        r.id,
+        r.completed_at,
+        r.balance_reminder_sent_at,
+        r.balance_reminder_count,
+        c.name AS customer_name,
+        c.phone AS customer_phone
+      FROM repair_orders r
+      LEFT JOIN customers c ON r.customer_id = c.id
+      WHERE r.status = 'completed'
+        AND r.completed_at IS NOT NULL
+        AND c.phone IS NOT NULL
+    `).all();
+
+    for (const repairOrder of repairOrders) {
+      try {
+        // Calculate current repair order total
+        const items = db.prepare(`
+          SELECT parts, labor
+          FROM repair_order_items
+          WHERE repair_order_id = ?
+        `).all(repairOrder.id);
+
+        const subtotal = items.reduce(
+          (sum, item) =>
+            sum +
+            Number(item.parts || 0) +
+            Number(item.labor || 0),
+          0
+        );
+
+      const tax =
+  Math.round(
+    subtotal * 0.075 * 100
+  ) / 100;
+
+const total =
+  Math.round(
+    (subtotal + tax) * 100
+  ) / 100;
+        // Calculate all active (non-voided) payments
+        const paymentRow = db.prepare(`
+          SELECT COALESCE(SUM(amount), 0) AS amount_paid
+          FROM repair_order_payments
+          WHERE repair_order_id = ?
+            AND COALESCE(voided, 0) = 0
+        `).get(repairOrder.id);
+
+        const amountPaid = Number(paymentRow.amount_paid || 0);
+        const balanceDue = Math.max(0, total - amountPaid);
+
+        // Stop if the invoice has been paid
+        if (balanceDue <= 0.009) {
+          continue;
+        }
+
+        const completedAt = new Date(repairOrder.completed_at);
+
+        if (Number.isNaN(completedAt.getTime())) {
+          continue;
+        }
+
+        const daysSinceCompleted =
+          (now.getTime() - completedAt.getTime()) /
+          (24 * 60 * 60 * 1000);
+
+        const reminderCount =
+          Number(repairOrder.balance_reminder_count || 0);
+
+        let shouldSend = false;
+
+        // First reminder: 3 days after completion
+        if (reminderCount === 0) {
+          shouldSend = daysSinceCompleted >= 3;
+        } else if (repairOrder.balance_reminder_sent_at) {
+          // Additional reminders: every 7 days
+          const lastReminder =
+            new Date(repairOrder.balance_reminder_sent_at);
+
+          if (!Number.isNaN(lastReminder.getTime())) {
+            const daysSinceLastReminder =
+              (now.getTime() - lastReminder.getTime()) /
+              (24 * 60 * 60 * 1000);
+
+            shouldSend = daysSinceLastReminder >= 7;
+          }
+        }
+
+        if (!shouldSend) {
+          continue;
+        }
+
+        const customerPhone =
+          normalizePhoneNumber(repairOrder.customer_phone);
+
+        if (!customerPhone) {
+          continue;
+        }
+
+        const customerFirstName =
+          String(repairOrder.customer_name || '')
+            .trim()
+            .split(/\s+/)[0];
+
+        await twilioClient.messages.create({
+          body:
+            `S&K Auto: ` +
+            `${customerFirstName ? customerFirstName + ', ' : ''}` +
+            `this is a friendly reminder that your outstanding balance is ` +
+            `$${balanceDue.toFixed(2)} on repair order #${repairOrder.id}. ` +
+            `Please contact us at (620) 899-0425 regarding payment. ` +
+            `If you have already made payment, please disregard this message. ` +
+            `Reply STOP to opt out.`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: customerPhone
+        });
+
+        db.prepare(`
+          UPDATE repair_orders
+          SET
+            balance_reminder_sent_at = ?,
+            balance_reminder_count =
+              COALESCE(balance_reminder_count, 0) + 1
+          WHERE id = ?
+        `).run(
+          new Date().toISOString(),
+          repairOrder.id
+        );
+
+        console.log(
+          `Balance reminder sent for repair order ${repairOrder.id}`
+        );
+      } catch (err) {
+        console.error(
+          `Balance reminder failed for repair order ${repairOrder.id}:`,
+          err
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Balance reminder checker failed:', err);
+  }
+}
+
+// sendBalanceReminders();
+
+// setInterval(sendBalanceReminders, 15 * 60 * 1000);
+
 // ===== S&K AUTO - GET ALL ESTIMATES =====
 app.get("/api/estimates", (req, res) => {
   try {
