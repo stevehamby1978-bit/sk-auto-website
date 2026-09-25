@@ -6540,6 +6540,86 @@ Questions? Call (620) 899-0425`;
   }
 });
 
+// ===== S&K AUTO - TEXT REPAIR AUTHORIZATION =====
+app.post('/api/text-authorization', async (req, res) => {
+  try {
+    const {
+      phone,
+      customerName,
+      description,
+      parts,
+      labor,
+      authorizationUrl
+    } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        error: 'Customer phone number is required.'
+      });
+    }
+
+    if (!authorizationUrl) {
+      return res.status(400).json({
+        error: 'Authorization link is required.'
+      });
+    }
+
+    // Convert customer phone number to +1XXXXXXXXXX format
+    const digits = String(phone).replace(/\D/g, '');
+    const customerPhone =
+      digits.length === 10 ? '+1' + digits :
+      digits.length === 11 && digits.startsWith('1') ? '+' + digits :
+      null;
+
+    if (!customerPhone) {
+      return res.status(400).json({
+        error: 'Customer phone number is invalid.'
+      });
+    }
+
+    const partsAmount = Number(parts || 0);
+    const laborAmount = Number(labor || 0);
+    const total = partsAmount + laborAmount;
+
+    const messageBody =
+`S&K Auto
+
+${customerName ? customerName + ', ' : ''}we have a recommended repair that requires your authorization.
+
+Recommended Repair:
+${description || 'Additional repair'}
+
+Parts: $${partsAmount.toFixed(2)}
+Labor: $${laborAmount.toFixed(2)}
+Total: $${total.toFixed(2)}
+
+Review and approve or decline here:
+${authorizationUrl}
+
+Questions? Call (620) 899-0425`;
+
+    const message = await twilioClient.messages.create({
+      body: messageBody,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: customerPhone
+    });
+
+    console.log('Authorization SMS sent:', message.sid);
+
+    res.json({
+      success: true,
+      message: 'Authorization text sent successfully.'
+    });
+
+  } catch (err) {
+    console.error('Authorization SMS failed:', err);
+
+    res.status(500).json({
+      error: 'Unable to send authorization text.'
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`S&K Auto website running on http://localhost:${PORT}`);
 
