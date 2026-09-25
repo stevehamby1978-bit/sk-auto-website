@@ -577,6 +577,7 @@ function formatAuthorizationMethod(method) {
 
 let currentInvoice = null;
 async function loadInvoice() {
+  const params = new URLSearchParams(window.location.search);
  const id = params.get('id');
 const token = params.get('token');
 
