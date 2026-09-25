@@ -791,6 +791,7 @@ document.getElementById('recordPaymentBtn').addEventListener('click', async () =
 
 <script>
 let currentVehicleId = null;
+  let currentRepairOrder = null;
 function money(value) {
   return '$' + (Number(value) || 0).toFixed(2);
 }
@@ -818,6 +819,7 @@ if (!response.ok) {
 }
 
 const order = await response.json();
+currentRepairOrder = order;
 
     if (!order) {
       throw new Error('Repair order not found');
@@ -1639,7 +1641,7 @@ const textResponse = await fetch('/api/text-authorization', {
     },
     body: JSON.stringify({
         phone: currentRepairOrder.customer_phone,
-        customerName: currentRepairOrder.customer_name,
+customerName: currentRepairOrder.customer_name,
         description: description,
         authorizationUrl: authorizationLink
     })
