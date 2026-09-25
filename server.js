@@ -1457,6 +1457,165 @@ app.post('/api/repair-orders/:id/balance-reminder', async (req, res) => {
   }
 });
 
+// ===== S&K AUTO - AUTOMATIC BALANCE REMINDERS =====
+
+const AUTO_BALANCE_REMINDER_DAYS = [7, 14, 30, 60, 90];
+
+async function runAutomaticBalanceReminders() {
+  console.log('Checking for automatic balance reminders...');
+
+  try {
+    // Get completed repair orders from every shop.
+    // Each order is checked again below to make sure money is still owed.
+    const repairOrders = db.prepare(`
+      SELECT
+        r.id,
+        r.shop_id,
+        r.completed_at,
+        r.balance_reminder_sent_at,
+        r.balance_reminder_count,
+        c.name AS customer_name,
+        c.phone AS customer_phone
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      WHERE r.status = 'completed'
+        AND r.completed_at IS NOT NULL
+    `).all();
+
+    for (const repairOrder of repairOrders) {
+      try {
+        if (!repairOrder.customer_phone) {
+          continue;
+        }
+
+        // Calculate invoice subtotal.
+        const items = db.prepare(`
+          SELECT parts, labor
+          FROM repair_order_items
+          WHERE repair_order_id = ?
+        `).all(repairOrder.id);
+
+        const subtotal = items.reduce(
+          (sum, item) =>
+            sum +
+            Number(item.parts || 0) +
+            Number(item.labor || 0),
+          0
+        );
+
+        // Keep this identical to the invoice calculation.
+        const tax =
+          Math.round(subtotal * 0.075 * 100) / 100;
+
+        const total =
+          Math.round((subtotal + tax) * 100) / 100;
+
+        // Count only non-voided payments.
+        const paymentRow = db.prepare(`
+          SELECT COALESCE(SUM(amount), 0) AS amount_paid
+          FROM repair_order_payments
+          WHERE repair_order_id = ?
+            AND COALESCE(voided, 0) = 0
+        `).get(repairOrder.id);
+
+        const amountPaid =
+          Math.round(
+            Number(paymentRow.amount_paid || 0) * 100
+          ) / 100;
+
+        const balanceDue = Math.max(
+          0,
+          Math.round((total - amountPaid) * 100) / 100
+        );
+
+        // Never send a reminder for a paid invoice.
+        if (balanceDue <= 0.009) {
+          continue;
+        }
+
+        const completedAt =
+          new Date(repairOrder.completed_at);
+
+        if (Number.isNaN(completedAt.getTime())) {
+          continue;
+        }
+
+        const daysOutstanding = Math.max(
+          0,
+          Math.floor(
+            (Date.now() - completedAt.getTime()) /
+            (24 * 60 * 60 * 1000)
+          )
+        );
+
+        // Only send on our selected reminder days.
+        if (!AUTO_BALANCE_REMINDER_DAYS.includes(daysOutstanding)) {
+          continue;
+        }
+
+        // Prevent duplicate automatic reminders on the same day.
+        if (repairOrder.balance_reminder_sent_at) {
+          const lastReminder =
+            new Date(repairOrder.balance_reminder_sent_at);
+
+          if (!Number.isNaN(lastReminder.getTime())) {
+            const hoursSinceLastReminder =
+              (Date.now() - lastReminder.getTime()) /
+              (60 * 60 * 1000);
+
+            if (hoursSinceLastReminder < 24) {
+              continue;
+            }
+          }
+        }
+
+        const customerName =
+          repairOrder.customer_name || 'Customer';
+
+        const message = await twilioClient.messages.create({
+          body:
+`Hello ${customerName}, this is a friendly reminder from S&K Auto that your account has an outstanding balance of $${balanceDue.toFixed(2)}. Please contact us at (620) 899-0425 to arrange payment. Thank you for choosing S&K Auto.`,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: repairOrder.customer_phone
+        });
+
+        // Record successful reminder.
+        db.prepare(`
+          UPDATE repair_orders
+          SET
+            balance_reminder_sent_at = CURRENT_TIMESTAMP,
+            balance_reminder_count =
+              COALESCE(balance_reminder_count, 0) + 1
+          WHERE id = ?
+            AND shop_id = ?
+        `).run(
+          repairOrder.id,
+          repairOrder.shop_id
+        );
+
+        console.log(
+          `Automatic balance reminder sent for repair order ${repairOrder.id}:`,
+          message.sid
+        );
+
+      } catch (orderError) {
+        // One failed customer should not stop reminders for everyone else.
+        console.error(
+          `Automatic reminder failed for repair order ${repairOrder.id}:`,
+          orderError
+        );
+      }
+    }
+
+  } catch (error) {
+    console.error(
+      'Automatic balance reminder check failed:',
+      error
+    );
+  }
+}
+
 // ===== S&K AUTO - GET ALL ESTIMATES =====
 app.get("/api/estimates", (req, res) => {
   try {
@@ -6367,5 +6526,17 @@ Questions? Call (620) 899-0425`;
 
 app.listen(PORT, () => {
   console.log(`S&K Auto website running on http://localhost:${PORT}`);
+
+  // ===== AUTOMATIC BALANCE REMINDER SCHEDULER =====
+  // Wait 5 minutes after startup before the first check.
+  setTimeout(() => {
+    runAutomaticBalanceReminders();
+
+    // Check once every hour after that.
+    setInterval(() => {
+      runAutomaticBalanceReminders();
+    }, 60 * 60 * 1000);
+
+  }, 5 * 60 * 1000);
 });
 
