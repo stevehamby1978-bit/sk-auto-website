@@ -330,7 +330,20 @@
 </div> 
     </div>
 
+<!-- ===== OUTSTANDING BALANCES ===== -->
+<section class="management-section">
+  <div class="section-header">
+    <div>
+      <h2>Outstanding Balances</h2>
+      <p>Completed repair orders with an unpaid balance.</p>
+    </div>
+  </div>
 
+  <div id="outstandingBalancesList">
+    <p>Loading outstanding balances...</p>
+  </div>
+</section>
+    
     <!-- ===== SHOP MANAGEMENT ===== -->
 
     <h2 class="section-title">
@@ -629,6 +642,83 @@ if (appointmentData.appointments.length === 0) {
 }
 }
 
+// ===== OUTSTANDING BALANCES =====
+const outstandingResponse =
+  await fetch('/api/outstanding-balances');
+
+if (outstandingResponse.ok) {
+  const outstandingData =
+    await outstandingResponse.json();
+
+  const balances =
+    outstandingData.outstandingBalances || [];
+
+  // Calculate total outstanding balance
+  const totalOutstanding = balances.reduce(
+    (sum, item) =>
+      sum + Number(item.balance_due || 0),
+    0
+  );
+
+  // Update dashboard total
+  const outstandingBalance =
+    document.getElementById('outstandingBalance');
+
+  if (outstandingBalance) {
+    outstandingBalance.textContent =
+      `$${totalOutstanding.toFixed(2)}`;
+  }
+
+  // Build outstanding balance list
+  const outstandingBalancesList =
+    document.getElementById('outstandingBalancesList');
+
+  if (outstandingBalancesList) {
+
+    if (balances.length === 0) {
+
+      outstandingBalancesList.innerHTML =
+        '<p>No outstanding balances.</p>';
+
+    } else {
+
+      outstandingBalancesList.innerHTML =
+        balances.map(item => {
+
+          const vehicle = [
+            item.vehicle_year,
+            item.vehicle_make,
+            item.vehicle_model
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          return `
+            <div style="
+              padding:12px;
+              margin-bottom:10px;
+              border:1px solid #ddd;
+              border-radius:8px;
+            ">
+              <strong>${item.customer_name || 'Unknown Customer'}</strong>
+              <br>
+
+              ${vehicle || 'Vehicle not listed'}
+              <br>
+
+              <strong>Balance Due:</strong>
+              $${Number(item.balance_due || 0).toFixed(2)}
+              <br>
+
+              <strong>Days Outstanding:</strong>
+              ${item.days_outstanding || 0}
+            </div>
+          `;
+        }).join('');
+    }
+  }
+}
+    
   } catch (error) {
 
     console.error(
