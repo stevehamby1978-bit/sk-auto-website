@@ -4581,6 +4581,14 @@ const paymentStatusText =
               <p>
                 Below is your invoice from S&K Auto.
               </p>
+<div style="text-align:center;margin:25px 0;">
+    <a
+        href="${invoiceUrl}"
+        style="display:inline-block;background:#d32f2f;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-size:16px;font-weight:bold;"
+    >
+        View Invoice
+    </a>
+</div>
 <div style="margin:20px 0;padding:12px;text-align:center;background:#f2f2f2;border-radius:6px;font-size:18px;font-weight:bold;">
   PAYMENT STATUS: ${paymentStatusText}
 </div>
