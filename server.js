@@ -108,6 +108,85 @@ app.use(session({
     }
 }));
 
+// ===== S&K AUTO - QUICKBOOKS TOKEN REFRESH =====
+async function refreshQuickBooksToken(shopId) {
+    const shop = db.prepare(`
+        SELECT
+            quickbooks_realm_id,
+            quickbooks_access_token,
+            quickbooks_refresh_token,
+            quickbooks_access_token_expires_at,
+            quickbooks_refresh_token_expires_at
+        FROM shops
+        WHERE id = ?
+    `).get(shopId);
+
+    if (!shop || !shop.quickbooks_refresh_token) {
+        throw new Error('QuickBooks is not connected for this shop.');
+    }
+
+    const now = Date.now();
+
+    // Keep using the current token if it has more than 5 minutes remaining.
+    if (
+        shop.quickbooks_access_token &&
+        shop.quickbooks_access_token_expires_at &&
+        Number(shop.quickbooks_access_token_expires_at) > now + (5 * 60 * 1000)
+    ) {
+        return shop.quickbooks_access_token;
+    }
+
+    const credentials = Buffer.from(
+        QUICKBOOKS_CLIENT_ID + ':' + QUICKBOOKS_CLIENT_SECRET
+    ).toString('base64');
+
+    const tokenResponse = await fetch(QUICKBOOKS_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Basic ' + credentials,
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: shop.quickbooks_refresh_token
+        })
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+        console.error('QuickBooks token refresh failed:', tokenData);
+        throw new Error('Could not refresh QuickBooks access token.');
+    }
+
+    const accessTokenExpiresAt =
+        Date.now() + (Number(tokenData.expires_in) * 1000);
+
+    const refreshTokenExpiresAt =
+        Date.now() + (Number(tokenData.x_refresh_token_expires_in) * 1000);
+
+    db.prepare(`
+        UPDATE shops
+        SET quickbooks_access_token = ?,
+            quickbooks_refresh_token = ?,
+            quickbooks_access_token_expires_at = ?,
+            quickbooks_refresh_token_expires_at = ?
+        WHERE id = ?
+    `).run(
+        tokenData.access_token,
+        tokenData.refresh_token,
+        accessTokenExpiresAt,
+        refreshTokenExpiresAt,
+        shopId
+    );
+
+    console.log(`QuickBooks token refreshed for shop ${shopId}`);
+
+    return tokenData.access_token;
+}
+// ===== END QUICKBOOKS TOKEN REFRESH =====
+
 // ===== S&K AUTO - QUICKBOOKS CONNECT =====
 app.get('/quickbooks/connect', (req, res) => {
 
