@@ -609,34 +609,7 @@ db.prepare(`
 );
 
 console.log('QuickBooks connection saved for shop:', shopId);
-    return res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>QuickBooks Connected</title>
-      </head>
-
-      <body style="
-        font-family:Arial,sans-serif;
-        text-align:center;
-        padding:60px;
-      ">
-
-        <h1>✓ QuickBooks Connected</h1>
-
-        <p>
-          S&K Auto Management is now connected
-          to QuickBooks.
-        </p>
-
-        <p>
-          You can close this page.
-        </p>
-
-      </body>
-      </html>
-    `);
-
+   return res.redirect('/dashboard.html?quickbooks=connected');
   } catch (error) {
 
     console.error(
