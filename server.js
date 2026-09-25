@@ -4492,7 +4492,7 @@ if (!invoiceToken) {
 }
 
 const invoiceUrl =
-    `https://skautohutch.com/invoice.html?token=${encodeURIComponent(invoiceToken)}`;
+    `https://skautohutch.com/invoice.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
     const items = db.prepare(`
       SELECT
         description,
