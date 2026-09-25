@@ -187,6 +187,35 @@ async function refreshQuickBooksToken(shopId) {
 }
 // ===== END QUICKBOOKS TOKEN REFRESH =====
 
+// ===== TEMP QUICKBOOKS TOKEN TEST =====
+app.get('/api/quickbooks/test-token', async (req, res) => {
+    try {
+        if (!req.session || !req.session.employee) {
+            return res.status(401).json({
+                success: false,
+                error: 'Not logged in.'
+            });
+        }
+
+        const shopId = req.session.employee.shop_id;
+        const accessToken = await refreshQuickBooksToken(shopId);
+
+        return res.json({
+            success: true,
+            message: 'QuickBooks token is valid.',
+            tokenReceived: Boolean(accessToken)
+        });
+    } catch (err) {
+        console.error('QuickBooks token test error:', err);
+
+        return res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+// ===== END TEMP QUICKBOOKS TOKEN TEST =====
+
 // ===== S&K AUTO - QUICKBOOKS CONNECT =====
 app.get('/quickbooks/connect', (req, res) => {
 
