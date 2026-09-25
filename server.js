@@ -132,7 +132,14 @@ app.get('/quickbooks/connect', (req, res) => {
   const authorizationUrl =
     QUICKBOOKS_AUTH_URL + '?' + params.toString();
 
-  res.redirect(authorizationUrl);
+  req.session.save((err) => {
+    if (err) {
+        console.error('Failed to save QuickBooks OAuth state:', err);
+        return res.status(500).send('Could not start QuickBooks authorization.');
+    }
+
+    res.redirect(authorizationUrl);
+});
 
 });
 // ===== END QUICKBOOKS CONNECT =====
