@@ -1320,6 +1320,143 @@ app.get('/api/outstanding-balances', (req, res) => {
   }
 });
 
+// ===== S&K AUTO - SEND OUTSTANDING BALANCE REMINDER =====
+app.post('/api/repair-orders/:id/balance-reminder', async (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    const repairOrderId = Number(req.params.id);
+
+    if (!shopId) {
+      return res.status(401).json({
+        error: 'Not authorized.'
+      });
+    }
+
+    if (!repairOrderId) {
+      return res.status(400).json({
+        error: 'Invalid repair order.'
+      });
+    }
+
+    // Get repair order and customer
+    const repairOrder = db.prepare(`
+      SELECT
+        r.id,
+        r.completed_at,
+        r.balance_reminder_count,
+        c.name AS customer_name,
+        c.phone AS customer_phone
+      FROM repair_orders r
+      LEFT JOIN customers c
+        ON r.customer_id = c.id
+      WHERE r.id = ?
+        AND r.shop_id = ?
+        AND r.status = 'completed'
+    `).get(repairOrderId, shopId);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: 'Completed repair order not found.'
+      });
+    }
+
+    if (!repairOrder.customer_phone) {
+      return res.status(400).json({
+        error: 'Customer does not have a phone number.'
+      });
+    }
+
+    // Calculate invoice total
+    const items = db.prepare(`
+      SELECT parts, labor
+      FROM repair_order_items
+      WHERE repair_order_id = ?
+    `).all(repairOrderId);
+
+    const subtotal = items.reduce(
+      (sum, item) =>
+        sum +
+        Number(item.parts || 0) +
+        Number(item.labor || 0),
+      0
+    );
+
+    const tax =
+      Math.round(subtotal * 0.075 * 100) / 100;
+
+    const total =
+      Math.round((subtotal + tax) * 100) / 100;
+
+    // Calculate payments
+    const paymentRow = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS amount_paid
+      FROM repair_order_payments
+      WHERE repair_order_id = ?
+        AND COALESCE(voided, 0) = 0
+    `).get(repairOrderId);
+
+    const amountPaid =
+      Number(paymentRow?.amount_paid || 0);
+
+    const balanceDue = Math.max(
+      0,
+      Math.round((total - amountPaid) * 100) / 100
+    );
+
+    if (balanceDue <= 0.009) {
+      return res.status(400).json({
+        error: 'This invoice is already paid in full.'
+      });
+    }
+
+    const customerName =
+      repairOrder.customer_name || 'Customer';
+
+    const messageBody =
+      `Hello ${customerName}, this is a friendly reminder from S&K Auto that your account has an outstanding balance of $${balanceDue.toFixed(2)}. ` +
+      `Please contact us at (620) 899-0425 to arrange payment. Thank you for choosing S&K Auto.`;
+
+    // Send SMS
+    const message = await twilioClient.messages.create({
+      body: messageBody,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: repairOrder.customer_phone
+    });
+
+    // Record successful reminder
+    db.prepare(`
+      UPDATE repair_orders
+      SET
+        balance_reminder_sent_at = CURRENT_TIMESTAMP,
+        balance_reminder_count =
+          COALESCE(balance_reminder_count, 0) + 1
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(repairOrderId, shopId);
+
+    console.log(
+      'Balance reminder SMS sent:',
+      message.sid
+    );
+
+    res.json({
+      success: true,
+      message: 'Balance reminder sent.',
+      balance_due: balanceDue
+    });
+
+  } catch (err) {
+    console.error(
+      'Balance reminder SMS failed:',
+      err
+    );
+
+    res.status(500).json({
+      error: 'Unable to send balance reminder.'
+    });
+  }
+});
+
 // ===== S&K AUTO - GET ALL ESTIMATES =====
 app.get("/api/estimates", (req, res) => {
   try {
