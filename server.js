@@ -303,8 +303,8 @@ app.get('/api/quickbooks/test-company', async (req, res) => {
 
     const accessToken = await refreshQuickBooksToken(shopId);
 
-    const url =
-      `https://quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/companyinfo/${shop.quickbooks_realm_id}?minorversion=75`;
+   const url =
+  `https://sandbox-quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/companyinfo/${shop.quickbooks_realm_id}?minorversion=75`;
 
     const qbResponse = await fetch(url, {
       method: 'GET',
