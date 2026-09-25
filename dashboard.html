@@ -710,9 +710,27 @@ if (outstandingResponse.ok) {
               $${Number(item.balance_due || 0).toFixed(2)}
               <br>
 
-              <strong>Days Outstanding:</strong>
-              ${item.days_outstanding || 0}
-            </div>
+<strong>Days Outstanding:</strong>
+${item.days_outstanding || 0}
+<br><br>
+
+<a
+ href="/invoice.html?id=${item.id}"
+  style="
+    display:inline-block;
+    padding:8px 14px;
+    background:#198754;
+    color:white;
+    text-decoration:none;
+    border-radius:6px;
+    font-weight:bold;
+  "
+>
+  View Invoice
+</a>
+
+</div>
+            
           `;
         }).join('');
     }
