@@ -7008,6 +7008,14 @@ app.patch("/api/repair-orders/:id/complete", async (req, res) => {
       WHERE id = ?
         AND shop_id = ?
     `).run(req.params.id, shopId);
+      db.prepare(`
+      UPDATE repair_orders
+      SET
+        status = 'completed',
+        completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(req.params.id, shopId);
 // ===== S&K AUTO - AUTOMATIC VEHICLE READY SMS =====
 try {
     const readyInfo = db.prepare(`
