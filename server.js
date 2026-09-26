@@ -459,18 +459,18 @@ async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
 
   const realmId = shop.quickbooks_realm_id;
 
-  const response = await fetch(
-    `https://quickbooks.api.intuit.com/v3/company/${realmId}/invoice?include=invoiceLink&minorversion=75`
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(invoiceData)
-    }
-  );
+ const response = await fetch(
+  `https://quickbooks.api.intuit.com/v3/company/${realmId}/invoice?include=invoiceLink&minorversion=75`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(invoiceData)
+  }
+);
 
   const data = await response.json();
 console.log(
