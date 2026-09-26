@@ -7157,6 +7157,101 @@ try {
   }
 });
 
+// ===== S&K AUTO - DELETE REPAIR ORDER =====
+app.delete("/api/repair-orders/:id", (req, res) => {
+  try {
+    if (!req.session.employee || !req.session.employee.id) {
+      return res.status(401).json({
+        error: "You must be signed in to delete a repair order."
+      });
+    }
+
+    const shopId = req.session.employee.shop_id;
+    const repairOrderId = Number(req.params.id);
+
+    if (!shopId) {
+      return res.status(403).json({
+        error: "No shop is associated with this employee."
+      });
+    }
+
+    if (!Number.isInteger(repairOrderId) || repairOrderId <= 0) {
+      return res.status(400).json({
+        error: "Invalid repair order ID."
+      });
+    }
+
+    // Make sure this repair order belongs to the logged-in shop
+    const repairOrder = db.prepare(`
+      SELECT id, quickbooks_invoice_id
+      FROM repair_orders
+      WHERE id = ?
+        AND shop_id = ?
+    `).get(repairOrderId, shopId);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        error: "Repair order not found."
+      });
+    }
+
+    // Don't silently leave a QuickBooks invoice behind
+    if (repairOrder.quickbooks_invoice_id) {
+      return res.status(409).json({
+        error:
+          "This repair order is linked to a QuickBooks invoice. Delete or void the QuickBooks invoice before deleting this repair order."
+      });
+    }
+
+    const deleteRepairOrder = db.transaction(() => {
+      // Delete child records first
+      db.prepare(`
+        DELETE FROM repair_order_recommendations
+        WHERE repair_order_id = ?
+      `).run(repairOrderId);
+
+      db.prepare(`
+        DELETE FROM repair_order_payments
+        WHERE repair_order_id = ?
+      `).run(repairOrderId);
+
+      db.prepare(`
+        DELETE FROM repair_order_items
+        WHERE repair_order_id = ?
+      `).run(repairOrderId);
+
+      // Delete the repair order itself
+      const result = db.prepare(`
+        DELETE FROM repair_orders
+        WHERE id = ?
+          AND shop_id = ?
+      `).run(repairOrderId, shopId);
+
+      if (result.changes !== 1) {
+        throw new Error("Repair order was not deleted.");
+      }
+    });
+
+    deleteRepairOrder();
+
+    console.log(
+      `Repair order ${repairOrderId} deleted from shop ${shopId}`
+    );
+
+    res.json({
+      success: true,
+      message: "Repair order deleted successfully."
+    });
+
+  } catch (err) {
+    console.error("Delete repair order error:", err);
+
+    res.status(500).json({
+      error: "Unable to delete repair order."
+    });
+  }
+});
+
 // ===== S&K AUTO - PAYMENT ROUTE =====
 
 // ===== S&K AUTO - RECORD PAYMENT =====
