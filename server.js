@@ -572,6 +572,185 @@ db.prepare(`
 }
 // ===== END QUICKBOOKS INVOICE SYNC =====
 
+// ===== S&K AUTO - SYNC QUICKBOOKS INVOICE PAYMENT STATUS =====
+async function syncQuickBooksInvoicePaymentStatus(
+  shopId,
+  repairOrderId
+) {
+  const repairOrder = db.prepare(`
+    SELECT
+      id,
+      quickbooks_invoice_id,
+      amount_paid,
+      payment_status
+    FROM repair_orders
+    WHERE id = ?
+      AND shop_id = ?
+    LIMIT 1
+  `).get(repairOrderId, shopId);
+
+  if (!repairOrder) {
+    throw new Error('Repair order not found.');
+  }
+
+  if (!repairOrder.quickbooks_invoice_id) {
+    return {
+      synced: false,
+      reason: 'No QuickBooks invoice is linked.'
+    };
+  }
+
+  const shop = db.prepare(`
+    SELECT quickbooks_realm_id
+    FROM shops
+    WHERE id = ?
+  `).get(shopId);
+
+  if (!shop || !shop.quickbooks_realm_id) {
+    throw new Error('This shop is not connected to QuickBooks.');
+  }
+
+  const accessToken =
+    await refreshQuickBooksToken(shopId);
+
+  const response = await fetch(
+    `https://quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/invoice/${repairOrder.quickbooks_invoice_id}?minorversion=75`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error(
+      'QuickBooks invoice payment status lookup failed:',
+      JSON.stringify(data)
+    );
+
+    throw new Error(
+      data?.Fault?.Error?.[0]?.Detail ||
+      data?.Fault?.Error?.[0]?.Message ||
+      'Unable to retrieve QuickBooks invoice.'
+    );
+  }
+
+  const qbInvoice = data?.Invoice;
+
+  if (!qbInvoice) {
+    throw new Error(
+      'QuickBooks did not return the invoice.'
+    );
+  }
+
+  const totalAmount =
+    Number(qbInvoice.TotalAmt || 0);
+
+  const balance =
+    Number(qbInvoice.Balance || 0);
+
+  const amountPaid =
+    Math.max(0, totalAmount - balance);
+
+  let paymentStatus = 'unpaid';
+
+  if (balance <= 0 && totalAmount > 0) {
+    paymentStatus = 'paid';
+  } else if (amountPaid > 0) {
+    paymentStatus = 'partial';
+  }
+
+  db.prepare(`
+    UPDATE repair_orders
+    SET
+      payment_status = ?,
+      amount_paid = ?,
+      paid_at = CASE
+        WHEN ? = 'paid'
+        THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
+        ELSE paid_at
+      END
+    WHERE id = ?
+      AND shop_id = ?
+  `).run(
+    paymentStatus,
+    amountPaid,
+    paymentStatus,
+    repairOrderId,
+    shopId
+  );
+
+  console.log(
+    `QuickBooks payment status synced for repair order ${repairOrderId}: ${paymentStatus}, paid ${amountPaid}, balance ${balance}`
+  );
+
+  return {
+    synced: true,
+    paymentStatus,
+    totalAmount,
+    amountPaid,
+    balance
+  };
+}
+// ===== END QUICKBOOKS INVOICE PAYMENT STATUS =====
+
+// ===== S&K AUTO - QUICKBOOKS PAYMENT STATUS API =====
+app.post(
+  '/api/repair-orders/:id/sync-quickbooks-payment',
+  async (req, res) => {
+    try {
+      if (!req.session || !req.session.employee) {
+        return res.status(401).json({
+          success: false,
+          error: 'Not logged in.'
+        });
+      }
+
+      const shopId = req.session.employee.shop_id;
+      const repairOrderId = Number(req.params.id);
+
+      if (
+        !Number.isInteger(repairOrderId) ||
+        repairOrderId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid repair order ID.'
+        });
+      }
+
+      const result =
+        await syncQuickBooksInvoicePaymentStatus(
+          shopId,
+          repairOrderId
+        );
+
+      return res.json({
+        success: true,
+        ...result
+      });
+
+    } catch (err) {
+      console.error(
+        'QuickBooks payment status sync error:',
+        err
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          err.message ||
+          'Unable to sync QuickBooks payment status.'
+      });
+    }
+  }
+);
+// ===== END QUICKBOOKS PAYMENT STATUS API =====
+
 // ===== TEMP QUICKBOOKS COMPANY TEST =====
 app.get('/api/quickbooks/test-company', async (req, res) => {
   try {
