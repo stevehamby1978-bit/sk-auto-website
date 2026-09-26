@@ -671,7 +671,55 @@ app.get('/api/quickbooks/test-invoice-columns', (req, res) => {
   }
 });
 // ===== END TEMP QUICKBOOKS INVOICE COLUMN TEST =====
+// ===== TEMP QUICKBOOKS REPAIR ORDER INVOICE TEST =====
+app.get('/api/quickbooks/test-repair-order/:id', (req, res) => {
+  try {
+    if (!req.session || !req.session.employee) {
+      return res.status(401).json({
+        success: false,
+        error: 'Not logged in.'
+      });
+    }
 
+    const shopId = req.session.employee.shop_id;
+
+    const repairOrder = db.prepare(`
+      SELECT
+        id,
+        status,
+        quickbooks_invoice_id,
+        quickbooks_invoice_url
+      FROM repair_orders
+      WHERE id = ?
+        AND shop_id = ?
+      LIMIT 1
+    `).get(req.params.id, shopId);
+
+    if (!repairOrder) {
+      return res.status(404).json({
+        success: false,
+        error: 'Repair order not found.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      repairOrder
+    });
+
+  } catch (err) {
+    console.error(
+      'QuickBooks repair order invoice test error:',
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+// ===== END TEMP QUICKBOOKS REPAIR ORDER INVOICE TEST =====
 // ===== TEMP QUICKBOOKS ITEMS TEST =====
 app.get('/api/quickbooks/test-items', async (req, res) => {
   try {
