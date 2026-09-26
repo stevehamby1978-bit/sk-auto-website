@@ -490,31 +490,69 @@ console.log(
     );
   }
 
-  const quickbooksInvoiceId =
-    data?.Invoice?.Id;
+ const quickbooksInvoiceId =
+  data?.Invoice?.Id;
 
-  const quickbooksInvoiceUrl =
-    data?.Invoice?.InvoiceLink || null;
+if (!quickbooksInvoiceId) {
+  throw new Error(
+    'QuickBooks did not return an invoice ID.'
+  );
+}
 
-  if (!quickbooksInvoiceId) {
-    throw new Error(
-      'QuickBooks did not return an invoice ID.'
+// ===== S&K AUTO - GET QUICKBOOKS INVOICE PAYMENT LINK =====
+let quickbooksInvoiceUrl = null;
+
+try {
+  const invoiceLinkResponse = await fetch(
+    `https://quickbooks.api.intuit.com/v3/company/${realmId}/invoice/${quickbooksInvoiceId}?include=invoiceLink&minorversion=75`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json'
+      }
+    }
+  );
+
+  const invoiceLinkData =
+    await invoiceLinkResponse.json();
+
+  console.log(
+    'QUICKBOOKS INVOICE LINK RESPONSE:',
+    JSON.stringify(invoiceLinkData, null, 2)
+  );
+
+  if (invoiceLinkResponse.ok) {
+    quickbooksInvoiceUrl =
+      invoiceLinkData?.Invoice?.InvoiceLink || null;
+  } else {
+    console.error(
+      'Unable to retrieve QuickBooks invoice link:',
+      invoiceLinkData
     );
   }
 
-  db.prepare(`
-    UPDATE repair_orders
-    SET
-      quickbooks_invoice_id = ?,
-      quickbooks_invoice_url = ?
-    WHERE id = ?
-      AND shop_id = ?
-  `).run(
-    quickbooksInvoiceId,
-    quickbooksInvoiceUrl,
-    repairOrderId,
-    shopId
+} catch (invoiceLinkError) {
+  console.error(
+    'QuickBooks invoice link lookup failed:',
+    invoiceLinkError
   );
+}
+// ===== END QUICKBOOKS INVOICE PAYMENT LINK =====
+
+db.prepare(`
+  UPDATE repair_orders
+  SET
+    quickbooks_invoice_id = ?,
+    quickbooks_invoice_url = ?
+  WHERE id = ?
+    AND shop_id = ?
+`).run(
+  quickbooksInvoiceId,
+  quickbooksInvoiceUrl,
+  repairOrderId,
+  shopId
+);
 
   console.log(
     `Repair order ${repairOrderId} linked to QuickBooks invoice ${quickbooksInvoiceId}`
