@@ -622,7 +622,23 @@ document.getElementById('recordPaymentBtn').addEventListener('click', async () =
         ">
         ✓ Mark Repair Complete
     </button>
-
+<button
+    id="deleteRepairBtn"
+    type="button"
+    style="
+        background:#dc3545;
+        color:white;
+        border:none;
+        padding:12px 22px;
+        border-radius:6px;
+        font-size:16px;
+        font-weight:bold;
+        cursor:pointer;
+        margin-left:10px;
+    "
+>
+    🗑 Delete Repair Order
+</button>
     <div
         id="completedRepairStatus"
         style="
@@ -934,7 +950,8 @@ const viewInvoiceBtn =
   document.getElementById('viewInvoiceBtn');
 const completeRepairBtn =
   document.getElementById('completeRepairBtn');
-
+const deleteRepairBtn =
+  document.getElementById('deleteRepairBtn');
 const completedRepairStatus =
   document.getElementById('completedRepairStatus');
 if (order.status === 'completed' && order.completed_at) {
@@ -2175,6 +2192,67 @@ const response = await fetch(
     }
 }
   
+// ===== S&K AUTO - DELETE REPAIR ORDER BUTTON =====
+const deleteRepairOrderBtn =
+  document.getElementById('deleteRepairBtn');
+
+if (deleteRepairOrderBtn) {
+  deleteRepairOrderBtn.addEventListener('click', async () => {
+
+    if (!currentRepairOrder || !currentRepairOrder.id) {
+      alert('Repair order information is not available.');
+      return;
+    }
+
+    const repairOrderId = currentRepairOrder.id;
+
+    const confirmed = confirm(
+      `Are you sure you want to permanently delete Repair Order #${repairOrderId}?\n\nThis cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleteRepairOrderBtn.disabled = true;
+    deleteRepairOrderBtn.textContent = 'Deleting...';
+
+    try {
+      const response = await fetch(
+        `/api/repair-orders/${repairOrderId}`,
+        {
+          method: 'DELETE'
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || 'Unable to delete repair order.'
+        );
+      }
+
+      alert('Repair order deleted successfully.');
+
+      window.location.href = '/repair-orders.html';
+
+    } catch (error) {
+      console.error('Delete repair order error:', error);
+
+      alert(
+        error.message ||
+        'Unable to delete repair order.'
+      );
+
+      deleteRepairOrderBtn.disabled = false;
+      deleteRepairOrderBtn.textContent =
+        '🗑 Delete Repair Order';
+    }
+  });
+}
+// ===== END DELETE REPAIR ORDER BUTTON =====
+
 loadRepairOrder();
 
 </script>
