@@ -229,7 +229,7 @@ async function syncCustomerToQuickBooks(shopId, customer) {
 
     // Create customer in QuickBooks
   const response = await fetch(
-  `https://sandbox-quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`,
+  `https://quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`
       {
         method: 'POST',
         headers: {
@@ -276,6 +276,108 @@ async function syncCustomerToQuickBooks(shopId, customer) {
 }
 // ===== END QUICKBOOKS CUSTOMER SYNC =====
 
+
+// ===== QUICKBOOKS CUSTOMER VERIFICATION =====
+async function verifyQuickBooksCustomer(
+  shopId,
+  quickbooksCustomerId,
+  customer
+) {
+  if (!quickbooksCustomerId) {
+    return false;
+  }
+
+  try {
+    const shop = db.prepare(`
+      SELECT quickbooks_realm_id
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
+
+    if (!shop || !shop.quickbooks_realm_id) {
+      return false;
+    }
+
+    const accessToken =
+      await refreshQuickBooksToken(shopId);
+
+    const response = await fetch(
+      `https://quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/customer/${quickbooksCustomerId}?minorversion=75`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+    const qbCustomer = data?.Customer;
+
+    if (!qbCustomer?.Id) {
+      return false;
+    }
+
+    const normalize = value =>
+      String(value || '')
+        .trim()
+        .toLowerCase();
+
+    const skName =
+      normalize(customer?.name);
+
+    const qbName =
+      normalize(qbCustomer.DisplayName);
+
+    const skEmail =
+      normalize(customer?.email);
+
+    const qbEmail =
+      normalize(
+        qbCustomer.PrimaryEmailAddr?.Address
+      );
+
+    // Name must match.
+    if (!skName || skName !== qbName) {
+      console.warn(
+        `QuickBooks customer mismatch. Stored ID ${quickbooksCustomerId} belongs to "${qbCustomer.DisplayName}", not "${customer?.name}".`
+      );
+
+      return false;
+    }
+
+    // If both systems have an email, require it to match too.
+    if (
+      skEmail &&
+      qbEmail &&
+      skEmail !== qbEmail
+    ) {
+      console.warn(
+        `QuickBooks customer email mismatch for ID ${quickbooksCustomerId}.`
+      );
+
+      return false;
+    }
+
+    return true;
+
+  } catch (err) {
+    console.error(
+      'QuickBooks customer verification error:',
+      err
+    );
+
+    return false;
+  }
+}
+// ===== END QUICKBOOKS CUSTOMER VERIFICATION =====
+
+
 // ===== QUICKBOOKS INVOICE SYNC =====
 async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
   // Load repair order + customer
@@ -317,11 +419,23 @@ async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
     };
   }
 
-  let quickbooksCustomerId =
-    repairOrder.quickbooks_customer_id;
+ let quickbooksCustomerId =
+  repairOrder.quickbooks_customer_id;
 
-  // Existing S&K customers may not have been synced yet.
-  if (!quickbooksCustomerId) {
+const quickbooksCustomerIsValid =
+  await verifyQuickBooksCustomer(
+    shopId,
+    quickbooksCustomerId,
+    {
+      name: repairOrder.customer_name,
+      email: repairOrder.customer_email || '',
+      phone: repairOrder.customer_phone || ''
+    }
+  );
+
+// Create a new QuickBooks customer if the stored
+// mapping is missing or belongs to a different customer.
+if (!quickbooksCustomerIsValid) {
     quickbooksCustomerId =
       await syncCustomerToQuickBooks(
         shopId,
