@@ -460,7 +460,7 @@ async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
   const realmId = shop.quickbooks_realm_id;
 
   const response = await fetch(
-    `https://sandbox-quickbooks.api.intuit.com/v3/company/${realmId}/invoice?include=invoiceLink&minorversion=75`,
+    `https://quickbooks.api.intuit.com/v3/company/${realmId}/invoice?include=invoiceLink&minorversion=75`
     {
       method: 'POST',
       headers: {
@@ -562,8 +562,7 @@ app.get('/api/quickbooks/test-company', async (req, res) => {
     const accessToken = await refreshQuickBooksToken(shopId);
 
    const url =
-  `https://sandbox-quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/companyinfo/${shop.quickbooks_realm_id}?minorversion=75`;
-
+  `https://quickbooks.api.intuit.com/v3/company/${shop.quickbooks_realm_id}/companyinfo/${shop.quickbooks_realm_id}`
     const qbResponse = await fetch(url, {
       method: 'GET',
       headers: {
