@@ -649,7 +649,51 @@ if (order.vehicle) {
     order.vehicle_mileage = order.vehicle.mileage;
 }
 currentInvoice = order;
+// ===== S&K AUTO - SYNC QUICKBOOKS PAYMENT STATUS =====
+// Only run this from the logged-in employee invoice view.
+if (!token && id && order.quickbooks_invoice_id) {
+  try {
+    const syncResponse = await fetch(
+      `/api/repair-orders/${encodeURIComponent(id)}/sync-quickbooks-payment`,
+      {
+        method: 'POST'
+      }
+    );
 
+    const syncResult = await syncResponse.json();
+
+    if (syncResponse.ok && syncResult.synced) {
+      // Update the invoice data currently being displayed
+      order.payment_status =
+        syncResult.paymentStatus;
+
+      order.amount_paid =
+        syncResult.amountPaid;
+
+      order.balance =
+        syncResult.balance;
+
+      console.log(
+        'QuickBooks payment status synced:',
+        syncResult
+      );
+    } else {
+      console.log(
+        'QuickBooks payment status not synced:',
+        syncResult
+      );
+    }
+
+  } catch (syncError) {
+    // Do not prevent the invoice from loading
+    // if QuickBooks is temporarily unavailable.
+    console.error(
+      'QuickBooks payment status check failed:',
+      syncError
+    );
+  }
+}
+// ===== END QUICKBOOKS PAYMENT STATUS SYNC =====
     document.getElementById('invoiceNumber').textContent =
       'SK-' + String(order.id).padStart(5, '0');
 
