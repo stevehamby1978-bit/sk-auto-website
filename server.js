@@ -7008,6 +7008,27 @@ app.patch("/api/repair-orders/:id/complete", async (req, res) => {
       WHERE id = ?
         AND shop_id = ?
     `).run(req.params.id, shopId);
+
+// ===== S&K AUTO - CREATE QUICKBOOKS INVOICE =====
+try {
+  const quickbooksInvoice =
+    await syncRepairOrderToQuickBooks(
+      shopId,
+      req.params.id
+    );
+
+  console.log(
+    `QuickBooks invoice ready for repair order ${req.params.id}:`,
+    quickbooksInvoice.id
+  );
+
+} catch (quickbooksError) {
+  console.error(
+    `QuickBooks invoice sync failed for repair order ${req.params.id}:`,
+    quickbooksError
+  );
+}
+// ===== END CREATE QUICKBOOKS INVOICE =====
     
 // ===== S&K AUTO - AUTOMATIC VEHICLE READY SMS =====
 try {
