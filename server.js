@@ -5428,6 +5428,7 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         r.id,
         r.status,
         r.payment_status,
+        r.quickbooks_invoice_url,
         r.payment_method,
         r.amount_paid,
         r.created_at,
@@ -5487,7 +5488,7 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         payment_method: repairOrder.payment_method,
         created_at: repairOrder.created_at,
         completed_at: repairOrder.completed_at,
-
+        quickbooks_invoice_url: repairOrder.quickbooks_invoice_url,
         customer_name: repairOrder.customer_name,
 
         vehicle: {
