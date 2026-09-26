@@ -276,6 +276,261 @@ async function syncCustomerToQuickBooks(shopId, customer) {
 }
 // ===== END QUICKBOOKS CUSTOMER SYNC =====
 
+// ===== QUICKBOOKS INVOICE SYNC =====
+async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
+  // Load repair order + customer
+  const repairOrder = db.prepare(`
+    SELECT
+      r.id,
+      r.shop_id,
+      r.customer_id,
+      r.amount_paid,
+      r.quickbooks_invoice_id,
+      r.quickbooks_invoice_url,
+      c.name AS customer_name,
+      c.phone AS customer_phone,
+      c.email AS customer_email,
+      c.quickbooks_customer_id
+    FROM repair_orders r
+    JOIN customers c
+      ON r.customer_id = c.id
+     AND c.shop_id = r.shop_id
+    WHERE r.id = ?
+      AND r.shop_id = ?
+    LIMIT 1
+  `).get(repairOrderId, shopId);
+
+  if (!repairOrder) {
+    throw new Error('Repair order not found.');
+  }
+
+  // Prevent duplicate QuickBooks invoices
+  if (repairOrder.quickbooks_invoice_id) {
+    console.log(
+      `Repair order ${repairOrderId} already linked to QuickBooks invoice ${repairOrder.quickbooks_invoice_id}`
+    );
+
+    return {
+      id: repairOrder.quickbooks_invoice_id,
+      url: repairOrder.quickbooks_invoice_url || null,
+      existing: true
+    };
+  }
+
+  let quickbooksCustomerId =
+    repairOrder.quickbooks_customer_id;
+
+  // Existing S&K customers may not have been synced yet.
+  if (!quickbooksCustomerId) {
+    quickbooksCustomerId =
+      await syncCustomerToQuickBooks(
+        shopId,
+        {
+          name: repairOrder.customer_name,
+          phone: repairOrder.customer_phone || '',
+          email: repairOrder.customer_email || ''
+        }
+      );
+
+    db.prepare(`
+      UPDATE customers
+      SET quickbooks_customer_id = ?
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(
+      quickbooksCustomerId,
+      repairOrder.customer_id,
+      shopId
+    );
+  }
+
+  // Load repair-order line items
+  const items = db.prepare(`
+    SELECT
+      id,
+      description,
+      parts,
+      labor
+    FROM repair_order_items
+    WHERE repair_order_id = ?
+    ORDER BY id ASC
+  `).all(repairOrderId);
+
+  if (!items.length) {
+    throw new Error(
+      'Repair order has no items to invoice.'
+    );
+  }
+
+  const lines = [];
+
+  for (const item of items) {
+    const parts = Number(item.parts || 0);
+    const labor = Number(item.labor || 0);
+    const amount = Number(
+      (parts + labor).toFixed(2)
+    );
+
+    if (amount <= 0) {
+      continue;
+    }
+
+    lines.push({
+      DetailType: 'SalesItemLineDetail',
+      Amount: amount,
+      Description: item.description || 'Repair service',
+      SalesItemLineDetail: {
+        ItemRef: {
+          value: '9',
+          name: 'Maintenance & Repair'
+        },
+        Qty: 1,
+        UnitPrice: amount
+      }
+    });
+  }
+
+  if (!lines.length) {
+    throw new Error(
+      'Repair order has no billable items.'
+    );
+  }
+
+  // Match the 7.5% tax currently used by S&K invoices.
+  const subtotal = lines.reduce(
+    (sum, line) => sum + Number(line.Amount || 0),
+    0
+  );
+
+  const taxAmount = Number(
+    (subtotal * 0.075).toFixed(2)
+  );
+
+  if (taxAmount > 0) {
+    lines.push({
+      DetailType: 'SalesItemLineDetail',
+      Amount: taxAmount,
+      Description: 'Sales Tax (7.5%)',
+      SalesItemLineDetail: {
+        ItemRef: {
+          value: '9',
+          name: 'Maintenance & Repair'
+        },
+        Qty: 1,
+        UnitPrice: taxAmount
+      }
+    });
+  }
+
+  const shop = db.prepare(`
+    SELECT quickbooks_realm_id
+    FROM shops
+    WHERE id = ?
+  `).get(shopId);
+
+  if (!shop || !shop.quickbooks_realm_id) {
+    throw new Error(
+      'This shop is not connected to QuickBooks.'
+    );
+  }
+
+  const accessToken =
+    await refreshQuickBooksToken(shopId);
+
+  const invoiceData = {
+    CustomerRef: {
+      value: String(quickbooksCustomerId)
+    },
+
+    Line: lines,
+
+    AllowOnlineCreditCardPayment: true,
+    AllowOnlineACHPayment: true,
+
+    PrivateNote:
+      `S&K Auto Repair Order #${repairOrderId}`
+  };
+
+  if (repairOrder.customer_email) {
+    invoiceData.BillEmail = {
+      Address: repairOrder.customer_email
+    };
+  }
+
+  const realmId = shop.quickbooks_realm_id;
+
+  const response = await fetch(
+    `https://sandbox-quickbooks.api.intuit.com/v3/company/${realmId}/invoice?include=invoiceLink&minorversion=75`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(invoiceData)
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error(
+      'QuickBooks invoice creation failed:',
+      JSON.stringify(data)
+    );
+
+    throw new Error(
+      data?.Fault?.Error?.[0]?.Detail ||
+      data?.Fault?.Error?.[0]?.Message ||
+      'QuickBooks invoice creation failed.'
+    );
+  }
+
+  const quickbooksInvoiceId =
+    data?.Invoice?.Id;
+
+  const quickbooksInvoiceUrl =
+    data?.Invoice?.InvoiceLink || null;
+
+  if (!quickbooksInvoiceId) {
+    throw new Error(
+      'QuickBooks did not return an invoice ID.'
+    );
+  }
+
+  db.prepare(`
+    UPDATE repair_orders
+    SET
+      quickbooks_invoice_id = ?,
+      quickbooks_invoice_url = ?
+    WHERE id = ?
+      AND shop_id = ?
+  `).run(
+    quickbooksInvoiceId,
+    quickbooksInvoiceUrl,
+    repairOrderId,
+    shopId
+  );
+
+  console.log(
+    `Repair order ${repairOrderId} linked to QuickBooks invoice ${quickbooksInvoiceId}`
+  );
+
+  if (quickbooksInvoiceUrl) {
+    console.log(
+      `QuickBooks invoice payment link received for repair order ${repairOrderId}`
+    );
+  }
+
+  return {
+    id: quickbooksInvoiceId,
+    url: quickbooksInvoiceUrl,
+    existing: false
+  };
+}
+// ===== END QUICKBOOKS INVOICE SYNC =====
+
 // ===== TEMP QUICKBOOKS COMPANY TEST =====
 app.get('/api/quickbooks/test-company', async (req, res) => {
   try {
