@@ -2050,11 +2050,11 @@ document.getElementById('viewServiceHistoryBtn').addEventListener('click', async
 
     list.innerHTML = history.map(order => {
 
-      const completedDate = order.completed_at
-        new Date(order.completed_at.replace(' ', 'T') + 'Z').toLocaleString('en-US', {
-  timeZone: 'America/Chicago'
-})
-        : 'Date unavailable';
+     const completedDate = order.completed_at
+  ? new Date(order.completed_at.replace(' ', 'T') + 'Z').toLocaleString('en-US', {
+      timeZone: 'America/Chicago'
+    })
+  : 'Date unavailable';
 
       const items = (order.items || []).map(item => {
 
