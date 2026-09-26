@@ -942,12 +942,16 @@ completeRepairBtn.style.display = 'none';
 
 completedRepairStatus.textContent =
   '✓ Repair Completed: ' +
-  new Date(order.completed_at).toLocaleString();
+ new Date(order.completed_at.replace(' ', 'T') + 'Z').toLocaleString('en-US', {
+  timeZone: 'America/Chicago'
+});
   completedInfo.style.display = 'block';
 
   completedInfo.textContent =
     '✓ Completed: ' +
-    new Date(order.completed_at).toLocaleString();
+   new Date(order.completed_at.replace(' ', 'T') + 'Z').toLocaleString('en-US', {
+  timeZone: 'America/Chicago'
+});
 
   viewInvoiceBtn.style.display = 'inline-block';
 
@@ -2047,7 +2051,9 @@ document.getElementById('viewServiceHistoryBtn').addEventListener('click', async
     list.innerHTML = history.map(order => {
 
       const completedDate = order.completed_at
-        ? new Date(order.completed_at).toLocaleString()
+        new Date(order.completed_at.replace(' ', 'T') + 'Z').toLocaleString('en-US', {
+  timeZone: 'America/Chicago'
+})
         : 'Date unavailable';
 
       const items = (order.items || []).map(item => {
