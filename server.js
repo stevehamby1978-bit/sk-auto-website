@@ -473,7 +473,10 @@ async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
   );
 
   const data = await response.json();
-
+console.log(
+    'QUICKBOOKS INVOICE RESPONSE:',
+    JSON.stringify(data, null, 2)
+);
   if (!response.ok) {
     console.error(
       'QuickBooks invoice creation failed:',
