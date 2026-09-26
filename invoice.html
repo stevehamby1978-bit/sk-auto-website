@@ -775,6 +775,22 @@ if (balanceDue > 0) {
 } else {
   paymentControls.style.display = 'none';
 }
+// ===== S&K AUTO - QUICKBOOKS PAY INVOICE =====
+if (payInvoiceBtn) {
+    payInvoiceBtn.addEventListener('click', () => {
+        const paymentUrl = order.quickbooks_invoice_url;
+
+        if (!paymentUrl) {
+            alert(
+                'Online payment is not available for this invoice yet.'
+            );
+            return;
+        }
+
+        window.location.href = paymentUrl;
+    });
+}
+// ===== END QUICKBOOKS PAY INVOICE =====
 const paidStatus = document.getElementById('paidStatus');
 
 if (balanceDue <= 0 && total > 0) {
