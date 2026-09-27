@@ -228,18 +228,18 @@ async function syncCustomerToQuickBooks(shopId, customer) {
     }
 
     // Create customer in QuickBooks
-  const response = await fetch(
-  `https://quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(quickBooksCustomer)
-      }
-    );
+ const response = await fetch(
+  `https://quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(quickBooksCustomer)
+  }
+);
 
     const data = await response.json();
 
