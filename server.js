@@ -236,7 +236,11 @@ async function syncCustomerToQuickBooks(shopId, customer) {
     );
 
     const searchData = await searchResponse.json();
-
+console.log(
+  'QUICKBOOKS CUSTOMER SEARCH:',
+  customerName,
+  JSON.stringify(searchData, null, 2)
+);
     if (!searchResponse.ok) {
       console.error(
         'QuickBooks customer search failed:',
