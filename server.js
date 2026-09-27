@@ -191,8 +191,7 @@ async function syncCustomerToQuickBooks(shopId, customer) {
   try {
     // Get this shop's QuickBooks connection information
     const shop = db.prepare(`
-      SELECT
-        quickbooks_realm_id
+      SELECT quickbooks_realm_id
       FROM shops
       WHERE id = ?
     `).get(shopId);
@@ -203,16 +202,71 @@ async function syncCustomerToQuickBooks(shopId, customer) {
 
     const realmId = shop.quickbooks_realm_id;
 
-    // Get a valid access token (refreshes automatically if needed)
+    // Get a valid access token
     const accessToken = await refreshQuickBooksToken(shopId);
 
     if (!accessToken) {
       throw new Error('Unable to obtain QuickBooks access token.');
     }
 
-    // Build the QuickBooks customer
+    const customerName = String(customer.name || '').trim();
+
+    if (!customerName) {
+      throw new Error('Customer name is required for QuickBooks.');
+    }
+
+    // Escape apostrophes for the QuickBooks query
+    const escapedName = customerName.replace(/'/g, "\\'");
+
+    // =========================================================
+    // FIRST: LOOK FOR AN EXISTING QUICKBOOKS CUSTOMER
+    // =========================================================
+    const query =
+      `select * from Customer where DisplayName = '${escapedName}'`;
+
+    const searchResponse = await fetch(
+      `https://quickbooks.api.intuit.com/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=75`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json'
+        }
+      }
+    );
+
+    const searchData = await searchResponse.json();
+
+    if (!searchResponse.ok) {
+      console.error(
+        'QuickBooks customer search failed:',
+        JSON.stringify(searchData)
+      );
+
+      throw new Error(
+        searchData?.Fault?.Error?.[0]?.Message ||
+        'QuickBooks customer search failed.'
+      );
+    }
+
+    const existingCustomers =
+      searchData?.QueryResponse?.Customer || [];
+
+    if (existingCustomers.length > 0) {
+      const existingCustomer = existingCustomers[0];
+
+      console.log(
+        `QuickBooks existing customer found. Customer ID: ${existingCustomer.Id}`
+      );
+
+      return existingCustomer.Id;
+    }
+
+    // =========================================================
+    // CUSTOMER DOES NOT EXIST — CREATE IT
+    // =========================================================
     const quickBooksCustomer = {
-      DisplayName: customer.name
+      DisplayName: customerName
     };
 
     if (customer.email) {
@@ -227,19 +281,18 @@ async function syncCustomerToQuickBooks(shopId, customer) {
       };
     }
 
-    // Create customer in QuickBooks
- const response = await fetch(
-  `https://quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`,
-  {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(quickBooksCustomer)
-  }
-);
+    const response = await fetch(
+      `https://quickbooks.api.intuit.com/v3/company/${realmId}/customer?minorversion=75`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(quickBooksCustomer)
+      }
+    );
 
     const data = await response.json();
 
@@ -264,7 +317,7 @@ async function syncCustomerToQuickBooks(shopId, customer) {
     }
 
     console.log(
-      `QuickBooks customer synced. Customer ID: ${quickBooksCustomerId}`
+      `QuickBooks customer created. Customer ID: ${quickBooksCustomerId}`
     );
 
     return quickBooksCustomerId;
