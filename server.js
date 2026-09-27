@@ -590,6 +590,8 @@ TaxCodeRef: {
       value: String(quickbooksCustomerId)
     },
 
+    DocNumber: `RO-${repairOrderId}`,
+    
     Line: lines,
 
     AllowOnlineCreditCardPayment: true,
