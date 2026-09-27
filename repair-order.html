@@ -857,6 +857,11 @@ const paymentHistory = document.getElementById('paymentHistory');
 
 if (Array.isArray(order.payments) && order.payments.length > 0) {
 
+    const localActivePaid = order.payments
+      .filter(payment => Number(payment.voided || 0) !== 1)
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const quickBooksOnlyPaid = Math.max(0, amountPaid - localActivePaid);
+
     paymentHistory.innerHTML = order.payments.map(payment => {
 
         const amount = Number(payment.amount || 0);
@@ -929,7 +934,12 @@ return `
         </div>
     </div>
 `;
-    }).join('');
+    }).join('') + (quickBooksOnlyPaid > 0.009 ? `
+        <div style="padding:10px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;gap:20px;">
+          <div><strong>QuickBooks Payment</strong><div style="font-size:13px;color:#666;">Synced from QuickBooks</div></div>
+          <div style="text-align:right;"><strong>${money(quickBooksOnlyPaid)}</strong></div>
+        </div>
+    ` : '');
 
 } else if (amountPaid > 0) {
     paymentHistory.innerHTML = `
