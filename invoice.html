@@ -847,7 +847,7 @@ if (balanceDue <= 0 && total > 0) {
     if (order.completed_at) {
 
       const completedDate =
-        new Date(order.completed_at);
+       new Date(order.completed_at.endsWith('Z') ? order.completed_at : order.completed_at + 'Z');
 
 
       document.getElementById('completedDate').innerHTML =
