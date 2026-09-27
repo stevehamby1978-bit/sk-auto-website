@@ -959,23 +959,24 @@ completeRepairBtn.style.display = 'none';
 
 completedRepairStatus.textContent =
   '✓ Repair Completed: ' +
-new Date(order.completed_at).toLocaleString('en-US', {
-  timeZone: 'America/Chicago'
-})
-  completedInfo.style.display = 'block';
 
-  completedInfo.textContent =
-    '✓ Completed: ' +
- new Date(order.completed_at).toLocaleString('en-US', {
-  timeZone: 'America/Chicago'
-})
+new Date(order.completed_at + (order.completed_at.endsWith('Z') ? '' : 'Z'))
+  .toLocaleString('en-US', { timeZone: 'America/Chicago' });
+  
+completedInfo.style.display = 'block';
 
-  viewInvoiceBtn.style.display = 'inline-block';
+completedInfo.textContent =
+  '✓ Completed: ' +
+new Date(order.completed_at + (order.completed_at.endsWith('Z') ? '' : 'Z'))
+  .toLocaleString('en-US', { timeZone: 'America/Chicago' });
 
-  viewInvoiceBtn.onclick = () => {
-    window.location.href =
-      '/invoice.html?id=' +
-      encodeURIComponent(order.id);
+viewInvoiceBtn.style.display = 'inline-block';
+
+viewInvoiceBtn.onclick = () => {
+  window.location.href =
+    '/invoice.html?id=' +
+    encodeURIComponent(order.id);
+};
   };
 
 } else {
