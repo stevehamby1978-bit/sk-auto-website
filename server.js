@@ -545,8 +545,25 @@ async function syncQuickBooksInvoicePaymentStatus(shopId, repairOrderId) {
   }
 
   const totalAmount = Number(qbInvoice.TotalAmt || 0);
-  const balance = Math.max(0, Number(qbInvoice.Balance || 0));
-  const amountPaid = Math.max(0, Number((totalAmount - balance).toFixed(2)));
+  const qbBalance = Math.max(0, Number(qbInvoice.Balance || 0));
+  const quickBooksPaid = Math.max(0, Number((totalAmount - qbBalance).toFixed(2)));
+
+  // Local payments are not automatically posted into QuickBooks. Never let a
+  // QuickBooks status check erase money that was already recorded in S&K Auto.
+  // Using the larger reconciled total also avoids double-counting when the same
+  // in-person payment was later entered into QuickBooks.
+  const localPaymentRow = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS amount_paid
+    FROM repair_order_payments
+    WHERE repair_order_id = ?
+      AND COALESCE(voided, 0) = 0
+  `).get(repairOrderId);
+  const localPaid = Math.max(0, Number(localPaymentRow?.amount_paid || 0));
+  const amountPaid = Math.max(
+    Number(quickBooksPaid.toFixed(2)),
+    Number(localPaid.toFixed(2))
+  );
+  const balance = Math.max(0, Number((totalAmount - amountPaid).toFixed(2)));
 
   let paymentStatus = 'unpaid';
   if (totalAmount > 0 && balance <= 0.005) {
@@ -559,6 +576,10 @@ async function syncQuickBooksInvoicePaymentStatus(shopId, repairOrderId) {
     UPDATE repair_orders
     SET payment_status = ?,
         amount_paid = ?,
+        payment_method = CASE
+          WHEN ? > 0 AND ? <= 0 THEN 'quickbooks'
+          ELSE payment_method
+        END,
         paid_at = CASE
           WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
           ELSE NULL
@@ -568,6 +589,8 @@ async function syncQuickBooksInvoicePaymentStatus(shopId, repairOrderId) {
   `).run(
     paymentStatus,
     amountPaid,
+    quickBooksPaid,
+    localPaid,
     paymentStatus,
     repairOrderId,
     shopId
@@ -1885,6 +1908,7 @@ async function sendBalanceReminders() {
         r.completed_at,
         r.balance_reminder_sent_at,
         r.balance_reminder_count,
+        r.amount_paid,
         c.name AS customer_name,
         c.phone AS customer_phone
       FROM repair_orders r
@@ -1920,15 +1944,9 @@ const total =
   Math.round(
     (subtotal + tax) * 100
   ) / 100;
-        // Calculate all active (non-voided) payments
-        const paymentRow = db.prepare(`
-          SELECT COALESCE(SUM(amount), 0) AS amount_paid
-          FROM repair_order_payments
-          WHERE repair_order_id = ?
-            AND COALESCE(voided, 0) = 0
-        `).get(repairOrder.id);
-
-        const amountPaid = Number(paymentRow.amount_paid || 0);
+        // repair_orders.amount_paid is authoritative because it can be
+        // updated by either local payments or a QuickBooks payment sync.
+        const amountPaid = Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
         const balanceDue = Math.max(0, total - amountPaid);
 
         // Stop if the invoice has been paid
@@ -2023,9 +2041,8 @@ const total =
     console.error('Balance reminder checker failed:', err);
   }
 }
- sendBalanceReminders();
-
- setInterval(sendBalanceReminders, 15 * 60 * 1000);
+ // Legacy 15-minute balance scheduler disabled to prevent duplicate reminders.
+ // The hourly runAutomaticBalanceReminders scheduler below is authoritative.
 
 // ===== S&K AUTO - GET OUTSTANDING BALANCES =====
 app.get('/api/outstanding-balances', (req, res) => {
@@ -2044,6 +2061,7 @@ app.get('/api/outstanding-balances', (req, res) => {
         r.completed_at,
         r.balance_reminder_sent_at,
         r.balance_reminder_count,
+        r.amount_paid,
         c.name AS customer_name,
         c.phone AS customer_phone,
         v.year AS vehicle_year,
@@ -2086,16 +2104,9 @@ app.get('/api/outstanding-balances', (req, res) => {
       const total =
         Math.round((subtotal + tax) * 100) / 100;
 
-      // Count only payments that have NOT been voided
-      const paymentRow = db.prepare(`
-        SELECT COALESCE(SUM(amount), 0) AS amount_paid
-        FROM repair_order_payments
-        WHERE repair_order_id = ?
-          AND COALESCE(voided, 0) = 0
-      `).get(repairOrder.id);
-
+      // Use the authoritative total, including QuickBooks-synced payments.
       const amountPaid =
-        Math.round(Number(paymentRow.amount_paid || 0) * 100) / 100;
+        Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 
       const balanceDue =
         Math.max(
@@ -2195,6 +2206,7 @@ app.post('/api/repair-orders/:id/balance-reminder', async (req, res) => {
         r.id,
         r.completed_at,
         r.balance_reminder_count,
+        r.amount_paid,
         c.name AS customer_name,
         c.phone AS customer_phone
       FROM repair_orders r
@@ -2238,16 +2250,9 @@ app.post('/api/repair-orders/:id/balance-reminder', async (req, res) => {
     const total =
       Math.round((subtotal + tax) * 100) / 100;
 
-    // Calculate payments
-    const paymentRow = db.prepare(`
-      SELECT COALESCE(SUM(amount), 0) AS amount_paid
-      FROM repair_order_payments
-      WHERE repair_order_id = ?
-        AND COALESCE(voided, 0) = 0
-    `).get(repairOrderId);
-
+    // Use authoritative amount paid so QuickBooks payments are respected.
     const amountPaid =
-      Number(paymentRow?.amount_paid || 0);
+      Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 
     const balanceDue = Math.max(
       0,
@@ -2323,6 +2328,7 @@ async function runAutomaticBalanceReminders() {
         r.completed_at,
         r.balance_reminder_sent_at,
         r.balance_reminder_count,
+        r.amount_paid,
         c.name AS customer_name,
         c.phone AS customer_phone
       FROM repair_orders r
@@ -2360,18 +2366,10 @@ async function runAutomaticBalanceReminders() {
         const total =
           Math.round((subtotal + tax) * 100) / 100;
 
-        // Count only non-voided payments.
-        const paymentRow = db.prepare(`
-          SELECT COALESCE(SUM(amount), 0) AS amount_paid
-          FROM repair_order_payments
-          WHERE repair_order_id = ?
-            AND COALESCE(voided, 0) = 0
-        `).get(repairOrder.id);
-
+        // Use authoritative amount paid so QuickBooks-synced payments
+        // cannot trigger a false overdue reminder.
         const amountPaid =
-          Math.round(
-            Number(paymentRow.amount_paid || 0) * 100
-          ) / 100;
+          Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 
         const balanceDue = Math.max(
           0,
@@ -4487,6 +4485,10 @@ repairOrder.recommendations = db.prepare(`
         (Number(item.labor) || 0),
       0
     );
+    repairOrder.tax =
+      Math.round(Number(repairOrder.subtotal || 0) * 0.075 * 100) / 100;
+    repairOrder.total =
+      Math.round((Number(repairOrder.subtotal || 0) + repairOrder.tax) * 100) / 100;
 // ===== S&K AUTO - GET PAYMENT HISTORY =====
 repairOrder.payments = db.prepare(`
     SELECT
@@ -4501,16 +4503,17 @@ repairOrder.payments = db.prepare(`
     WHERE repair_order_id = ?
     ORDER BY id ASC
 `).all(repairOrder.id);
-// amount_paid on repair_orders is the authoritative total. It may come
-// from local S&K payments or from a QuickBooks payment-status sync.
-repairOrder.amount_paid = Number(repairOrder.amount_paid || 0);
-const repairOrderTax =
-  Math.round(Number(repairOrder.subtotal || 0) * 0.075 * 100) / 100;
-const repairOrderTotal =
-  Math.round((Number(repairOrder.subtotal || 0) + repairOrderTax) * 100) / 100;
+// amount_paid on repair_orders is authoritative. It may come from
+// local S&K payments or from a QuickBooks payment-status sync.
+repairOrder.amount_paid = Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
+repairOrder.local_amount_paid = Math.round(
+  repairOrder.payments
+    .filter(payment => Number(payment.voided || 0) === 0)
+    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0) * 100
+) / 100;
 repairOrder.balance_due = Math.max(
   0,
-  repairOrderTotal - repairOrder.amount_paid
+  Math.round((repairOrder.total - repairOrder.amount_paid) * 100) / 100
 );
     
     res.json(repairOrder);
@@ -5085,101 +5088,73 @@ if (
 // ===== S&K AUTO - VOID PAYMENT =====
 app.post("/api/repair-orders/:id/payments/:paymentId/void", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
     const repairOrderId = Number(req.params.id);
     const paymentId = Number(req.params.paymentId);
     const reason = String(req.body.reason || "").trim();
 
-    if (!reason) {
-      return res.status(400).json({
-        error: "A reason is required to void a payment."
-      });
-    }
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    if (!reason) return res.status(400).json({ error: "A reason is required to void a payment." });
+
+    const repairOrder = db.prepare(`
+      SELECT id, amount_paid
+      FROM repair_orders
+      WHERE id = ? AND shop_id = ?
+    `).get(repairOrderId, shopId);
+    if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
 
     const payment = db.prepare(`
       SELECT id, repair_order_id, amount, payment_method, paid_at, voided
       FROM repair_order_payments
       WHERE id = ? AND repair_order_id = ?
     `).get(paymentId, repairOrderId);
-
-    if (!payment) {
-      return res.status(404).json({
-        error: "Payment not found."
-      });
-    }
-
-    if (payment.voided) {
-      return res.status(400).json({
-        error: "This payment has already been voided."
-      });
-    }
+    if (!payment) return res.status(404).json({ error: "Payment not found." });
+    if (payment.voided) return res.status(400).json({ error: "This payment has already been voided." });
 
     db.prepare(`
       UPDATE repair_order_payments
-      SET
-        voided = 1,
-        voided_at = CURRENT_TIMESTAMP,
-        void_reason = ?
+      SET voided = 1, voided_at = CURRENT_TIMESTAMP, void_reason = ?
       WHERE id = ? AND repair_order_id = ?
     `).run(reason, paymentId, repairOrderId);
 
-    const activePayments = db.prepare(`
-      SELECT amount
-      FROM repair_order_payments
+    const orderTotals = db.prepare(`
+      SELECT COALESCE(SUM(parts), 0) AS parts_total,
+             COALESCE(SUM(labor), 0) AS labor_total
+      FROM repair_order_items
       WHERE repair_order_id = ?
-        AND (voided = 0 OR voided IS NULL)
-    `).all(repairOrderId);
+    `).get(repairOrderId);
+    const subtotal = Number(orderTotals.parts_total || 0) + Number(orderTotals.labor_total || 0);
+    const tax = Math.round(subtotal * 0.075 * 100) / 100;
+    const total = Math.round((subtotal + tax) * 100) / 100;
 
-    const amountPaid = activePayments.reduce(
-      (sum, row) => sum + Number(row.amount || 0),
-      0
+    // A void reverses this local payment from the authoritative total without
+    // erasing unrelated QuickBooks-synced money already reflected on the order.
+    const amountPaid = Math.max(
+      0,
+      Math.round((Number(repairOrder.amount_paid || 0) - Number(payment.amount || 0)) * 100) / 100
     );
+    let paymentStatus = "unpaid";
+    if (amountPaid > 0 && amountPaid < total - 0.009) paymentStatus = "partial";
+    else if (total > 0 && amountPaid >= total - 0.009) paymentStatus = "paid";
 
     db.prepare(`
       UPDATE repair_orders
-      SET amount_paid = ?
-      WHERE id = ?
-    `).run(amountPaid, repairOrderId);
-// Recalculate payment status after voiding a payment
-const orderTotals = db.prepare(`
-  SELECT
-    COALESCE(SUM(parts), 0) AS parts_total,
-    COALESCE(SUM(labor), 0) AS labor_total
-  FROM repair_order_items
-  WHERE repair_order_id = ?
-`).get(repairOrderId);
+      SET amount_paid = ?,
+          payment_status = ?,
+          paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE NULL END
+      WHERE id = ? AND shop_id = ?
+    `).run(amountPaid, paymentStatus, paymentStatus, repairOrderId, shopId);
 
-const subtotal =
-  Number(orderTotals.parts_total || 0) +
-  Number(orderTotals.labor_total || 0);
-
-const total = subtotal + (subtotal * 0.075);
-
-let paymentStatus = "unpaid";
-
-if (amountPaid > 0 && amountPaid < total) {
-  paymentStatus = "partial";
-} else if (amountPaid >= total && total > 0) {
-  paymentStatus = "paid";
-}
-
-db.prepare(`
-  UPDATE repair_orders
-  SET payment_status = ?
-  WHERE id = ?
-`).run(paymentStatus, repairOrderId);
- res.json({
-  success: true,
-  message: "Payment voided successfully.",
-  amount_paid: amountPaid,
-  payment_status: paymentStatus
-});
-
+    res.json({
+      success: true,
+      message: "Payment voided successfully.",
+      amount_paid: amountPaid,
+      payment_status: paymentStatus,
+      balance_due: Math.max(0, Math.round((total - amountPaid) * 100) / 100)
+    });
   } catch (err) {
     console.error("Void payment error:", err);
-
-    res.status(500).json({
-      error: "Unable to void payment."
-    });
+    res.status(500).json({ error: "Unable to void payment." });
   }
 });
 
@@ -6978,121 +6953,91 @@ app.delete("/api/repair-orders/:id", (req, res) => {
 // ===== S&K AUTO - RECORD PAYMENT =====
 app.post("/api/repair-orders/:id/payments", (req, res) => {
   try {
-    if (!req.session.employee || !req.session.employee.id) {
-      return res.status(401).json({
-        error: "You must be signed in to record a payment."
-      });
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
+    const repairOrderId = Number(req.params.id);
+    const amount = Math.round(Number(req.body.amount) * 100) / 100;
+    const paymentMethod = typeof req.body.payment_method === "string"
+      ? req.body.payment_method.trim().toLowerCase()
+      : "";
+    const allowedMethods = ["cash", "card", "check", "other"];
+
+    if (!Number.isInteger(repairOrderId) || repairOrderId <= 0) {
+      return res.status(400).json({ error: "Invalid repair order ID." });
     }
-
-    const shopId = req.session.employee.shop_id;
-
-    if (!shopId) {
-      return res.status(403).json({
-        error: "No shop is associated with this employee."
-      });
-    }
-
-    const amount = Number(req.body.amount);
-    const paymentMethod =
-      typeof req.body.payment_method === "string"
-        ? req.body.payment_method.trim()
-        : "";
-
     if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({
-        error: "Enter a valid payment amount."
-      });
+      return res.status(400).json({ error: "Enter a valid payment amount." });
     }
-
-    if (!paymentMethod) {
-      return res.status(400).json({
-        error: "Select a payment method."
-      });
+    if (!allowedMethods.includes(paymentMethod)) {
+      return res.status(400).json({ error: "Select a valid payment method." });
     }
 
     const repairOrder = db.prepare(`
-      SELECT id
+      SELECT id, amount_paid
       FROM repair_orders
-      WHERE id = ?
-        AND shop_id = ?
-    `).get(
-      req.params.id,
-      shopId
-    );
+      WHERE id = ? AND shop_id = ?
+    `).get(repairOrderId, shopId);
+    if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
 
-    if (!repairOrder) {
-      return res.status(404).json({
-        error: "Repair order not found."
-      });
-    }
-// ===== S&K AUTO - PREVENT OVERPAYMENT =====
-const totals = db.prepare(`
-  SELECT
-    COALESCE((
-      SELECT SUM(parts + labor)
+    const totals = db.prepare(`
+      SELECT COALESCE(SUM(parts + labor), 0) AS subtotal
       FROM repair_order_items
       WHERE repair_order_id = ?
-    ), 0) AS subtotal,
+    `).get(repairOrderId);
+    const subtotal = Number(totals.subtotal || 0);
+    const tax = Math.round(subtotal * 0.075 * 100) / 100;
+    const total = Math.round((subtotal + tax) * 100) / 100;
+    const currentPaid = Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
+    const balanceDue = Math.max(0, Math.round((total - currentPaid) * 100) / 100);
 
-    COALESCE((
-      SELECT SUM(amount)
-      FROM repair_order_payments
-      WHERE repair_order_id = ?
-        AND (voided = 0 OR voided IS NULL)
-    ), 0) AS amount_paid
-`).get(req.params.id, req.params.id);
+    if (balanceDue <= 0.009) {
+      return res.status(400).json({ error: "This invoice is already paid in full." });
+    }
+    if (amount > balanceDue + 0.001) {
+      return res.status(400).json({
+        error: `Payment cannot exceed the remaining balance of $${balanceDue.toFixed(2)}.`
+      });
+    }
 
-const subtotal = Number(totals.subtotal || 0);
+    const newAmountPaid = Math.round((currentPaid + amount) * 100) / 100;
+    const newBalance = Math.max(0, Math.round((total - newAmountPaid) * 100) / 100);
+    const paymentStatus = newBalance <= 0.009 ? "paid" : "partial";
 
-const tax = Math.round(
-  subtotal * 0.075 * 100
-) / 100;
+    const transaction = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO repair_order_payments (repair_order_id, amount, payment_method)
+        VALUES (?, ?, ?)
+      `).run(repairOrderId, amount, paymentMethod);
 
-const total = Math.round(
-  (subtotal + tax) * 100
-) / 100;
+      db.prepare(`
+        UPDATE repair_orders
+        SET amount_paid = ?,
+            payment_status = ?,
+            payment_method = ?,
+            paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE NULL END
+        WHERE id = ? AND shop_id = ?
+      `).run(newAmountPaid, paymentStatus, paymentMethod, paymentStatus, repairOrderId, shopId);
+      return result;
+    });
 
-const amountPaid = Number(totals.amount_paid || 0);
-
-const balanceDue = Math.max(
-  0,
-  Math.round((total - amountPaid) * 100) / 100
-);
-
-if (amount > balanceDue + 0.001) {
-  return res.status(400).json({
-    error: `Payment cannot exceed the remaining balance of $${balanceDue.toFixed(2)}.`
-  });
-}
-    const result = db.prepare(`
-      INSERT INTO repair_order_payments (
-        repair_order_id,
-        amount,
-        payment_method
-      )
-      VALUES (?, ?, ?)
-    `).run(
-      req.params.id,
-      amount,
-      paymentMethod
-    );
-
+    const result = transaction();
     res.status(201).json({
       success: true,
       id: Number(result.lastInsertRowid),
-      amount: amount,
+      amount,
       payment_method: paymentMethod,
+      amount_paid: newAmountPaid,
+      payment_status: paymentStatus,
+      balance_due: newBalance,
       message: "Payment recorded successfully."
     });
-
   } catch (err) {
     console.error("Record payment error:", err);
-
-    res.status(500).json({
-      error: "Unable to record payment."
-    });
+    res.status(500).json({ error: "Unable to record payment." });
   }
 });
+
 // ===== S&K AUTO - UPDATE TECHNICIAN DIAGNOSIS =====
 app.patch("/api/repair-orders/:id/diagnosis", (req, res) => {
     try {
