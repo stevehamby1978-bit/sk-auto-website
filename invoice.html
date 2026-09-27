@@ -884,8 +884,13 @@ const paymentHistory =
   document.getElementById('paymentHistory');
 
 const activePayments = (order.payments || []).filter(payment => !payment.voided);
+const localActivePaid = activePayments.reduce(
+  (sum, payment) => sum + Number(payment.amount || 0),
+  0
+);
+const quickBooksOnlyPaid = Math.max(0, amountPaid - localActivePaid);
 
-if (activePayments.length > 0) {
+if (activePayments.length > 0 || quickBooksOnlyPaid > 0.009) {
 
     paymentHistorySection.style.display = 'block';
 
@@ -952,7 +957,11 @@ if (activePayments.length > 0) {
     </div>
 `;
 
-}).join('');
+}).join('') + (quickBooksOnlyPaid > 0.009 ? `
+    <div style="padding:8px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;gap:15px;">
+      <div><strong>${money(quickBooksOnlyPaid)}</strong>&nbsp;–&nbsp; QuickBooks Payment<br><span style="font-size:13px;">Synced from QuickBooks</span></div>
+    </div>
+` : '');
 
 }
 
@@ -975,6 +984,8 @@ const validPayments = (order.payments || []).filter(
 if (validPayments.length > 0) {
     methodText =
         validPayments[validPayments.length - 1].payment_method || '';
+} else if (amountPaid > 0) {
+    methodText = order.payment_method || 'QuickBooks';
 }
 
   if (methodText === 'card') {
