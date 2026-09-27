@@ -955,38 +955,38 @@ const deleteRepairBtn =
 const completedRepairStatus =
   document.getElementById('completedRepairStatus');
 if (order.status === 'completed' && order.completed_at) {
-completeRepairBtn.style.display = 'none';
+  completeRepairBtn.style.display = 'none';
 
-completedRepairStatus.textContent =
-  '✓ Repair Completed: ' +
+  const completedDate = new Date(
+    order.completed_at.endsWith('Z')
+      ? order.completed_at
+      : order.completed_at + 'Z'
+  );
 
-new Date(order.completed_at + (order.completed_at.endsWith('Z') ? '' : 'Z'))
-  .toLocaleString('en-US', { timeZone: 'America/Chicago' });
-  
-completedInfo.style.display = 'block';
+  const completedDateText = completedDate.toLocaleString('en-US', {
+    timeZone: 'America/Chicago'
+  });
 
-completedInfo.textContent =
-  '✓ Completed: ' +
-new Date(order.completed_at + (order.completed_at.endsWith('Z') ? '' : 'Z'))
-  .toLocaleString('en-US', { timeZone: 'America/Chicago' });
+  completedRepairStatus.textContent =
+    '✓ Repair Completed: ' + completedDateText;
 
-viewInvoiceBtn.style.display = 'inline-block';
+  completedInfo.style.display = 'block';
+  completedInfo.textContent =
+    '✓ Completed: ' + completedDateText;
 
-viewInvoiceBtn.onclick = () => {
-  window.location.href =
-    '/invoice.html?id=' +
-    encodeURIComponent(order.id);
-};
+  viewInvoiceBtn.style.display = 'inline-block';
+
+  viewInvoiceBtn.onclick = () => {
+    window.location.href =
+      '/invoice.html?id=' + encodeURIComponent(order.id);
   };
 
 } else {
-completeRepairBtn.style.display = 'inline-block';
-completedRepairStatus.textContent = '';
+  completeRepairBtn.style.display = 'inline-block';
+  completedRepairStatus.textContent = '';
   completedInfo.style.display = 'none';
   completedInfo.textContent = '';
-
   viewInvoiceBtn.style.display = 'none';
-
 }
 statusSelect.value =
   order.status || 'waiting';
