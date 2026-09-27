@@ -717,18 +717,50 @@ async function syncQuickBooksInvoicePaymentStatus(
 
   const data = await response.json();
 
-  if (!response.ok) {
-    console.error(
-      'QuickBooks invoice payment status lookup failed:',
-      JSON.stringify(data)
+ if (!response.ok) {
+  console.error(
+    'QuickBooks invoice payment status lookup failed:',
+    JSON.stringify(data)
+  );
+
+  const qbErrorCode = data?.Fault?.Error?.[0]?.code;
+  const qbErrorMessage = data?.Fault?.Error?.[0]?.Message || '';
+  const qbErrorDetail = data?.Fault?.Error?.[0]?.Detail || '';
+
+  // QuickBooks error 610 = referenced object was deleted/inactivated.
+  // Clear the stale QuickBooks invoice link so this repair order
+  // can continue working normally inside S&K Auto.
+  if (
+    qbErrorCode === '610' ||
+    qbErrorMessage.includes('Object Not Found') ||
+    qbErrorDetail.includes('made inactive')
+  ) {
+    console.log(
+      `Clearing stale QuickBooks invoice ID ${repairOrder.quickbooks_invoice_id} from repair order ${repairOrderId}`
     );
 
-    throw new Error(
-      data?.Fault?.Error?.[0]?.Detail ||
-      data?.Fault?.Error?.[0]?.Message ||
-      'Unable to retrieve QuickBooks invoice.'
-    );
+    db.prepare(`
+      UPDATE repair_orders
+      SET
+        quickbooks_invoice_id = NULL,
+        quickbooks_invoice_url = NULL
+      WHERE id = ?
+        AND shop_id = ?
+    `).run(repairOrderId, shopId);
+
+    return {
+      synced: false,
+      staleInvoiceCleared: true,
+      reason: 'QuickBooks invoice no longer exists.'
+    };
   }
+
+  throw new Error(
+    qbErrorDetail ||
+    qbErrorMessage ||
+    'Unable to retrieve QuickBooks invoice.'
+  );
+}
 
   const qbInvoice = data?.Invoice;
 
