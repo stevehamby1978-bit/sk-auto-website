@@ -499,7 +499,10 @@ if (!quickbooksCustomerIsValid) {
           name: 'Maintenance & Repair'
         },
         Qty: 1,
-        UnitPrice: amount
+        UnitPrice: amount,
+TaxCodeRef: {
+  value: 'TAX'
+}
       }
     });
   }
@@ -508,32 +511,6 @@ if (!quickbooksCustomerIsValid) {
     throw new Error(
       'Repair order has no billable items.'
     );
-  }
-
-  // Match the 7.5% tax currently used by S&K invoices.
-  const subtotal = lines.reduce(
-    (sum, line) => sum + Number(line.Amount || 0),
-    0
-  );
-
-  const taxAmount = Number(
-    (subtotal * 0.075).toFixed(2)
-  );
-
-  if (taxAmount > 0) {
-    lines.push({
-      DetailType: 'SalesItemLineDetail',
-      Amount: taxAmount,
-      Description: 'Sales Tax (7.5%)',
-      SalesItemLineDetail: {
-        ItemRef: {
-          value: '9',
-          name: 'Maintenance & Repair'
-        },
-        Qty: 1,
-        UnitPrice: taxAmount
-      }
-    });
   }
 
   const shop = db.prepare(`
