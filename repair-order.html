@@ -931,6 +931,22 @@ return `
 `;
     }).join('');
 
+} else if (amountPaid > 0) {
+    paymentHistory.innerHTML = `
+        <div style="
+            padding: 12px;
+            margin-top: 8px;
+            border: 1px solid #28a745;
+            border-radius: 6px;
+            background: #f4fff6;
+        ">
+            <strong>QuickBooks Payment</strong><br>
+            Amount: ${money(amountPaid)}<br>
+            <span style="color:#28a745;font-weight:bold;">
+                ✓ Paid through QuickBooks
+            </span>
+        </div>
+    `;
 } else {
     paymentHistory.innerHTML = 'No payments recorded.';
 }
