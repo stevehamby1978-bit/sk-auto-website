@@ -570,22 +570,41 @@ if (balanceDue > 0) {
 } else {
   paymentControls.style.display = 'none';
 }
-// ===== S&K AUTO - QUICKBOOKS PAY INVOICE =====
+// ===== GARAVEX - ONLINE PAYMENT ROUTING =====
 if (payInvoiceBtn) {
-    payInvoiceBtn.addEventListener('click', () => {
-        const paymentUrl = order.quickbooks_invoice_url;
+  payInvoiceBtn.addEventListener('click', async () => {
+    // Secure customer invoices use the shop's Stripe Connect account when enabled.
+    if (token && order.stripe_payments_enabled) {
+      try {
+        payInvoiceBtn.disabled = true;
+        payInvoiceBtn.textContent = 'Opening secure payment...';
+        const response = await fetch('/api/stripe/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.url) throw new Error(result.error || 'Unable to start payment.');
+        window.location.href = result.url;
+        return;
+      } catch (err) {
+        alert(err.message || 'Unable to start online payment.');
+        payInvoiceBtn.disabled = false;
+        payInvoiceBtn.textContent = 'Pay ' + money(balanceDue);
+        return;
+      }
+    }
 
-        if (!paymentUrl) {
-            alert(
-                'Online payment is not available for this invoice yet.'
-            );
-            return;
-        }
+    // Existing QuickBooks payment link remains available for shops that use it.
+    if (order.quickbooks_invoice_url) {
+      window.location.href = order.quickbooks_invoice_url;
+      return;
+    }
 
-        window.location.href = paymentUrl;
-    });
+    alert('Online payment is not available for this invoice yet.');
+  });
 }
-// ===== END QUICKBOOKS PAY INVOICE =====
+// ===== END ONLINE PAYMENT ROUTING =====
 const paidStatus = document.getElementById('paidStatus');
 
 if (balanceDue <= 0 && total > 0) {
