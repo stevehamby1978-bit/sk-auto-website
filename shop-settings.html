@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shop Settings | Garavex</title>
+<title>Shop Settings | S&K Auto Shop Management</title>
 <style>
 *{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23;--green:#29965a}
 body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.header{background:#15191e;border-bottom:3px solid var(--accent);padding:18px 22px}.header-inner{max-width:950px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:15px}.header h1{margin:0;font-size:27px}.back{background:#303841;color:#fff;text-decoration:none;padding:10px 15px;border-radius:7px;font-weight:bold}.container{max-width:950px;margin:28px auto;padding:0 18px 50px}.lead{color:var(--muted);line-height:1.55}.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:22px;margin:20px 0}.card h2{margin:0 0 17px;color:var(--accent)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-weight:bold;margin-bottom:6px}input{width:100%;padding:11px 12px;border:1px solid #46505a;border-radius:7px;background:#0f1317;color:#fff;font-size:15px}button{border:0;border-radius:7px;padding:12px 16px;background:var(--accent);color:#fff;font-weight:bold;cursor:pointer}.logo-row{display:flex;gap:22px;align-items:center;flex-wrap:wrap}.logo-preview{width:190px;height:110px;border:1px dashed #59636e;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#0f1317;overflow:hidden;color:var(--muted);text-align:center;padding:10px}.logo-preview img{max-width:100%;max-height:100%;object-fit:contain}.hint{color:var(--muted);font-size:13px;line-height:1.45;margin-top:7px}.message{display:none;margin-top:14px;padding:12px;border-radius:7px}.ok{display:block;background:#163e28;border:1px solid var(--green);color:#a8efbf}.err{display:block;background:#4b2020;border:1px solid #b43b3b;color:#ffc0c0}.copyright{margin-top:20px;color:var(--muted);font-size:13px;text-align:center}@media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.header-inner{align-items:flex-start;flex-direction:column}.back{width:100%;text-align:center}}
@@ -27,40 +27,41 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:
 </div><button type="submit" style="margin-top:18px">Save Shop Profile</button><div id="profileMessage" class="message"></div></form>
 </section>
 <section class="card"><h2>Shop Logo</h2><div class="logo-row"><div id="logoPreview" class="logo-preview">No shop logo uploaded</div><div style="flex:1;min-width:240px"><form id="logoForm"><label for="logo">Upload Logo</label><input id="logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required><div class="hint">PNG, JPG or WebP works best. This logo is stored separately for this shop and does not expose customer-uploaded images.</div><button type="submit" style="margin-top:14px">Upload Logo</button><div id="logoMessage" class="message"></div></form></div></div></section>
-<section class="card"><h2>Integrated Payments · Stripe Connect</h2>
-<p class="lead" style="margin-top:0">Connect this shop's own Stripe account so customer invoice payments deposit directly to this shop. Each Garavex shop connects separately.</p>
-<div id="stripeStatus" class="hint" style="font-size:15px;margin-bottom:14px">Checking Stripe status...</div>
-<button type="button" id="stripeConnectBtn">Connect Stripe</button>
-<div id="stripeMessage" class="message"></div>
-</section>
-<div class="copyright">Powered by Garavex · © 2026 S&amp;K Auto. All rights reserved.</div>
+<section class="card"><h2>Integrated Payments · Stripe Connect</h2><p class="lead" style="margin-top:0">Connect this shop’s own Stripe account so customer payments can be processed for this shop. Each Garavex shop connects separately.</p><div id="stripeStatus" class="hint">Checking Stripe connection…</div><button id="stripeConnectBtn" type="button" style="margin-top:14px">Connect Stripe</button><div id="stripeMessage" class="message"></div></section>
+<div class="copyright">Powered by S&amp;K Auto Shop Management · © 2026 S&amp;K Auto. All rights reserved.</div>
 </main>
 <script>
 const fields=['name','phone','email','address','city','state','zip','tagline','website'];
 function showMessage(id,text,ok){const el=document.getElementById(id);el.textContent=text;el.className='message '+(ok?'ok':'err')}
 async function loadProfile(){try{const r=await fetch('/api/shop-profile');const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to load shop profile.');fields.forEach(k=>document.getElementById(k).value=d[k]||'');const preview=document.getElementById('logoPreview');preview.innerHTML=d.logo_url?`<img src="${d.logo_url}" alt="Shop logo">`:'No shop logo uploaded';}catch(e){showMessage('profileMessage',e.message,false)}}
-document.getElementById('profileForm').addEventListener('submit',async e=>{e.preventDefault();const body={};fields.forEach(k=>body[k]=document.getElementById(k).value.trim());try{const r=await fetch('/api/shop-profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to save shop profile.');showMessage('profileMessage','Shop profile saved successfully.',true);await loadProfile();}catch(err){showMessage('profileMessage',err.message,false)}});
-document.getElementById('logoForm').addEventListener('submit',async e=>{e.preventDefault();const file=document.getElementById('logo').files[0];if(!file)return;const fd=new FormData();fd.append('logo',file);try{const r=await fetch('/api/shop-profile/logo',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to upload logo.');document.getElementById('logoPreview').innerHTML=`<img src="${d.logo_url}?v=${Date.now()}" alt="Shop logo">`;showMessage('logoMessage','Shop logo uploaded successfully.',true);document.getElementById('logo').value='';}catch(err){showMessage('logoMessage',err.message,false)}});
-async function loadStripeStatus(){
+document.getElementById('profileForm').addEventListener('submit',async e=>{e.preventDefault();const body={};fields.forEach(k=>body[k]=document.getElementById(k).value.trim());try{const r=await fetch('/api/shop-profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to save shop profile.');showMessage('profileMessage','Shop profile saved successfully.',true);await async function loadStripeStatus(){
   const status=document.getElementById('stripeStatus');
   const btn=document.getElementById('stripeConnectBtn');
   try{
-    const r=await fetch('/api/stripe/status'); const d=await r.json();
-    if(!r.ok)throw new Error(d.error||'Unable to check Stripe.');
-    if(d.onboarding_complete&&d.charges_enabled){status.textContent='✓ Stripe connected — online card payments are enabled.';btn.textContent='Manage / Update Stripe';}
-    else if(d.connected){status.textContent='Stripe account created — finish onboarding to accept payments.';btn.textContent='Continue Stripe Setup';}
+    const r=await fetch('/api/stripe-connect/status');
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Unable to check Stripe connection.');
+    if(d.connected){status.textContent='Stripe is connected and card payments are active for this shop.';btn.textContent='Manage / Reconnect Stripe';}
+    else if(d.onboardingStarted){status.textContent='Stripe onboarding has started, but card payments are not active yet.';btn.textContent='Continue Stripe Setup';}
     else{status.textContent='Stripe is not connected for this shop.';btn.textContent='Connect Stripe';}
-  }catch(e){status.textContent=e.message;}
+  }catch(e){status.textContent='Unable to check Stripe status.';showMessage('stripeMessage',e.message,false)}
 }
 document.getElementById('stripeConnectBtn').addEventListener('click',async()=>{
-  const btn=document.getElementById('stripeConnectBtn'); btn.disabled=true;
-  try{const r=await fetch('/api/stripe/connect',{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to connect Stripe.');window.location.href=d.url;}
-  catch(e){showMessage('stripeMessage',e.message,false);btn.disabled=false;}
+  const btn=document.getElementById('stripeConnectBtn');
+  try{
+    btn.disabled=true;btn.textContent='Opening Stripe…';
+    const r=await fetch('/api/stripe-connect/start',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Unable to start Stripe onboarding.');
+    window.location.assign(d.url);
+  }catch(e){showMessage('stripeMessage',e.message,false);btn.disabled=false;await loadStripeStatus();}
 });
-const stripeParam=new URLSearchParams(location.search).get('stripe');
-if(stripeParam==='return')showMessage('stripeMessage','Returned from Stripe. Checking account status...',true);
-if(stripeParam==='refresh')showMessage('stripeMessage','Stripe setup needs to be continued.',false);
+const stripeQuery=new URLSearchParams(location.search).get('stripe');
+if(stripeQuery==='returned')showMessage('stripeMessage','Returned from Stripe. Checking payment status…',true);
+if(stripeQuery==='error')showMessage('stripeMessage','Stripe setup returned an error. Please try again.',false);
 loadStripeStatus();
+loadProfile();}catch(err){showMessage('profileMessage',err.message,false)}});
+document.getElementById('logoForm').addEventListener('submit',async e=>{e.preventDefault();const file=document.getElementById('logo').files[0];if(!file)return;const fd=new FormData();fd.append('logo',file);try{const r=await fetch('/api/shop-profile/logo',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to upload logo.');document.getElementById('logoPreview').innerHTML=`<img src="${d.logo_url}?v=${Date.now()}" alt="Shop logo">`;showMessage('logoMessage','Shop logo uploaded successfully.',true);document.getElementById('logo').value='';}catch(err){showMessage('logoMessage',err.message,false)}});
 loadProfile();
 </script>
 </body></html>
