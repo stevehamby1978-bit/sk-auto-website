@@ -1067,19 +1067,37 @@ recommendations.forEach((repair) => {
 
   const status = document.createElement('div');
   status.style.marginTop = '6px';
-  status.textContent =
-    'Status: ' + (repair.status || 'pending');
+  const repairStatus = (repair.status || 'pending').toLowerCase();
+  status.textContent = 'Status: ' + repairStatus.toUpperCase();
+  status.style.fontWeight = 'bold';
+  status.style.color =
+    repairStatus === 'approved' ? '#1f7a34' :
+    repairStatus === 'declined' ? '#b42318' : '#8a5a00';
 
   repairBox.appendChild(description);
   repairBox.appendChild(amounts);
   repairBox.appendChild(status);
+
+  if (repairStatus !== 'pending') {
+    const audit = document.createElement('div');
+    audit.style.cssText = 'margin-top:6px; color:#555; font-size:13px;';
+    const source = repair.authorization_source === 'customer'
+      ? 'Customer secure link'
+      : (repair.authorization_source === 'employee' ? 'Recorded by shop' : 'Recorded');
+    const decidedAt = repair.authorized_at
+      ? new Date(repair.authorized_at.replace(' ', 'T') + 'Z').toLocaleString()
+      : '';
+    const by = repair.authorized_by ? ' • ' + repair.authorized_by : '';
+    audit.textContent = source + by + (decidedAt ? ' • ' + decidedAt : '');
+    repairBox.appendChild(audit);
+  }
 // ===== S&K AUTO - APPROVE RECOMMENDED REPAIR BUTTON =====
 if ((repair.status || 'pending').toLowerCase() === 'pending') {
 
   const approveBtn = document.createElement('button');
 
   approveBtn.type = 'button';
-  approveBtn.textContent = '✓ Approve Repair';
+  approveBtn.textContent = '✓ Record Customer Approval';
 
   approveBtn.style.cssText =
     'margin-top:10px; padding:8px 14px; ' +
@@ -1089,13 +1107,13 @@ if ((repair.status || 'pending').toLowerCase() === 'pending') {
   approveBtn.addEventListener('click', async () => {
 
     if (!confirm(
-      'Approve this repair and add it to the repair order?'
+      'Record that the customer approved this repair and add it to the repair order?'
     )) {
       return;
     }
 
     approveBtn.disabled = true;
-    approveBtn.textContent = 'Approving...';
+    approveBtn.textContent = 'Recording...';
 
     try {
 
@@ -1130,7 +1148,7 @@ if ((repair.status || 'pending').toLowerCase() === 'pending') {
       alert(error.message);
 
       approveBtn.disabled = false;
-      approveBtn.textContent = '✓ Approve Repair';
+      approveBtn.textContent = '✓ Record Customer Approval';
     }
   });
 
@@ -1139,7 +1157,7 @@ if ((repair.status || 'pending').toLowerCase() === 'pending') {
 const declineBtn = document.createElement('button');
 
 declineBtn.type = 'button';
-declineBtn.textContent = '✕ Decline Repair';
+declineBtn.textContent = '✕ Record Customer Decline';
 
 declineBtn.style.cssText =
   'margin-top:10px; margin-left:10px; padding:8px 14px; ' +
@@ -1149,13 +1167,13 @@ declineBtn.style.cssText =
 declineBtn.addEventListener('click', async () => {
 
   if (!confirm(
-    'Decline this recommended repair?'
+    'Record that the customer declined this recommended repair?'
   )) {
     return;
   }
 
   declineBtn.disabled = true;
-  declineBtn.textContent = 'Declining...';
+  declineBtn.textContent = 'Recording...';
 
   try {
 
@@ -1187,7 +1205,7 @@ declineBtn.addEventListener('click', async () => {
     alert(error.message);
 
     declineBtn.disabled = false;
-    declineBtn.textContent = '✕ Decline Repair';
+    declineBtn.textContent = '✕ Record Customer Decline';
   }
 });
 
