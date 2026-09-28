@@ -1702,18 +1702,12 @@ document.getElementById('addRecommendedBtn').addEventListener('click', async () 
     '&token=' +
     encodeURIComponent(result.authorizationToken);
 
-const textResponse = await fetch('/api/text-authorization', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-        phone: currentRepairOrder.customer_phone,
-customerName: currentRepairOrder.customer_name,
-        description: description,
-        authorizationUrl: authorizationLink
-    })
-});
+const textResponse = await fetch(
+    '/api/repair-orders/' + encodeURIComponent(id) +
+    '/recommendations/' + encodeURIComponent(result.id) +
+    '/text-authorization',
+    { method: 'POST' }
+);
 
 const textResult = await textResponse.json();
 
