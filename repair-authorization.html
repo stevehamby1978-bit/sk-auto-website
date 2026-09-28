@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>S&K Auto | Repair Authorization</title>
+  <title>Repair Authorization</title>
 
   <style>
 
 *{box-sizing:border-box}:root{--bg:#0e1114;--panel:#fff;--ink:#222;--muted:#66717d;--line:#d9dee3;--accent:#ef3e23;--green:#218838;--red:#c43b3b}
-body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f4;color:var(--ink)}.header{background:#15191e;color:#fff;text-align:center;padding:25px 15px;border-bottom:4px solid var(--accent)}.header img{max-width:190px;margin-bottom:8px}.header h1{margin:5px 0}.container{max-width:720px;margin:30px auto;padding:0 15px}.card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:26px;box-shadow:0 6px 24px rgba(0,0,0,.08)}.repair{border:1px solid var(--line);border-radius:9px;padding:19px;margin-top:20px}.repair h2{margin-top:0;color:#222}.price-row{display:flex;justify-content:space-between;margin:9px 0}.total{font-size:21px;font-weight:bold;border-top:2px solid var(--accent);padding-top:12px;margin-top:12px}.buttons{display:flex;gap:12px;margin-top:21px}button{flex:1;border:0;border-radius:7px;padding:14px;font-size:16px;font-weight:bold;cursor:pointer}.approve{background:var(--green);color:#fff}.decline{background:var(--red);color:#fff}.status{text-align:center;font-weight:bold;margin-top:20px;font-size:18px}.footer{text-align:center;color:#66717d;margin-top:25px;line-height:1.5}#loading{text-align:center;padding:30px}#vehicleInfo{border:1px solid var(--line)!important;background:#f6f7f8!important}@media(max-width:550px){.buttons{flex-direction:column}.card{padding:19px}}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f4;color:var(--ink)}.header{background:#15191e;color:#fff;text-align:center;padding:25px 15px;border-bottom:4px solid var(--accent)}.header img{width:240px;height:180px;object-fit:contain;margin-bottom:8px}.header h1{margin:5px 0}.container{max-width:720px;margin:30px auto;padding:0 15px}.card{background:#fff;border:1px solid var(--line);border-radius:11px;padding:26px;box-shadow:0 6px 24px rgba(0,0,0,.08)}.repair{border:1px solid var(--line);border-radius:9px;padding:19px;margin-top:20px}.repair h2{margin-top:0;color:#222}.price-row{display:flex;justify-content:space-between;margin:9px 0}.total{font-size:21px;font-weight:bold;border-top:2px solid var(--accent);padding-top:12px;margin-top:12px}.buttons{display:flex;gap:12px;margin-top:21px}button{flex:1;border:0;border-radius:7px;padding:14px;font-size:16px;font-weight:bold;cursor:pointer}.approve{background:var(--green);color:#fff}.decline{background:var(--red);color:#fff}.status{text-align:center;font-weight:bold;margin-top:20px;font-size:18px}.footer{text-align:center;color:#66717d;margin-top:25px;line-height:1.5}#loading{text-align:center;padding:30px}#vehicleInfo{border:1px solid var(--line)!important;background:#f6f7f8!important}@media(max-width:550px){.buttons{flex-direction:column}.card{padding:19px}}
 
 </style>
 </head>
@@ -17,9 +17,9 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f4;color:va
 <body>
 
 <div class="header">
-  <img src="/sk-auto-logo.jpg" alt="S&K Auto">
+  <img id="shopLogo" alt="Shop logo" style="display:none;">
   <h1>Repair Authorization</h1>
-  <div>The Art of Automotive Repair</div>
+  <div id="shopTagline"></div>
 </div>
 
 <div class="container">
@@ -33,7 +33,7 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f4;color:va
     <div id="content" style="display:none;">
 
       <p>
-        S&K Auto has recommended the following repair for your vehicle.
+        <span id="shopNameIntro">The repair shop</span> has recommended the following repair for your vehicle.
         Please review the repair and choose whether you authorize the work.
       </p>
 
@@ -83,10 +83,10 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f4;color:va
   </div>
 
   <div class="footer">
-    S&K Auto<br>
-    3107 Homestead<br>
-    Hutchinson, KS 67502<br>
-    (620) 899-0425
+    <strong id="shopNameFooter"></strong><br>
+    <span id="shopAddressFooter"></span><br>
+    <span id="shopContactFooter"></span>
+    <div style="margin-top:12px;font-size:12px;">Powered by Garavex™</div>
   </div>
 
 </div>
@@ -133,6 +133,17 @@ async function loadRepair() {
     }
 
     repairData = result;
+
+    const shopName = result.shop_name || 'Repair Shop';
+    document.title = shopName + ' | Repair Authorization';
+    document.getElementById('shopNameIntro').textContent = shopName;
+    document.getElementById('shopNameFooter').textContent = shopName;
+    document.getElementById('shopTagline').textContent = result.shop_tagline || '';
+    const shopAddress = [result.shop_address, [result.shop_city, result.shop_state].filter(Boolean).join(', '), result.shop_zip].filter(Boolean).join(' · ');
+    document.getElementById('shopAddressFooter').textContent = shopAddress;
+    document.getElementById('shopContactFooter').textContent = [result.shop_phone, result.shop_email].filter(Boolean).join(' · ');
+    const shopLogo = document.getElementById('shopLogo');
+    if (result.shop_logo_url) { shopLogo.src = result.shop_logo_url; shopLogo.alt = shopName + ' logo'; shopLogo.style.display = 'inline-block'; }
 
     document.getElementById('description').textContent =
       result.description || 'Recommended Repair';
