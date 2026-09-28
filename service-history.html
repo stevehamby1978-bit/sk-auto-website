@@ -7,216 +7,11 @@
   <title>S&K Auto | Vehicle Service History</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
 
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #111;
-      color: #222;
-    }
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.page{max-width:1250px;min-height:100vh;margin:auto}.header{background:#15191e;color:#fff;padding:22px 26px;border-bottom:3px solid var(--accent);display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}.header h1{margin:0;font-size:28px}.header p{margin:5px 0 0;color:var(--muted)}.dashboard-btn{display:inline-block;padding:10px 15px;background:#303841;color:#fff;text-decoration:none;border-radius:7px;font-weight:bold}.content{padding:27px 18px 45px}.toolbar{display:flex;gap:11px;margin-bottom:18px;flex-wrap:wrap}.search{flex:1;min-width:260px}.search,.filter{padding:12px 13px;border:1px solid #46505a;border-radius:7px;background:#171b20;color:#fff;font-size:15px}.result-count{margin-bottom:14px;color:var(--muted);font-weight:bold}.history-list{display:grid;gap:13px}.history-card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:18px}.history-top{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.history-card h2{margin:0 0 7px;font-size:21px}.history-card p{margin:5px 0;color:#c3cad1}.status{display:inline-block;padding:6px 10px;border-radius:20px;color:#fff;font-size:12px;font-weight:bold;text-transform:uppercase}.waiting{background:#b98316}.in_progress{background:#1769aa}.completed{background:#25844e}.cancelled{background:#ad3838}.items{margin-top:14px;padding-top:11px;border-top:1px solid var(--line)}.item{padding:8px 0;border-bottom:1px solid #293038}.item:last-child{border-bottom:0}.total{margin-top:12px;text-align:right;font-size:18px;font-weight:bold}.buttons{margin-top:14px;display:flex;gap:9px;flex-wrap:wrap}.btn{display:inline-block;padding:10px 14px;border-radius:6px;text-decoration:none;color:#fff;background:var(--accent);font-weight:bold}.invoice-btn{background:#303841}.message{background:var(--panel);border:1px solid var(--line);padding:25px;border-radius:9px;text-align:center;color:var(--muted)}@media(max-width:650px){.content{padding:18px}.buttons{flex-direction:column}.btn{text-align:center}}
 
-    .page {
-      max-width: 1250px;
-      min-height: 100vh;
-      margin: 0 auto;
-      background: #f4f4f4;
-    }
-
-    .header {
-      background: #151515;
-      color: white;
-      padding: 24px 30px;
-      border-bottom: 4px solid #ef3e23;
-
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 20px;
-      flex-wrap: wrap;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 28px;
-    }
-
-    .header p {
-      margin: 5px 0 0;
-      color: #ccc;
-    }
-
-    .dashboard-btn {
-      display: inline-block;
-      padding: 11px 17px;
-      background: #333;
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      font-weight: bold;
-    }
-
-    .dashboard-btn:hover {
-      background: #555;
-    }
-
-    .content {
-      padding: 30px;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .search {
-      flex: 1;
-      min-width: 260px;
-      padding: 13px 15px;
-      border: 1px solid #bbb;
-      border-radius: 6px;
-      font-size: 16px;
-    }
-
-    .filter {
-      padding: 12px;
-      border: 1px solid #bbb;
-      border-radius: 6px;
-      background: white;
-      font-size: 15px;
-    }
-
-    .result-count {
-      margin-bottom: 15px;
-      color: #555;
-      font-weight: bold;
-    }
-
-    .history-list {
-      display: grid;
-      gap: 15px;
-    }
-
-    .history-card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.10);
-      border-left: 5px solid #ef3e23;
-    }
-
-    .history-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      flex-wrap: wrap;
-    }
-
-    .history-card h2 {
-      margin: 0 0 7px;
-      font-size: 21px;
-    }
-
-    .history-card p {
-      margin: 5px 0;
-      color: #555;
-    }
-
-    .status {
-      display: inline-block;
-      padding: 6px 10px;
-      border-radius: 20px;
-      color: white;
-      font-size: 12px;
-      font-weight: bold;
-      text-transform: uppercase;
-    }
-
-    .waiting {
-      background: #e0a800;
-    }
-
-    .in_progress {
-      background: #007bff;
-    }
-
-    .completed {
-      background: #28a745;
-    }
-
-    .cancelled {
-      background: #dc3545;
-    }
-
-    .items {
-      margin-top: 15px;
-      padding-top: 12px;
-      border-top: 1px solid #ddd;
-    }
-
-    .item {
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
-    }
-
-    .item:last-child {
-      border-bottom: 0;
-    }
-
-    .total {
-      margin-top: 13px;
-      text-align: right;
-      font-size: 18px;
-      font-weight: bold;
-    }
-
-    .buttons {
-      margin-top: 15px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      display: inline-block;
-      padding: 10px 15px;
-      border-radius: 5px;
-      text-decoration: none;
-      color: white;
-      background: #ef3e23;
-      font-weight: bold;
-    }
-
-    .invoice-btn {
-      background: #333;
-    }
-
-    .message {
-      background: white;
-      padding: 25px;
-      border-radius: 8px;
-      text-align: center;
-      color: #666;
-    }
-
-    @media(max-width:650px) {
-      .content {
-        padding: 18px;
-      }
-
-      .buttons {
-        flex-direction: column;
-      }
-
-      .btn {
-        text-align: center;
-      }
-    }
-  </style>
+</style>
 </head>
 
 <body>
@@ -569,11 +364,12 @@ function displayHistory(list) {
               View Repair Order
             </a>
 
+            ${status === 'completed' ? `
             <a
               href="invoice.html?id=${encodeURIComponent(order.id)}"
               class="btn invoice-btn">
               View Invoice
-            </a>
+            </a>` : ''}
 
           </div>
 
