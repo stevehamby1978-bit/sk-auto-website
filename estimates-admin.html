@@ -1,260 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>S&K Auto | Estimate Creator</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: #fff;
-    }
-
-    .container {
-      width: min(1000px, 92%);
-      margin: 40px auto;
-    }
-
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    .header h1 {
-      margin-bottom: 5px;
-    }
-
-    .header span {
-      color: #e44b2e;
-      font-weight: bold;
-    }
-
-    .panel {
-      background: #1b1b1b;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 25px;
-      margin-bottom: 25px;
-    }
-
-    h2 {
-      margin-top: 0;
-      color: #e44b2e;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-    }
-
-    label {
-      display: block;
-      font-weight: bold;
-      margin-bottom: 6px;
-    }
-
-    input,
-    textarea {
-      width: 100%;
-      padding: 12px;
-      border-radius: 6px;
-      border: 1px solid #555;
-      background: #0d0d0d;
-      color: #fff;
-      font-size: 16px;
-    }
-
-    textarea {
-      min-height: 100px;
-      resize: vertical;
-    }
-
-    .field {
-      margin-bottom: 15px;
-    }
-
-    .item {
-      border: 1px solid #444;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 15px;
-    }
-
-    .item-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr;
-      gap: 12px;
-    }
-
-    button {
-      border: none;
-      border-radius: 6px;
-      padding: 13px 18px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .add-button {
-      background: #333;
-      color: #fff;
-    }
-
-    .create-button {
-      background: #e44b2e;
-      color: #fff;
-      width: 100%;
-      margin-top: 15px;
-    }
-
-    .remove-button {
-      background: #661c1c;
-      color: #fff;
-      margin-top: 10px;
-    }
-
-    .total {
-      text-align: right;
-      font-size: 24px;
-      font-weight: bold;
-      margin-top: 20px;
-    }
-
-    .total span {
-      color: #e44b2e;
-    }
-
-    #message {
-      margin-top: 15px;
-      padding: 12px;
-      border-radius: 6px;
-      display: none;
-    }
-
-    @media (max-width: 700px) {
-      .grid,
-      .item-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
-</head>
-
-<body>
-
-<div class="container">
-
-  <div class="header">
-    <h1>S&amp;K Auto</h1>
-    <span>Estimate Creator</span>
-  </div>
-
-  <form id="estimateForm">
-
-    <div class="panel">
-      <h2>Customer Information</h2>
-
-      <div class="grid">
-        <div class="field">
-          <label>Customer Name</label>
-          <input type="text" id="customerName" required>
-        </div>
-
-        <div class="field">
-          <label>Phone Number</label>
-          <input type="tel" id="customerPhone" required>
-        </div>
-
-        <div class="field">
-          <label>Email</label>
-          <input type="email" id="customerEmail">
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>Vehicle Information</h2>
-
-      <div class="grid">
-        <div class="field">
-          <label>Year</label>
-          <input type="text" id="vehicleYear">
-        </div>
-
-        <div class="field">
-          <label>Make</label>
-          <input type="text" id="vehicleMake">
-        </div>
-
-        <div class="field">
-          <label>Model</label>
-          <input type="text" id="vehicleModel">
-        </div>
-
-        <div class="field">
-          <label>Mileage</label>
-          <input type="text" id="vehicleMileage">
-        </div>
-
-        <div class="field">
-          <label>VIN</label>
-          <input type="text" id="vehicleVin">
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>Estimate Items</h2>
-
-      <div id="items"></div>
-
-      <button type="button" class="add-button" onclick="addItem()">
-        + Add Repair Item
-      </button>
-
-      <div class="total">
-        Estimate Total: $<span id="total">0.00</span>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>Notes</h2>
-
-      <textarea id="estimateNotes"
-        placeholder="Additional recommendations, warranty information, or notes for the customer..."></textarea>
-    </div>
-
-    <button type="submit" class="create-button">
-      Create Estimate
-    </button>
-
-    <div id="message"></div>
-
-  </form>
-  <div class="section">
-  <h2>Saved Estimates</h2>
-  <button type="button" onclick="loadSavedEstimates()">Refresh Estimates</button>
-  <div id="savedEstimates">
-    <p>Loading saved estimates...</p>
-  </div>
-</div>
-<div class="section">
-  <h2>Approved Estimates</h2>
-  <div id="approvedEstimates">
-    <p>Loading approved estimates...</p>
-  </div>
-</div>
-</div>
-
-<script>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>S&K Auto | Estimates</title>
+<style>
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#e44b2e}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.topbar{background:#15191e;border-bottom:1px solid var(--line)}.topbar-inner{max-width:1200px;margin:auto;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:16px}.brand{font-size:22px;font-weight:800}.brand span{color:var(--accent)}.nav{display:flex;gap:8px;flex-wrap:wrap}.nav a{color:#fff;text-decoration:none;background:#252b32;padding:9px 13px;border-radius:7px;font-weight:700;font-size:14px}.container{max-width:1200px;margin:30px auto;padding:0 18px 50px}.hero{margin-bottom:22px}.hero h1{margin:0 0 6px;font-size:32px}.hero p{margin:0;color:var(--muted)}.workflow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.step{background:var(--panel);border:1px solid var(--line);padding:13px;border-radius:10px;color:var(--muted);font-size:14px}.step strong{display:block;color:#fff;margin-bottom:4px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:22px;margin-bottom:22px}.panel h2{margin:0 0 18px;color:var(--accent);font-size:21px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.field{margin-bottom:14px}.field label{display:block;font-weight:700;margin-bottom:6px}input,textarea{width:100%;padding:11px 12px;border:1px solid #46505a;border-radius:7px;background:#0f1317;color:#fff;font-size:15px}textarea{min-height:100px;resize:vertical}.item{background:#11161b;border:1px solid var(--line);border-radius:10px;padding:15px;margin-bottom:12px}.item-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}button{border:0;border-radius:7px;padding:11px 15px;font-weight:800;cursor:pointer;font-size:14px}.add-button,.section-head button{background:#303841;color:#fff}.create-button{background:var(--accent);color:#fff;width:100%;font-size:17px;padding:14px}.remove-button{background:#5e2525;color:#fff;margin-top:10px}.total{text-align:right;font-size:22px;font-weight:800;margin-top:16px}.total span{color:var(--accent)}#message{display:none;margin-top:14px;padding:13px;border-radius:8px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.section-head h2{margin:0}#savedEstimates,#approvedEstimates{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.saved-estimate{background:#11161b;border:1px solid var(--line);border-radius:10px;padding:16px}.saved-estimate h3{margin:0 0 9px}.saved-estimate p{margin:6px 0;color:#cbd1d7}.saved-estimate button{background:var(--accent);color:#fff;margin-top:7px}.status-note{color:var(--muted);font-size:13px;margin-top:-10px;margin-bottom:15px}@media(max-width:800px){.grid,.workflow,#savedEstimates,#approvedEstimates{grid-template-columns:1fr}.item-grid{grid-template-columns:1fr}.topbar-inner{align-items:flex-start;flex-direction:column}}
+</style></head><body>
+<div class="topbar"><div class="topbar-inner"><div class="brand">S&amp;K <span>Auto</span></div><div class="nav"><a href="/dashboard.html">Dashboard</a><a href="/repair-orders.html">Repair Orders</a><a href="/customers.html">Customers</a></div></div></div>
+<main class="container"><div class="hero"><h1>Estimates</h1><p>Create a customer estimate, receive approval, then move approved work into the repair workflow.</p></div>
+<div class="workflow"><div class="step"><strong>1. Create</strong>Customer, vehicle and repair items</div><div class="step"><strong>2. Customer Review</strong>Open the secure estimate link</div><div class="step"><strong>3. Authorization</strong>Customer approves or declines</div><div class="step"><strong>4. Repair Workflow</strong>Approved work is ready for the next shop step</div></div>
+<form id="estimateForm">
+<section class="panel"><h2>1. Customer Information</h2><div class="grid"><div class="field"><label>Customer Name</label><input type="text" id="customerName" required></div><div class="field"><label>Phone Number</label><input type="tel" id="customerPhone" required></div><div class="field"><label>Email</label><input type="email" id="customerEmail"></div></div></section>
+<section class="panel"><h2>2. Vehicle Information</h2><div class="grid"><div class="field"><label>Year</label><input type="text" id="vehicleYear"></div><div class="field"><label>Make</label><input type="text" id="vehicleMake"></div><div class="field"><label>Model</label><input type="text" id="vehicleModel"></div><div class="field"><label>Mileage</label><input type="text" id="vehicleMileage"></div><div class="field"><label>VIN</label><input type="text" id="vehicleVin"></div></div></section>
+<section class="panel"><h2>3. Estimate Items</h2><div id="items"></div><button type="button" class="add-button" onclick="addItem()">+ Add Repair Item</button><div class="total">Estimate Total: $<span id="total">0.00</span></div></section>
+<section class="panel"><h2>4. Customer Notes</h2><div class="field"><textarea id="estimateNotes" placeholder="Recommendations, warranty information, repair details, or other notes for the customer..."></textarea></div><button type="submit" class="create-button">Create Customer Estimate</button><div id="message"></div></section></form>
+<section class="panel"><div class="section-head"><h2>Approved Estimates</h2><button type="button" onclick="loadSavedEstimates()">Refresh</button></div><p class="status-note">Customer-approved estimates are separated here so authorized work is easy to find.</p><div id="approvedEstimates"><p>Loading approved estimates...</p></div></section>
+<section class="panel"><div class="section-head"><h2>Pending / Saved Estimates</h2><button type="button" onclick="loadSavedEstimates()">Refresh</button></div><div id="savedEstimates"><p>Loading saved estimates...</p></div></section>
+</main><script>
 
 function addItem() {
   const items = document.getElementById("items");
@@ -410,6 +168,12 @@ document.getElementById("estimateForm")
         "<strong>Estimate created successfully.</strong><br>" +
         "Estimate #" + result.id;
 
+      document.getElementById("estimateForm").reset();
+      document.getElementById("items").innerHTML = "";
+      addItem();
+      calculateTotal();
+      loadSavedEstimates();
+
     } catch (error) {
 
       message.style.display = "block";
@@ -470,7 +234,4 @@ if ((estimate.status || "pending").toLowerCase() === "approved") {
 }
 
 loadSavedEstimates();
-</script>
-
-</body>
-</html>
+</script></body></html>
