@@ -7,197 +7,19 @@
 <title>S&K Auto | Payment Receipt</title>
 
 <style>
-    * {
-        box-sizing: border-box;
-    }
 
-    body {
-        margin: 0;
-        padding: 30px 15px;
-        background: #111827;
-        font-family: Arial, Helvetica, sans-serif;
-        color: #222;
-    }
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#fff;--ink:#222;--muted:#66717d;--line:#d9dee3;--accent:#ef3e23;--green:#218838;--blue:#315a86}
+body{margin:0;padding:28px 15px;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--ink)}
+.receipt{width:850px;max-width:100%;margin:0 auto;background:#fff;padding:36px 40px;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.header{display:flex;justify-content:space-between;align-items:flex-start;gap:25px;border-bottom:4px solid var(--accent);padding-bottom:18px;margin-bottom:24px}
+.logo{width:155px;max-width:100%;height:auto}.business-info{margin-top:8px;line-height:1.5;color:#333}.receipt-title{text-align:right}.receipt-title h1{margin:0;color:var(--accent);font-size:31px}.receipt-title div{margin-top:6px;font-weight:bold}
+.section{margin-top:24px}.section-title{color:var(--accent);font-size:18px;font-weight:bold;margin-bottom:10px}.two-column{display:grid;grid-template-columns:1fr 1fr;gap:25px}.two-column>div{border:1px solid var(--line);border-radius:8px;padding:15px}.info-line{margin:6px 0}
+.payment-box{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}.payment-row{display:flex;justify-content:space-between;gap:20px;padding:13px 17px;border-bottom:1px solid var(--line)}.payment-row:last-child{border-bottom:0}.payment-row strong:last-child{text-align:right}.payment-amount{background:#f5f6f7;font-size:21px}.balance{font-size:20px;font-weight:bold;background:#fafafa}
+.paid-full{display:none;margin-top:20px;padding:13px;text-align:center;border:2px solid var(--green);color:var(--green);font-size:23px;font-weight:bold;border-radius:7px}
+.actions{margin-top:27px;display:flex;gap:9px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:20px}button{border:0;padding:11px 16px;border-radius:6px;color:#fff;font-weight:bold;cursor:pointer;font-size:14px}.print-btn{background:var(--accent)}.back-btn{background:#303841}.error{width:850px;max-width:100%;margin:50px auto;padding:25px;background:#fff;color:#c62828;text-align:center;border-radius:8px;font-weight:bold}
+@media(max-width:600px){.header,.two-column{display:block}.receipt-title{text-align:left;margin-top:20px}.receipt{padding:23px 19px}.two-column>div{margin-bottom:12px}.actions button{width:100%}}
+@media print{@page{size:letter;margin:.3in}body{background:#fff;padding:0}.receipt{width:100%;padding:0;border-radius:0;box-shadow:none}.actions{display:none}.header{margin-bottom:15px}.section{margin-top:15px}}
 
-    .receipt {
-        width: 800px;
-        max-width: 100%;
-        margin: 0 auto;
-        background: white;
-        padding: 35px 40px;
-        border-radius: 8px;
-    }
-
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 25px;
-        border-bottom: 3px solid #c62828;
-        padding-bottom: 20px;
-        margin-bottom: 25px;
-    }
-
-    .logo {
-        width: 150px;
-        max-width: 100%;
-    }
-
-    .business-info {
-        margin-top: 8px;
-        line-height: 1.45;
-    }
-
-    .receipt-title {
-        text-align: right;
-    }
-
-    .receipt-title h1 {
-        margin: 0;
-        color: #c62828;
-        font-size: 32px;
-    }
-
-    .receipt-title div {
-        margin-top: 6px;
-        font-weight: bold;
-    }
-
-    .section {
-        margin-top: 25px;
-    }
-
-    .section-title {
-        color: #c62828;
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-
-    .two-column {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 30px;
-    }
-
-    .info-line {
-        margin: 5px 0;
-    }
-
-    .payment-box {
-        margin-top: 30px;
-        border: 2px solid #ddd;
-        border-radius: 7px;
-        overflow: hidden;
-    }
-
-    .payment-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 20px;
-        padding: 13px 18px;
-        border-bottom: 1px solid #ddd;
-    }
-
-    .payment-row:last-child {
-        border-bottom: none;
-    }
-
-    .payment-row strong:last-child {
-        text-align: right;
-    }
-
-    .payment-amount {
-        background: #f3f4f6;
-        font-size: 21px;
-    }
-
-    .balance {
-        font-size: 20px;
-        font-weight: bold;
-    }
-
-    .paid-full {
-        display: none;
-        margin-top: 25px;
-        padding: 14px;
-        text-align: center;
-        border: 2px solid #28a745;
-        color: #28a745;
-        font-size: 24px;
-        font-weight: bold;
-        border-radius: 6px;
-    }
-
-    .actions {
-        margin-top: 30px;
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    button {
-        border: none;
-        padding: 11px 18px;
-        border-radius: 5px;
-        color: white;
-        font-weight: bold;
-        cursor: pointer;
-        font-size: 14px;
-    }
-
-    .print-btn {
-        background: #c62828;
-    }
-
-    .back-btn {
-        background: #1261c9;
-    }
-
-    .error {
-        width: 800px;
-        max-width: 100%;
-        margin: 50px auto;
-        padding: 25px;
-        background: white;
-        color: #c62828;
-        text-align: center;
-        border-radius: 8px;
-        font-weight: bold;
-    }
-
-    @media print {
-        body {
-            background: white;
-            padding: 0;
-        }
-
-        .receipt {
-            width: 100%;
-            padding: 15px;
-            border-radius: 0;
-        }
-
-        .actions {
-            display: none;
-        }
-    }
-
-    @media (max-width: 600px) {
-        .header,
-        .two-column {
-            display: block;
-        }
-
-        .receipt-title {
-            text-align: left;
-            margin-top: 20px;
-        }
-
-        .receipt {
-            padding: 25px 20px;
-        }
-    }
 </style>
 </head>
 
@@ -460,7 +282,7 @@ async function loadReceipt() {
                 'Payment receipt is unavailable.'
             );
         }
-console.log('RECEIPT ORDER DATA:', order);
+
 
      const subtotal = Number(order.subtotal || 0);
 
@@ -581,11 +403,11 @@ const total =
 
 
         document.getElementById('mileage').textContent =
-            order.mileage || '';
+            order.vehicle_mileage || order.mileage || '';
 
 
         document.getElementById('vin').textContent =
-            order.vin || '';
+            order.vehicle_vin || order.vin || '';
 
 
         document.getElementById('paymentAmount').textContent =
