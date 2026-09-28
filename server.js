@@ -4365,232 +4365,114 @@ res.json({
     });
   }
 });
-// ===== S&K AUTO - GET ALL APPOINTMENTS =====
+// ===== GARAVEX - GET ALL APPOINTMENTS (SHOP ISOLATED) =====
 app.get("/api/appointments", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
 
     const appointments = db.prepare(`
       SELECT *
       FROM bookings
+      WHERE shop_id = ?
       ORDER BY date ASC, time ASC
-    `).all();
+    `).all(shopId);
 
     res.json(appointments);
-
   } catch (err) {
-
     console.error("Get appointments error:", err);
-
-    res.status(500).json({
-      error: "Unable to retrieve appointments."
-    });
-
+    res.status(500).json({ error: "Unable to retrieve appointments." });
   }
 });
-// ===== S&K AUTO - DELETE APPOINTMENT =====
+
+// ===== GARAVEX - DELETE APPOINTMENT (SHOP ISOLATED) =====
 app.delete("/api/appointments/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
     const appointment = db.prepare(`
       SELECT id
       FROM bookings
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = ? AND shop_id = ?
+    `).get(req.params.id, shopId);
 
-    if (!appointment) {
-      return res.status(404).json({
-        error: "Appointment not found."
-      });
-    }
+    if (!appointment) return res.status(404).json({ error: "Appointment not found." });
 
-    db.prepare(`
-      DELETE FROM bookings
-      WHERE id = ?
-    `).run(req.params.id);
-
-    res.json({
-      success: true,
-      message: "Appointment deleted."
-    });
-
+    db.prepare(`DELETE FROM bookings WHERE id = ? AND shop_id = ?`).run(req.params.id, shopId);
+    res.json({ success: true, message: "Appointment deleted." });
   } catch (err) {
     console.error("Delete appointment error:", err);
-
-    res.status(500).json({
-      error: "Unable to delete appointment."
-    });
+    res.status(500).json({ error: "Unable to delete appointment." });
   }
 });
-// ===== S&K AUTO - UPDATE APPOINTMENT =====
+
+// ===== GARAVEX - UPDATE APPOINTMENT (SHOP ISOLATED) =====
 app.patch("/api/appointments/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
     const id = req.params.id;
+    const { date, time, name, phone, email, vehicle, service, notes } = req.body;
 
-    const {
-      date,
-      time,
-      name,
-      phone,
-      email,
-      vehicle,
-      service,
-      notes
-    } = req.body;
-
-    if (
-      !date ||
-      !time ||
-      !name ||
-      !phone ||
-      !vehicle ||
-      !service
-    ) {
-      return res.status(400).json({
-        error: "Please complete all required appointment fields."
-      });
+    if (!date || !time || !name || !phone || !vehicle || !service) {
+      return res.status(400).json({ error: "Please complete all required appointment fields." });
     }
-
-    if (!SHOP_SLOTS.includes(time)) {
-      return res.status(400).json({
-        error: "Invalid appointment time."
-      });
-    }
-
+    if (!SHOP_SLOTS.includes(time)) return res.status(400).json({ error: "Invalid appointment time." });
     if (!isValidDateString(date) || !isWeekday(date)) {
-      return res.status(400).json({
-        error: "Please choose a Monday-Friday date."
-      });
+      return res.status(400).json({ error: "Please choose a Monday-Friday date." });
     }
+    if (isBlockedDate(date)) return res.status(400).json({ error: "The shop is closed on this date." });
 
-    if (isBlockedDate(date)) {
-      return res.status(400).json({
-        error: "S&K Auto is closed on this date."
-      });
-    }
+    const blockedTime = db.prepare(`SELECT 1 FROM blocked_times WHERE date = ? AND time = ?`).get(date, time);
+    if (blockedTime) return res.status(400).json({ error: "That appointment time is unavailable." });
 
-    const blockedTime = db.prepare(`
-      SELECT 1
-      FROM blocked_times
-      WHERE date = ? AND time = ?
-    `).get(date, time);
-
-    if (blockedTime) {
-      return res.status(400).json({
-        error: "That appointment time is unavailable."
-      });
-    }
+    const appointment = db.prepare(`
+      SELECT id FROM bookings WHERE id = ? AND shop_id = ?
+    `).get(id, shopId);
+    if (!appointment) return res.status(404).json({ error: "Appointment not found." });
 
     const existingBooking = db.prepare(`
       SELECT id
       FROM bookings
-      WHERE date = ?
-        AND time = ?
-        AND id != ?
-    `).get(date, time, id);
-
-    if (existingBooking) {
-      return res.status(409).json({
-        error: "That appointment time is already booked."
-      });
-    }
-
-    const appointment = db.prepare(`
-      SELECT id
-      FROM bookings
-      WHERE id = ?
-    `).get(id);
-
-    if (!appointment) {
-      return res.status(404).json({
-        error: "Appointment not found."
-      });
-    }
+      WHERE date = ? AND time = ? AND id != ? AND shop_id = ?
+    `).get(date, time, id, shopId);
+    if (existingBooking) return res.status(409).json({ error: "That appointment time is already booked." });
 
     db.prepare(`
       UPDATE bookings
-      SET date = ?,
-          time = ?,
-          name = ?,
-          phone = ?,
-          email = ?,
-          vehicle = ?,
-          service = ?,
-          notes = ?
-      WHERE id = ?
-    `).run(
-      date,
-      time,
-      name.trim(),
-      phone.trim(),
-      (email || "").trim(),
-      vehicle.trim(),
-      service.trim(),
-      (notes || "").trim(),
-      id
-    );
+      SET date = ?, time = ?, name = ?, phone = ?, email = ?, vehicle = ?, service = ?, notes = ?
+      WHERE id = ? AND shop_id = ?
+    `).run(date, time, name.trim(), phone.trim(), (email || "").trim(), vehicle.trim(), service.trim(), (notes || "").trim(), id, shopId);
 
-    res.json({
-      success: true,
-      message: "Appointment updated successfully."
-    });
-
+    res.json({ success: true, message: "Appointment updated successfully." });
   } catch (err) {
     console.error("Update appointment error:", err);
-
-    res.status(500).json({
-      error: "Unable to update appointment."
-    });
+    res.status(500).json({ error: "Unable to update appointment." });
   }
 });
 
-// ===== S&K AUTO - UPDATE APPOINTMENT STATUS =====
+// ===== GARAVEX - UPDATE APPOINTMENT STATUS (SHOP ISOLATED) =====
 app.patch("/api/appointments/:id/status", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
     const { status } = req.body;
-
-    const allowedStatuses = [
-      "scheduled",
-      "checked_in",
-      "in_progress",
-      "completed",
-      "cancelled"
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        error: "Invalid appointment status."
-      });
-    }
+    const allowedStatuses = ["scheduled", "checked_in", "in_progress", "completed", "cancelled"];
+    if (!allowedStatuses.includes(status)) return res.status(400).json({ error: "Invalid appointment status." });
 
     const appointment = db.prepare(`
-      SELECT id
-      FROM bookings
-      WHERE id = ?
-    `).get(req.params.id);
+      SELECT id FROM bookings WHERE id = ? AND shop_id = ?
+    `).get(req.params.id, shopId);
+    if (!appointment) return res.status(404).json({ error: "Appointment not found." });
 
-    if (!appointment) {
-      return res.status(404).json({
-        error: "Appointment not found."
-      });
-    }
-
-    db.prepare(`
-      UPDATE bookings
-      SET status = ?
-      WHERE id = ?
-    `).run(status, req.params.id);
-
-    res.json({
-      success: true,
-      id: Number(req.params.id),
-      status: status
-    });
-
+    db.prepare(`UPDATE bookings SET status = ? WHERE id = ? AND shop_id = ?`).run(status, req.params.id, shopId);
+    res.json({ success: true, id: Number(req.params.id), status });
   } catch (err) {
     console.error("Update appointment status error:", err);
-
-    res.status(500).json({
-      error: "Unable to update appointment status."
-    });
+    res.status(500).json({ error: "Unable to update appointment status." });
   }
 });
 
