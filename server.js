@@ -4055,9 +4055,131 @@ db.prepare(`
   }
 });
 
+// ===== S&K AUTO V1 - DASHBOARD REPORTING =====
+app.get('/api/dashboard/reporting', (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+
+    const period = String(req.query.period || 'month').toLowerCase();
+    const customStart = String(req.query.start || '').trim();
+    const customEnd = String(req.query.end || '').trim();
+
+    const chicagoDate = (date) => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(date);
+
+    const now = new Date();
+    const today = chicagoDate(now);
+    let startDate = today;
+    let endDate = today;
+
+    if (period === 'week') {
+      const localDay = Number(new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago', weekday: 'short'
+      }).format(now) === 'Sun' ? 0 : ['Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' }).format(now)) + 1);
+      const start = new Date(now.getTime() - localDay * 86400000);
+      startDate = chicagoDate(start);
+    } else if (period === 'month') {
+      startDate = today.slice(0, 8) + '01';
+    } else if (period === 'year') {
+      startDate = today.slice(0, 4) + '-01-01';
+    } else if (period === 'custom') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(customStart) || !/^\d{4}-\d{2}-\d{2}$/.test(customEnd)) {
+        return res.status(400).json({ error: 'Valid start and end dates are required.' });
+      }
+      startDate = customStart;
+      endDate = customEnd;
+      if (startDate > endDate) return res.status(400).json({ error: 'Start date cannot be after end date.' });
+    }
+
+    const orders = db.prepare(`
+      SELECT r.id, r.status, r.completed_at, r.created_at, r.amount_paid, r.payment_status,
+             c.name AS customer_name, v.year AS vehicle_year, v.make AS vehicle_make, v.model AS vehicle_model
+      FROM repair_orders r
+      LEFT JOIN customers c ON r.customer_id = c.id
+      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      WHERE r.shop_id = ?
+      ORDER BY r.id DESC
+    `).all(shopId);
+
+    const itemsStmt = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`);
+    const money2 = value => Math.round((Number(value) || 0) * 100) / 100;
+    const orderTotals = (id) => {
+      const items = itemsStmt.all(id);
+      const parts = money2(items.reduce((s, i) => s + Number(i.parts || 0), 0));
+      const labor = money2(items.reduce((s, i) => s + Number(i.labor || 0), 0));
+      const subtotal = money2(parts + labor);
+      const tax = money2(subtotal * 0.075);
+      return { parts, labor, subtotal, tax, total: money2(subtotal + tax) };
+    };
+
+    let activeRepairOrders = 0;
+    let completedAllTime = 0;
+    let outstandingBalance = 0;
+    let outstandingCount = 0;
+    let completedJobs = 0;
+    let invoicedSales = 0;
+    let collectedRevenue = 0;
+    let partsSales = 0;
+    let laborSales = 0;
+    let paidCount = 0;
+    let partialCount = 0;
+    let unpaidCount = 0;
+    const recentCompleted = [];
+
+    for (const order of orders) {
+      const totals = orderTotals(order.id);
+      const paid = money2(order.amount_paid);
+      const balance = money2(Math.max(0, totals.total - paid));
+
+      if (order.status !== 'completed' && order.status !== 'cancelled') activeRepairOrders++;
+      if (order.status === 'completed') {
+        completedAllTime++;
+        if (balance > 0.009) { outstandingBalance = money2(outstandingBalance + balance); outstandingCount++; }
+      }
+
+      const completedDate = order.completed_at ? String(order.completed_at).slice(0, 10) : '';
+      if (order.status === 'completed' && completedDate >= startDate && completedDate <= endDate) {
+        completedJobs++;
+        invoicedSales = money2(invoicedSales + totals.total);
+        collectedRevenue = money2(collectedRevenue + Math.min(paid, totals.total));
+        partsSales = money2(partsSales + totals.parts);
+        laborSales = money2(laborSales + totals.labor);
+        if (balance <= 0.009 && totals.total > 0) paidCount++;
+        else if (paid > 0.009) partialCount++;
+        else unpaidCount++;
+        if (recentCompleted.length < 8) recentCompleted.push({
+          id: order.id, customer_name: order.customer_name || 'Customer',
+          vehicle: [order.vehicle_year, order.vehicle_make, order.vehicle_model].filter(Boolean).join(' '),
+          completed_at: order.completed_at, total: totals.total, amount_paid: paid, balance_due: balance
+        });
+      }
+    }
+
+    const customerCount = db.prepare(`SELECT COUNT(*) AS count FROM customers WHERE shop_id = ?`).get(shopId)?.count || 0;
+    const averageRepairOrder = completedJobs ? money2(invoicedSales / completedJobs) : 0;
+
+    res.json({
+      period: { key: period, start: startDate, end: endDate },
+      customerCount: Number(customerCount), activeRepairOrders, completedAllTime,
+      completedJobs, invoicedSales, collectedRevenue, outstandingBalance, outstandingCount,
+      partsSales, laborSales, averageRepairOrder,
+      paymentStatus: { paid: paidCount, partial: partialCount, unpaid: unpaidCount },
+      recentCompleted
+    });
+  } catch (err) {
+    console.error('Dashboard reporting error:', err);
+    res.status(500).json({ error: 'Unable to retrieve dashboard reporting.' });
+  }
+});
+
 // ===== S&K AUTO - TODAY'S APPOINTMENTS =====
 app.get("/api/dashboard/todays-appointments", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
     const today = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Chicago",
       year: "numeric",
@@ -4069,8 +4191,9 @@ app.get("/api/dashboard/todays-appointments", (req, res) => {
       SELECT *
       FROM bookings
       WHERE date = ?
+        AND shop_id = ?
       ORDER BY time ASC
-    `).all(today);
+    `).all(today, shopId);
 
    const statusCounts = {
   scheduled: 0,
