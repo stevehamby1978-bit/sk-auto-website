@@ -25,13 +25,6 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const fs = require('fs');
-// ===== GARAVEX - STRIPE CONNECT CONFIGURATION =====
-const Stripe = require('stripe');
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : null;
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || '';
-// ===== END STRIPE CONNECT CONFIGURATION =====
 // ===== S&K AUTO - QUICKBOOKS CONFIGURATION =====
 const QUICKBOOKS_CLIENT_ID =
   process.env.QUICKBOOKS_CLIENT_ID;
@@ -51,6 +44,49 @@ const QUICKBOOKS_TOKEN_URL =
 const QUICKBOOKS_SCOPE =
   'com.intuit.quickbooks.accounting com.intuit.quickbooks.payment';
 // ===== END QUICKBOOKS CONFIGURATION =====
+
+// ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_API_VERSION = '2026-08-26.dahlia';
+
+async function stripeRequest(pathname, { method = 'GET', body, form = false } = {}) {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY is not configured.');
+  }
+
+  const headers = {
+    Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+    'Stripe-Version': STRIPE_API_VERSION
+  };
+
+  let payload;
+  if (body !== undefined) {
+    if (form) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      payload = new URLSearchParams(body).toString();
+    } else {
+      headers['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
+  }
+
+  const response = await fetch(`https://api.stripe.com${pathname}`, {
+    method,
+    headers,
+    body: payload
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = data?.error?.message || data?.error?.code || `Stripe request failed (${response.status}).`;
+    const err = new Error(message);
+    err.stripe = data;
+    throw err;
+  }
+  return data;
+}
+// ===== END GARAVEX - STRIPE CONNECT CONFIGURATION =====
+
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 const uploadsDir = path.join(dataDir, 'uploads');
@@ -1051,20 +1087,6 @@ quickBooksShopColumns.forEach(([name, type]) => {
     }
 });
 
-// ===== STRIPE CONNECT SHOP COLUMNS =====
-const stripeShopColumns = [
-    ['stripe_account_id', 'TEXT'],
-    ['stripe_onboarding_complete', 'INTEGER NOT NULL DEFAULT 0']
-];
-
-stripeShopColumns.forEach(([name, type]) => {
-    if (!existingShopColumns.has(name)) {
-        db.exec(`ALTER TABLE shops ADD COLUMN ${name} ${type}`);
-        console.log(`Added shops.${name}`);
-        existingShopColumns.add(name);
-    }
-});
-
 // ===== SHOP PROFILE / WHITE-LABEL COLUMNS =====
 const shopProfileColumns = [
     ['tagline', 'TEXT'],
@@ -1079,6 +1101,26 @@ shopProfileColumns.forEach(([name, type]) => {
         existingShopColumns.add(name);
     }
 });
+
+
+// ===== GARAVEX - STRIPE CONNECT SHOP COLUMNS =====
+const stripeShopColumns = [
+  ['stripe_account_id', 'TEXT'],
+  ['stripe_connected_at', 'TEXT']
+];
+
+const stripeExistingShopColumns = new Set(
+  db.prepare(`PRAGMA table_info(shops)`).all().map(column => column.name)
+);
+
+stripeShopColumns.forEach(([name, type]) => {
+  if (!stripeExistingShopColumns.has(name)) {
+    db.exec(`ALTER TABLE shops ADD COLUMN ${name} ${type}`);
+    console.log(`Added shops.${name}`);
+  }
+});
+// ===== END GARAVEX - STRIPE CONNECT SHOP COLUMNS =====
+
 db.exec(`
   -- ===== S&K AUTO - EMPLOYEES =====
   CREATE TABLE IF NOT EXISTS employees (
@@ -1245,13 +1287,6 @@ if (!paymentColumnNames.includes('void_reason')) {
         ADD COLUMN void_reason TEXT
     `).run();
 }
-if (!paymentColumnNames.includes('stripe_checkout_session_id')) {
-    db.prepare(`
-        ALTER TABLE repair_order_payments
-        ADD COLUMN stripe_checkout_session_id TEXT
-    `).run();
-}
-
 // ===== S&K AUTO - BALANCE REMINDER SUPPORT =====
 const balanceReminderColumns = db
     .prepare(`PRAGMA table_info(repair_orders)`)
@@ -2608,21 +2643,10 @@ app.get('/api/estimates/:token', (req, res) => {
         v.make AS vehicle_make,
         v.model AS vehicle_model,
         v.vin AS vehicle_vin,
-        v.mileage AS vehicle_mileage,
-        s.name AS shop_name,
-        s.phone AS shop_phone,
-        s.email AS shop_email,
-        s.address AS shop_address,
-        s.city AS shop_city,
-        s.state AS shop_state,
-        s.zip AS shop_zip,
-        s.tagline AS shop_tagline,
-        s.website AS shop_website,
-        s.logo_filename AS shop_logo_filename
+        v.mileage AS vehicle_mileage
       FROM estimates e
       LEFT JOIN customers c ON e.customer_id = c.id
       LEFT JOIN vehicles v ON e.vehicle_id = v.id
-      LEFT JOIN shops s ON e.shop_id = s.id
       WHERE e.token = ?
     `).get(req.params.token);
 if (!estimate) {
@@ -2649,13 +2673,6 @@ estimate.tax = Math.round(subtotal * taxRate * 100) / 100;
 
 estimate.total =
     Math.round((subtotal + estimate.tax) * 100) / 100;
-
-// Public estimate links are not tied to an employee session, so return only
-// the branding for the shop that owns this estimate.
-estimate.shop_logo_url = estimate.shop_logo_filename
-    ? `/api/shop-logo/${encodeURIComponent(estimate.shop_logo_filename)}`
-    : null;
-delete estimate.shop_logo_filename;
 
     res.json(estimate);
 
@@ -3162,175 +3179,6 @@ app.get("/api/current-employee", (req, res) => {
   });
 });
 
-// ===== GARAVEX - STRIPE CONNECT =====
-function requireStripe(res) {
-  if (!stripe) {
-    res.status(503).json({ error: 'Stripe is not configured on this server.' });
-    return false;
-  }
-  return true;
-}
-
-function requestBaseUrl(req) {
-  return `${req.protocol}://${req.get('host')}`;
-}
-
-app.get('/api/stripe/status', requireOwner, async (req, res) => {
-  try {
-    if (!requireStripe(res)) return;
-    const shopId = req.session.employee.shop_id;
-    const shop = db.prepare(`SELECT stripe_account_id FROM shops WHERE id = ?`).get(shopId);
-    if (!shop?.stripe_account_id) {
-      return res.json({ connected: false, onboarding_complete: false, charges_enabled: false, payouts_enabled: false });
-    }
-    const account = await stripe.accounts.retrieve(shop.stripe_account_id);
-    const complete = Boolean(account.details_submitted && account.charges_enabled);
-    db.prepare(`UPDATE shops SET stripe_onboarding_complete = ? WHERE id = ?`).run(complete ? 1 : 0, shopId);
-    res.json({
-      connected: true,
-      onboarding_complete: complete,
-      charges_enabled: Boolean(account.charges_enabled),
-      payouts_enabled: Boolean(account.payouts_enabled),
-      account_id: account.id
-    });
-  } catch (err) {
-    console.error('Stripe status error:', err);
-    res.status(500).json({ error: err.message || 'Unable to check Stripe status.' });
-  }
-});
-
-app.post('/api/stripe/connect', requireOwner, async (req, res) => {
-  try {
-    if (!requireStripe(res)) return;
-    const shopId = req.session.employee.shop_id;
-    const shop = db.prepare(`SELECT id, name, email, stripe_account_id FROM shops WHERE id = ?`).get(shopId);
-    if (!shop) return res.status(404).json({ error: 'Shop not found.' });
-
-    let accountId = shop.stripe_account_id;
-    if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'US',
-        email: shop.email || undefined,
-        business_profile: { name: shop.name },
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true }
-        },
-        metadata: { shop_id: String(shopId), platform: 'Garavex' }
-      });
-      accountId = account.id;
-      db.prepare(`UPDATE shops SET stripe_account_id = ?, stripe_onboarding_complete = 0 WHERE id = ?`).run(accountId, shopId);
-    }
-
-    const base = requestBaseUrl(req);
-    const link = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: `${base}/shop-settings.html?stripe=refresh`,
-      return_url: `${base}/shop-settings.html?stripe=return`,
-      type: 'account_onboarding'
-    });
-    res.json({ success: true, url: link.url });
-  } catch (err) {
-    console.error('Stripe Connect onboarding error:', err);
-    res.status(500).json({ error: err.message || 'Unable to start Stripe onboarding.' });
-  }
-});
-
-app.post('/api/stripe/create-checkout-session', async (req, res) => {
-  try {
-    if (!requireStripe(res)) return;
-    const token = String(req.body?.token || '').trim();
-    if (!token) return res.status(400).json({ error: 'Invoice token is required.' });
-
-    const ro = db.prepare(`
-      SELECT r.id, r.shop_id, r.amount_paid, r.payment_status, r.invoice_token,
-             c.email AS customer_email, s.name AS shop_name,
-             s.stripe_account_id, s.stripe_onboarding_complete
-      FROM repair_orders r
-      LEFT JOIN customers c ON c.id = r.customer_id
-      JOIN shops s ON s.id = r.shop_id
-      WHERE r.invoice_token = ? AND r.status = 'completed'
-      LIMIT 1
-    `).get(token);
-    if (!ro) return res.status(404).json({ error: 'Invoice not found.' });
-    if (!ro.stripe_account_id) return res.status(400).json({ error: 'This shop has not connected online payments yet.' });
-
-    const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(ro.id);
-    const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
-    const total = Math.round((subtotal + subtotal * 0.075) * 100) / 100;
-    const balance = Math.max(0, Math.round((total - Number(ro.amount_paid || 0)) * 100) / 100);
-    if (balance <= 0.009) return res.status(400).json({ error: 'This invoice is already paid.' });
-
-    const base = requestBaseUrl(req);
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      customer_email: ro.customer_email || undefined,
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: 'usd',
-          unit_amount: Math.round(balance * 100),
-          product_data: { name: `${ro.shop_name} Invoice #${ro.id}` }
-        }
-      }],
-      metadata: { repair_order_id: String(ro.id), shop_id: String(ro.shop_id), invoice_token: token },
-      success_url: `${base}/api/stripe/payment-success?session_id={CHECKOUT_SESSION_ID}&token=${encodeURIComponent(token)}`,
-      cancel_url: `${base}/invoice.html?token=${encodeURIComponent(token)}`
-    }, { stripeAccount: ro.stripe_account_id });
-
-    res.json({ success: true, url: session.url });
-  } catch (err) {
-    console.error('Stripe Checkout error:', err);
-    res.status(500).json({ error: err.message || 'Unable to start online payment.' });
-  }
-});
-
-app.get('/api/stripe/payment-success', async (req, res) => {
-  const token = String(req.query.token || '').trim();
-  const sessionId = String(req.query.session_id || '').trim();
-  const fallback = `/invoice.html?token=${encodeURIComponent(token)}`;
-  try {
-    if (!stripe || !token || !sessionId) return res.redirect(fallback);
-    const ro = db.prepare(`
-      SELECT r.id, r.shop_id, r.amount_paid, s.stripe_account_id
-      FROM repair_orders r JOIN shops s ON s.id = r.shop_id
-      WHERE r.invoice_token = ? LIMIT 1
-    `).get(token);
-    if (!ro?.stripe_account_id) return res.redirect(fallback);
-
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {}, { stripeAccount: ro.stripe_account_id });
-    if (session.payment_status !== 'paid' || session.metadata?.repair_order_id !== String(ro.id)) {
-      return res.redirect(`${fallback}&payment=not_verified`);
-    }
-
-    const already = db.prepare(`SELECT id FROM repair_order_payments WHERE stripe_checkout_session_id = ? LIMIT 1`).get(sessionId);
-    if (!already) {
-      const paid = Number(session.amount_total || 0) / 100;
-      db.prepare(`
-        INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_checkout_session_id)
-        VALUES (?, ?, 'Stripe', ?)
-      `).run(ro.id, paid, sessionId);
-
-      const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(ro.id);
-      const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
-      const total = Math.round((subtotal + subtotal * 0.075) * 100) / 100;
-      const newPaid = Math.min(total, Math.round((Number(ro.amount_paid || 0) + paid) * 100) / 100);
-      const status = newPaid >= total - 0.009 ? 'paid' : 'partial';
-      db.prepare(`
-        UPDATE repair_orders
-        SET amount_paid = ?, payment_status = ?, payment_method = 'Stripe',
-            paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END
-        WHERE id = ? AND shop_id = ?
-      `).run(newPaid, status, status, ro.id, ro.shop_id);
-    }
-    return res.redirect(`${fallback}&payment=success`);
-  } catch (err) {
-    console.error('Stripe payment verification error:', err);
-    return res.redirect(`${fallback}&payment=error`);
-  }
-});
-
 // ===== SHOP PROFILE / WHITE-LABEL FOUNDATION =====
 app.get('/api/shop-profile', (req, res) => {
   try {
@@ -3339,8 +3187,7 @@ app.get('/api/shop-profile', (req, res) => {
 
     const shop = db.prepare(`
       SELECT id, name, slug, phone, email, address, city, state, zip,
-             tagline, website, logo_filename, active, created_at,
-             stripe_account_id, stripe_onboarding_complete
+             tagline, website, logo_filename, active, created_at
       FROM shops
       WHERE id = ?
       LIMIT 1
@@ -4094,11 +3941,7 @@ ORDER BY year DESC, make ASC, model ASC
         v.make AS vehicle_make,
         v.model AS vehicle_model,
         v.vin AS vehicle_vin,
-        v.mileage AS vehicle_mileage,
-        s.name AS shop_name, s.tagline AS shop_tagline, s.phone AS shop_phone,
-        s.email AS shop_email, s.address AS shop_address, s.city AS shop_city,
-        s.state AS shop_state, s.zip AS shop_zip, s.logo_filename AS shop_logo_filename,
-        s.stripe_account_id, s.stripe_onboarding_complete
+        v.mileage AS vehicle_mileage
       FROM repair_orders r
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
@@ -4567,114 +4410,232 @@ res.json({
     });
   }
 });
-// ===== GARAVEX - GET ALL APPOINTMENTS (SHOP ISOLATED) =====
+// ===== S&K AUTO - GET ALL APPOINTMENTS =====
 app.get("/api/appointments", (req, res) => {
   try {
-    const shopId = req.session?.employee?.shop_id;
-    if (!shopId) return res.status(401).json({ error: "Not authorized." });
 
     const appointments = db.prepare(`
       SELECT *
       FROM bookings
-      WHERE shop_id = ?
       ORDER BY date ASC, time ASC
-    `).all(shopId);
+    `).all();
 
     res.json(appointments);
+
   } catch (err) {
+
     console.error("Get appointments error:", err);
-    res.status(500).json({ error: "Unable to retrieve appointments." });
+
+    res.status(500).json({
+      error: "Unable to retrieve appointments."
+    });
+
   }
 });
-
-// ===== GARAVEX - DELETE APPOINTMENT (SHOP ISOLATED) =====
+// ===== S&K AUTO - DELETE APPOINTMENT =====
 app.delete("/api/appointments/:id", (req, res) => {
   try {
-    const shopId = req.session?.employee?.shop_id;
-    if (!shopId) return res.status(401).json({ error: "Not authorized." });
-
     const appointment = db.prepare(`
       SELECT id
       FROM bookings
-      WHERE id = ? AND shop_id = ?
-    `).get(req.params.id, shopId);
+      WHERE id = ?
+    `).get(req.params.id);
 
-    if (!appointment) return res.status(404).json({ error: "Appointment not found." });
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found."
+      });
+    }
 
-    db.prepare(`DELETE FROM bookings WHERE id = ? AND shop_id = ?`).run(req.params.id, shopId);
-    res.json({ success: true, message: "Appointment deleted." });
+    db.prepare(`
+      DELETE FROM bookings
+      WHERE id = ?
+    `).run(req.params.id);
+
+    res.json({
+      success: true,
+      message: "Appointment deleted."
+    });
+
   } catch (err) {
     console.error("Delete appointment error:", err);
-    res.status(500).json({ error: "Unable to delete appointment." });
+
+    res.status(500).json({
+      error: "Unable to delete appointment."
+    });
   }
 });
-
-// ===== GARAVEX - UPDATE APPOINTMENT (SHOP ISOLATED) =====
+// ===== S&K AUTO - UPDATE APPOINTMENT =====
 app.patch("/api/appointments/:id", (req, res) => {
   try {
-    const shopId = req.session?.employee?.shop_id;
-    if (!shopId) return res.status(401).json({ error: "Not authorized." });
-
     const id = req.params.id;
-    const { date, time, name, phone, email, vehicle, service, notes } = req.body;
 
-    if (!date || !time || !name || !phone || !vehicle || !service) {
-      return res.status(400).json({ error: "Please complete all required appointment fields." });
+    const {
+      date,
+      time,
+      name,
+      phone,
+      email,
+      vehicle,
+      service,
+      notes
+    } = req.body;
+
+    if (
+      !date ||
+      !time ||
+      !name ||
+      !phone ||
+      !vehicle ||
+      !service
+    ) {
+      return res.status(400).json({
+        error: "Please complete all required appointment fields."
+      });
     }
-    if (!SHOP_SLOTS.includes(time)) return res.status(400).json({ error: "Invalid appointment time." });
+
+    if (!SHOP_SLOTS.includes(time)) {
+      return res.status(400).json({
+        error: "Invalid appointment time."
+      });
+    }
+
     if (!isValidDateString(date) || !isWeekday(date)) {
-      return res.status(400).json({ error: "Please choose a Monday-Friday date." });
+      return res.status(400).json({
+        error: "Please choose a Monday-Friday date."
+      });
     }
-    if (isBlockedDate(date)) return res.status(400).json({ error: "The shop is closed on this date." });
 
-    const blockedTime = db.prepare(`SELECT 1 FROM blocked_times WHERE date = ? AND time = ?`).get(date, time);
-    if (blockedTime) return res.status(400).json({ error: "That appointment time is unavailable." });
+    if (isBlockedDate(date)) {
+      return res.status(400).json({
+        error: "S&K Auto is closed on this date."
+      });
+    }
 
-    const appointment = db.prepare(`
-      SELECT id FROM bookings WHERE id = ? AND shop_id = ?
-    `).get(id, shopId);
-    if (!appointment) return res.status(404).json({ error: "Appointment not found." });
+    const blockedTime = db.prepare(`
+      SELECT 1
+      FROM blocked_times
+      WHERE date = ? AND time = ?
+    `).get(date, time);
+
+    if (blockedTime) {
+      return res.status(400).json({
+        error: "That appointment time is unavailable."
+      });
+    }
 
     const existingBooking = db.prepare(`
       SELECT id
       FROM bookings
-      WHERE date = ? AND time = ? AND id != ? AND shop_id = ?
-    `).get(date, time, id, shopId);
-    if (existingBooking) return res.status(409).json({ error: "That appointment time is already booked." });
+      WHERE date = ?
+        AND time = ?
+        AND id != ?
+    `).get(date, time, id);
+
+    if (existingBooking) {
+      return res.status(409).json({
+        error: "That appointment time is already booked."
+      });
+    }
+
+    const appointment = db.prepare(`
+      SELECT id
+      FROM bookings
+      WHERE id = ?
+    `).get(id);
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found."
+      });
+    }
 
     db.prepare(`
       UPDATE bookings
-      SET date = ?, time = ?, name = ?, phone = ?, email = ?, vehicle = ?, service = ?, notes = ?
-      WHERE id = ? AND shop_id = ?
-    `).run(date, time, name.trim(), phone.trim(), (email || "").trim(), vehicle.trim(), service.trim(), (notes || "").trim(), id, shopId);
+      SET date = ?,
+          time = ?,
+          name = ?,
+          phone = ?,
+          email = ?,
+          vehicle = ?,
+          service = ?,
+          notes = ?
+      WHERE id = ?
+    `).run(
+      date,
+      time,
+      name.trim(),
+      phone.trim(),
+      (email || "").trim(),
+      vehicle.trim(),
+      service.trim(),
+      (notes || "").trim(),
+      id
+    );
 
-    res.json({ success: true, message: "Appointment updated successfully." });
+    res.json({
+      success: true,
+      message: "Appointment updated successfully."
+    });
+
   } catch (err) {
     console.error("Update appointment error:", err);
-    res.status(500).json({ error: "Unable to update appointment." });
+
+    res.status(500).json({
+      error: "Unable to update appointment."
+    });
   }
 });
 
-// ===== GARAVEX - UPDATE APPOINTMENT STATUS (SHOP ISOLATED) =====
+// ===== S&K AUTO - UPDATE APPOINTMENT STATUS =====
 app.patch("/api/appointments/:id/status", (req, res) => {
   try {
-    const shopId = req.session?.employee?.shop_id;
-    if (!shopId) return res.status(401).json({ error: "Not authorized." });
-
     const { status } = req.body;
-    const allowedStatuses = ["scheduled", "checked_in", "in_progress", "completed", "cancelled"];
-    if (!allowedStatuses.includes(status)) return res.status(400).json({ error: "Invalid appointment status." });
+
+    const allowedStatuses = [
+      "scheduled",
+      "checked_in",
+      "in_progress",
+      "completed",
+      "cancelled"
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid appointment status."
+      });
+    }
 
     const appointment = db.prepare(`
-      SELECT id FROM bookings WHERE id = ? AND shop_id = ?
-    `).get(req.params.id, shopId);
-    if (!appointment) return res.status(404).json({ error: "Appointment not found." });
+      SELECT id
+      FROM bookings
+      WHERE id = ?
+    `).get(req.params.id);
 
-    db.prepare(`UPDATE bookings SET status = ? WHERE id = ? AND shop_id = ?`).run(status, req.params.id, shopId);
-    res.json({ success: true, id: Number(req.params.id), status });
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found."
+      });
+    }
+
+    db.prepare(`
+      UPDATE bookings
+      SET status = ?
+      WHERE id = ?
+    `).run(status, req.params.id);
+
+    res.json({
+      success: true,
+      id: Number(req.params.id),
+      status: status
+    });
+
   } catch (err) {
     console.error("Update appointment status error:", err);
-    res.status(500).json({ error: "Unable to update appointment status." });
+
+    res.status(500).json({
+      error: "Unable to update appointment status."
+    });
   }
 });
 
@@ -5570,7 +5531,6 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         r.status,
         r.payment_status,
         r.quickbooks_invoice_url,
-        r.shop_id,
         r.payment_method,
         r.amount_paid,
         r.created_at,
@@ -5586,8 +5546,6 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         ON r.customer_id = c.id
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
-      LEFT JOIN shops s
-        ON r.shop_id = s.id
       WHERE r.invoice_token = ?
       LIMIT 1
     `).get(token);
@@ -5633,16 +5591,6 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         created_at: repairOrder.created_at,
         completed_at: repairOrder.completed_at,
         quickbooks_invoice_url: repairOrder.quickbooks_invoice_url,
-        stripe_payments_enabled: Boolean(repairOrder.stripe_account_id && repairOrder.stripe_onboarding_complete),
-        shop_name: repairOrder.shop_name,
-        shop_tagline: repairOrder.shop_tagline,
-        shop_phone: repairOrder.shop_phone,
-        shop_email: repairOrder.shop_email,
-        shop_address: repairOrder.shop_address,
-        shop_city: repairOrder.shop_city,
-        shop_state: repairOrder.shop_state,
-        shop_zip: repairOrder.shop_zip,
-        shop_logo_url: repairOrder.shop_logo_filename ? `/api/shop-logo/${encodeURIComponent(repairOrder.shop_logo_filename)}` : null,
         customer_name: repairOrder.customer_name,
 
         vehicle: {
@@ -7189,7 +7137,7 @@ try {
 });
 
 // ===== S&K AUTO - DELETE REPAIR ORDER =====
-app.delete("/api/repair-orders/:id", requireOwner, (req, res) => {
+app.delete("/api/repair-orders/:id", (req, res) => {
   try {
     if (!req.session.employee || !req.session.employee.id) {
       return res.status(401).json({
@@ -7226,18 +7174,16 @@ app.delete("/api/repair-orders/:id", requireOwner, (req, res) => {
       });
     }
 
-    // Never permanently delete a repair order that has payment history.
-    // Completed TEST orders may be deleted by the owner as long as they
-    // have no payments and are not linked to QuickBooks.
+    // Financial/completed repair orders are permanent accounting records.
     const paymentCount = db.prepare(`
       SELECT COUNT(*) AS count
       FROM repair_order_payments
       WHERE repair_order_id = ?
     `).get(repairOrderId);
 
-    if (Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
+    if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
       return res.status(409).json({
-        error: "Repair orders with payment history cannot be permanently deleted."
+        error: "Completed or paid repair orders cannot be permanently deleted. Keep this order as part of the service and accounting history."
       });
     }
 
@@ -7250,18 +7196,6 @@ app.delete("/api/repair-orders/:id", requireOwner, (req, res) => {
     }
 
     const deleteRepairOrder = db.transaction(() => {
-      // Delete communication history tied to this repair order first.
-      db.prepare(`
-        DELETE FROM customer_communication_history
-        WHERE repair_order_id = ?
-          AND shop_id = ?
-      `).run(repairOrderId, shopId);
-
-      db.prepare(`
-        DELETE FROM invoice_email_history
-        WHERE repair_order_id = ?
-      `).run(repairOrderId);
-
       // Delete child records first
       db.prepare(`
         DELETE FROM repair_order_recommendations
@@ -8182,6 +8116,164 @@ Questions? Call (620) 899-0425`;
     });
   }
 });
+
+
+// ===== GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
+function requireLoggedInOwner(req, res, next) {
+  if (!req.session || !req.session.employee) {
+    return res.status(401).json({ success: false, error: 'Not logged in.' });
+  }
+  if (req.session.employee.role !== 'owner') {
+    return res.status(403).json({ success: false, error: 'Owner access required.' });
+  }
+  next();
+}
+
+function requestBaseUrl(req) {
+  const forwardedProto = req.get('x-forwarded-proto');
+  const protocol = forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol;
+  return `${protocol}://${req.get('host')}`;
+}
+
+app.get('/api/stripe-connect/status', requireLoggedInOwner, async (req, res) => {
+  try {
+    const shopId = req.session.employee.shop_id;
+    const shop = db.prepare(`
+      SELECT stripe_account_id, stripe_connected_at
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
+
+    if (!shop) return res.status(404).json({ success: false, error: 'Shop not found.' });
+    if (!shop.stripe_account_id) {
+      return res.json({ success: true, connected: false, accountId: null });
+    }
+
+    const account = await stripeRequest(
+      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant&include[]=requirements`
+    );
+    const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
+    const connected = cardStatus === 'active';
+
+    return res.json({
+      success: true,
+      connected,
+      onboardingStarted: true,
+      accountId: shop.stripe_account_id,
+      cardPaymentsStatus: cardStatus,
+      connectedAt: shop.stripe_connected_at || null
+    });
+  } catch (err) {
+    console.error('Stripe Connect status error:', err.stripe || err);
+    return res.status(500).json({ success: false, error: err.message || 'Unable to check Stripe connection.' });
+  }
+});
+
+app.post('/api/stripe-connect/start', requireLoggedInOwner, async (req, res) => {
+  try {
+    const shopId = req.session.employee.shop_id;
+    const shop = db.prepare(`
+      SELECT id, name, email, stripe_account_id
+      FROM shops
+      WHERE id = ?
+    `).get(shopId);
+
+    if (!shop) return res.status(404).json({ success: false, error: 'Shop not found.' });
+
+    let accountId = shop.stripe_account_id;
+    if (!accountId) {
+      const account = await stripeRequest('/v2/core/accounts', {
+        method: 'POST',
+        body: {
+          contact_email: shop.email || undefined,
+          display_name: shop.name,
+          identity: { country: 'us' },
+          configuration: {
+            merchant: {
+              capabilities: {
+                card_payments: { requested: true }
+              }
+            }
+          },
+          defaults: {
+            responsibilities: {
+              fees_collector: 'stripe',
+              losses_collector: 'stripe'
+            }
+          },
+          dashboard: 'full',
+          metadata: {
+            garavex_shop_id: String(shop.id)
+          }
+        }
+      });
+      accountId = account.id;
+      db.prepare(`UPDATE shops SET stripe_account_id = ? WHERE id = ?`).run(accountId, shopId);
+    }
+
+    const base = requestBaseUrl(req);
+    const link = await stripeRequest('/v1/account_links', {
+      method: 'POST',
+      form: true,
+      body: {
+        account: accountId,
+        refresh_url: `${base}/stripe-connect/refresh`,
+        return_url: `${base}/stripe-connect/return`,
+        type: 'account_onboarding'
+      }
+    });
+
+    return res.json({ success: true, url: link.url, accountId });
+  } catch (err) {
+    console.error('Stripe Connect start error:', err.stripe || err);
+    return res.status(500).json({ success: false, error: err.message || 'Unable to start Stripe onboarding.' });
+  }
+});
+
+app.get('/stripe-connect/refresh', requireLoggedInOwner, async (req, res) => {
+  try {
+    const shopId = req.session.employee.shop_id;
+    const shop = db.prepare(`SELECT stripe_account_id FROM shops WHERE id = ?`).get(shopId);
+    if (!shop?.stripe_account_id) return res.redirect('/shop-settings.html?stripe=not-started');
+
+    const base = requestBaseUrl(req);
+    const link = await stripeRequest('/v1/account_links', {
+      method: 'POST',
+      form: true,
+      body: {
+        account: shop.stripe_account_id,
+        refresh_url: `${base}/stripe-connect/refresh`,
+        return_url: `${base}/stripe-connect/return`,
+        type: 'account_onboarding'
+      }
+    });
+    return res.redirect(link.url);
+  } catch (err) {
+    console.error('Stripe Connect refresh error:', err.stripe || err);
+    return res.redirect('/shop-settings.html?stripe=error');
+  }
+});
+
+app.get('/stripe-connect/return', requireLoggedInOwner, async (req, res) => {
+  try {
+    const shopId = req.session.employee.shop_id;
+    const shop = db.prepare(`SELECT stripe_account_id FROM shops WHERE id = ?`).get(shopId);
+    if (shop?.stripe_account_id) {
+      const account = await stripeRequest(
+        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant`
+      );
+      const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
+      if (cardStatus === 'active') {
+        db.prepare(`UPDATE shops SET stripe_connected_at = COALESCE(stripe_connected_at, CURRENT_TIMESTAMP) WHERE id = ?`).run(shopId);
+      }
+    }
+    return res.redirect('/shop-settings.html?stripe=returned');
+  } catch (err) {
+    console.error('Stripe Connect return error:', err.stripe || err);
+    return res.redirect('/shop-settings.html?stripe=error');
+  }
+});
+// ===== END GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
 
 app.listen(PORT, () => {
   console.log(`S&K Auto website running on http://localhost:${PORT}`);
