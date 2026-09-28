@@ -142,6 +142,8 @@
         Please review the repair and choose whether you authorize the work.
       </p>
 
+      <div id="vehicleInfo" style="display:none; margin:12px 0; padding:12px; background:#f7f8fa; border-radius:6px; font-weight:bold;"></div>
+
       <div class="repair">
 
         <h2 id="description"></h2>
@@ -215,6 +217,8 @@ async function loadRepair() {
   }
 
   try {
+    const buttons = document.querySelectorAll('#buttons button');
+    buttons.forEach(button => button.disabled = true);
 
     const response = await fetch(
       '/api/customer-repair-authorization/' +
@@ -238,6 +242,14 @@ async function loadRepair() {
     document.getElementById('description').textContent =
       result.description || 'Recommended Repair';
 
+    const vehicleText = [result.vehicle_year, result.vehicle_make, result.vehicle_model]
+      .filter(Boolean).join(' ');
+    if (vehicleText) {
+      const vehicleInfo = document.getElementById('vehicleInfo');
+      vehicleInfo.textContent = 'Vehicle: ' + vehicleText;
+      vehicleInfo.style.display = 'block';
+    }
+
     const parts = Number(result.parts) || 0;
     const labor = Number(result.labor) || 0;
 
@@ -258,7 +270,8 @@ async function loadRepair() {
       document.getElementById('buttons').style.display = 'none';
 
       document.getElementById('status').textContent =
-        '✓ This repair has been approved.';
+        '✓ This repair has been approved.' +
+        (result.authorized_at ? ' Decision recorded: ' + new Date(result.authorized_at.replace(' ', 'T') + 'Z').toLocaleString() + '.' : '');
 
     }
 
@@ -267,7 +280,8 @@ async function loadRepair() {
       document.getElementById('buttons').style.display = 'none';
 
       document.getElementById('status').textContent =
-        '✕ This repair has been declined.';
+        '✕ This repair has been declined.' +
+        (result.authorized_at ? ' Decision recorded: ' + new Date(result.authorized_at.replace(' ', 'T') + 'Z').toLocaleString() + '.' : '');
 
     }
 
@@ -295,6 +309,8 @@ async function authorizeRepair(action) {
   }
 
   try {
+    const buttons = document.querySelectorAll('#buttons button');
+    buttons.forEach(button => button.disabled = true);
 
     const response = await fetch(
       '/api/customer-repair-authorization/' +
@@ -339,9 +355,8 @@ async function authorizeRepair(action) {
     }
 
   } catch (error) {
-
+    document.querySelectorAll('#buttons button').forEach(button => button.disabled = false);
     alert(error.message);
-
   }
 
 }
