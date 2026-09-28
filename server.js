@@ -1442,10 +1442,11 @@ const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
 ];
-function isBlockedDate(date) {
-  return db
-    .prepare('SELECT 1 FROM blocked_dates WHERE date = ?')
-    .get(date) !== undefined;
+function isBlockedDate(date, shopId = null) {
+  if (shopId) {
+    return db.prepare('SELECT 1 FROM blocked_dates WHERE date = ? AND shop_id = ?').get(date, shopId) !== undefined;
+  }
+  return db.prepare('SELECT 1 FROM blocked_dates WHERE date = ?').get(date) !== undefined;
 }
 function isWeekday(dateString) {
   const d = new Date(`${dateString}T12:00:00`);
@@ -1459,11 +1460,13 @@ function isValidDateString(s) {
 }
 
 app.get('/api/availability', (req, res) => {
+  const publicShop = db.prepare(`SELECT id FROM shops WHERE slug = 'sk-auto' LIMIT 1`).get();
+  const publicShopId = publicShop?.id || null;
   const date = String(req.query.date || '');
   if (!isValidDateString(date) || !isWeekday(date)) {
     return res.status(400).json({error: 'Choose a Monday-Friday date.'});
   }
-if (isBlockedDate(date)) {
+if (isBlockedDate(date, publicShopId)) {
   return res.json({
     date,
     available: [],
@@ -1472,12 +1475,12 @@ if (isBlockedDate(date)) {
   });
 }
 const rows = db
-  .prepare('SELECT time FROM bookings WHERE date = ?')
-  .all(date);
+  .prepare('SELECT time FROM bookings WHERE date = ? AND shop_id = ?')
+  .all(date, publicShopId);
 
 const blockedRows = db
-  .prepare('SELECT time FROM blocked_times WHERE date = ?')
-  .all(date);
+  .prepare('SELECT time FROM blocked_times WHERE date = ? AND shop_id = ?')
+  .all(date, publicShopId);
 
 const booked = new Set(rows.map(r => r.time));
 const blocked = new Set(blockedRows.map(r => r.time));
@@ -1489,6 +1492,8 @@ const available = SHOP_SLOTS.filter(
 });
 
 app.post('/api/book', upload.array('photos', 3), (req, res) => {
+  const publicShop = db.prepare(`SELECT id FROM shops WHERE slug = 'sk-auto' LIMIT 1`).get();
+  const publicShopId = publicShop?.id || null;
   const {service, vehicle, date, time, name, phone, email = '', notes = ''} = req.body || {};
 
   if (![service, vehicle, date, time, name, phone].every(v => typeof v === 'string' && v.trim())) {
@@ -1497,14 +1502,14 @@ app.post('/api/book', upload.array('photos', 3), (req, res) => {
   if (!isValidDateString(date) || !isWeekday(date)) {
     return res.status(400).json({error: 'Appointments are Monday-Friday only.'});
   }
-  if (isBlockedDate(date)) {
+  if (isBlockedDate(date, publicShopId)) {
   return res.status(400).json({
     error: 'S&K Auto is closed on this date. Please choose another day.'
   });
 }
   const blockedTime = db
-  .prepare('SELECT 1 FROM blocked_times WHERE date = ? AND time = ?')
-  .get(date, time);
+  .prepare('SELECT 1 FROM blocked_times WHERE date = ? AND time = ? AND shop_id = ?')
+  .get(date, time, publicShopId);
 
 if (blockedTime) {
   return res.status(400).json({
@@ -1521,8 +1526,8 @@ if (blockedTime) {
   
      const bookingResult = db.prepare(`
   INSERT INTO bookings
-  (confirmation, service, vehicle, date, time, name, phone, email, notes)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (confirmation, service, vehicle, date, time, name, phone, email, notes, shop_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `).run(
       confirmation,
       service.trim(),
@@ -1532,7 +1537,8 @@ if (blockedTime) {
       name.trim(),
       phone.trim(),
       String(email).trim(),
-      String(notes).trim()
+      String(notes).trim(),
+      publicShopId
     );
 const bookingId = bookingResult.lastInsertRowid;
 
@@ -1777,83 +1783,67 @@ Confirmation: ${confirmation}`,
   }
 });
 app.get('/api/admin/blocked-dates', (req, res) => {
-  const rows = db
-    .prepare('SELECT date, reason FROM blocked_dates ORDER BY date')
-    .all();
-
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+  const rows = db.prepare('SELECT date, reason FROM blocked_dates WHERE shop_id = ? ORDER BY date').all(shopId);
   res.json({ blockedDates: rows });
 });
 
 app.post('/api/admin/blocked-dates', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.body.date || '');
   const reason = String(req.body.reason || '').trim();
-
-  if (!isValidDateString(date)) {
-    return res.status(400).json({ error: 'Invalid date.' });
+  if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
+  const existing = db.prepare('SELECT rowid FROM blocked_dates WHERE date = ? AND shop_id = ?').get(date, shopId);
+  if (existing) db.prepare('UPDATE blocked_dates SET reason = ? WHERE rowid = ?').run(reason, existing.rowid);
+  else {
+    try { db.prepare('INSERT INTO blocked_dates (date, reason, shop_id) VALUES (?, ?, ?)').run(date, reason, shopId); }
+    catch (err) { return res.status(409).json({ error: 'This date is already reserved by another shop in the current V1 scheduler.' }); }
   }
-
-  db.prepare(`
-    INSERT INTO blocked_dates (date, reason)
-    VALUES (?, ?)
-    ON CONFLICT(date) DO UPDATE SET reason = excluded.reason
-  `).run(date, reason);
-
   res.json({ ok: true, date, reason });
 });
 
 app.delete('/api/admin/blocked-dates/:date', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.params.date || '');
-
-  if (!isValidDateString(date)) {
-    return res.status(400).json({ error: 'Invalid date.' });
-  }
-
-  db.prepare('DELETE FROM blocked_dates WHERE date = ?').run(date);
-
+  if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
+  db.prepare('DELETE FROM blocked_dates WHERE date = ? AND shop_id = ?').run(date, shopId);
   res.json({ ok: true, date });
 });
-app.get('/api/admin/blocked-times', (req, res) => {
-  const rows = db
-    .prepare('SELECT date, time, reason FROM blocked_times ORDER BY date, time')
-    .all();
 
+app.get('/api/admin/blocked-times', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+  const rows = db.prepare('SELECT date, time, reason FROM blocked_times WHERE shop_id = ? ORDER BY date, time').all(shopId);
   res.json({ blockedTimes: rows });
 });
 
 app.post('/api/admin/blocked-times', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.body.date || '');
   const time = String(req.body.time || '');
   const reason = String(req.body.reason || '').trim();
-
-  if (!isValidDateString(date)) {
-    return res.status(400).json({ error: 'Invalid date.' });
+  if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
+  if (!SHOP_SLOTS.includes(time)) return res.status(400).json({ error: 'Invalid time.' });
+  const existing = db.prepare('SELECT rowid FROM blocked_times WHERE date = ? AND time = ? AND shop_id = ?').get(date, time, shopId);
+  if (existing) db.prepare('UPDATE blocked_times SET reason = ? WHERE rowid = ?').run(reason, existing.rowid);
+  else {
+    try { db.prepare('INSERT INTO blocked_times (date, time, reason, shop_id) VALUES (?, ?, ?, ?)').run(date, time, reason, shopId); }
+    catch (err) { return res.status(409).json({ error: 'This time is already reserved by another shop in the current V1 scheduler.' }); }
   }
-
-  if (!SHOP_SLOTS.includes(time)) {
-    return res.status(400).json({ error: 'Invalid time.' });
-  }
-
-  db.prepare(`
-    INSERT INTO blocked_times (date, time, reason)
-    VALUES (?, ?, ?)
-    ON CONFLICT(date, time) DO UPDATE SET reason = excluded.reason
-  `).run(date, time, reason);
-
   res.json({ ok: true, date, time, reason });
 });
 
 app.delete('/api/admin/blocked-times/:date/:time', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.params.date || '');
   const time = String(req.params.time || '');
-
-  if (!isValidDateString(date)) {
-    return res.status(400).json({ error: 'Invalid date.' });
-  }
-
-  db.prepare(
-    'DELETE FROM blocked_times WHERE date = ? AND time = ?'
-  ).run(date, time);
-
+  if (!isValidDateString(date)) return res.status(400).json({ error: 'Invalid date.' });
+  db.prepare('DELETE FROM blocked_times WHERE date = ? AND time = ? AND shop_id = ?').run(date, time, shopId);
   res.json({ ok: true, date, time });
 });
 app.get('/api/health', (req, res) => {
@@ -2749,6 +2739,16 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// ===== S&K AUTO SaaS - SCHEDULING BLOCK SHOP MIGRATION =====
+for (const tableName of ['blocked_dates', 'blocked_times']) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all().map(column => column.name);
+  if (!columns.includes('shop_id')) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN shop_id INTEGER`);
+  }
+  if (primaryShop) {
+    db.prepare(`UPDATE ${tableName} SET shop_id = ? WHERE shop_id IS NULL`).run(primaryShop.id);
+  }
+}
 // ===== S&K AUTO SaaS - ESTIMATE SHOP MIGRATION =====
 const estimateShopColumns = db.prepare(`
   PRAGMA table_info(estimates)
@@ -3104,120 +3104,49 @@ app.get("/api/current-employee", (req, res) => {
 // ===== S&K AUTO - GET EMPLOYEES =====
 app.get("/api/employees", (req, res) => {
   try {
+    const employee = req.session?.employee;
+    if (!employee) return res.status(401).json({ error: "Not authorized." });
+    if (employee.role !== "owner") return res.status(403).json({ error: "Owner access required." });
     const employees = db.prepare(`
-      SELECT
-        id,
-        name,
-        email,
-        role,
-        active,
-        created_at
+      SELECT id, name, email, role, active, created_at
       FROM employees
+      WHERE shop_id = ?
       ORDER BY active DESC, name ASC
-    `).all();
-
+    `).all(employee.shop_id);
     res.json(employees);
-
   } catch (err) {
     console.error("Get employees error:", err);
-
-    res.status(500).json({
-      error: "Unable to load employees."
-    });
+    res.status(500).json({ error: "Unable to load employees." });
   }
 });
 
 // ===== S&K AUTO - ADD EMPLOYEE =====
 app.post("/api/employees", async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      password,
-      role
-    } = req.body;
-
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        error: "Employee name is required."
-      });
-    }
-
-    if (!email || !email.trim()) {
-      return res.status(400).json({
-        error: "Employee email is required."
-      });
-    }
-
-    if (!password || password.length < 8) {
-      return res.status(400).json({
-        error: "Password must be at least 8 characters."
-      });
-    }
-
+    const currentEmployee = req.session?.employee;
+    if (!currentEmployee) return res.status(401).json({ error: "Not authorized." });
+    if (currentEmployee.role !== "owner") return res.status(403).json({ error: "Owner access required." });
+    const { name, email, password, role } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: "Employee name is required." });
+    if (!email || !email.trim()) return res.status(400).json({ error: "Employee email is required." });
+    if (!password || password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
     const cleanEmail = email.trim().toLowerCase();
-
-    const allowedRoles = [
-      "owner",
-      "manager",
-      "service_writer",
-      "technician"
-    ];
-
-    const employeeRole = allowedRoles.includes(role)
-      ? role
-      : "technician";
-
-    const existingEmployee = db.prepare(`
-      SELECT id
-      FROM employees
-      WHERE LOWER(email) = ?
-    `).get(cleanEmail);
-
-    if (existingEmployee) {
-      return res.status(409).json({
-        error: "An employee with this email already exists."
-      });
-    }
-
+    const allowedRoles = ["owner", "manager", "service_writer", "technician"];
+    const employeeRole = allowedRoles.includes(role) ? role : "technician";
+    const existingEmployee = db.prepare(`SELECT id FROM employees WHERE LOWER(email) = ?`).get(cleanEmail);
+    if (existingEmployee) return res.status(409).json({ error: "An employee with this email already exists." });
     const passwordHash = await bcrypt.hash(password, 12);
-
     const result = db.prepare(`
-    INSERT INTO employees (
-  name,
-  email,
-  password_hash,
-  role,
-  active,
-  must_change_password
-)
-VALUES (?, ?, ?, ?, 1, 1)
-    `).run(
-      name.trim(),
-      cleanEmail,
-      passwordHash,
-      employeeRole
-    );
-
-    res.status(201).json({
-      success: true,
-      employee: {
-        id: result.lastInsertRowid,
-        name: name.trim(),
-        email: cleanEmail,
-        role: employeeRole,
-        active: 1
-      }
-    });
-
+      INSERT INTO employees (name, email, password_hash, role, active, must_change_password, shop_id)
+      VALUES (?, ?, ?, ?, 1, 1, ?)
+    `).run(name.trim(), cleanEmail, passwordHash, employeeRole, currentEmployee.shop_id);
+    res.status(201).json({ success: true, employee: { id: Number(result.lastInsertRowid), name: name.trim(), email: cleanEmail, role: employeeRole, active: 1 } });
   } catch (err) {
     console.error("Add employee error:", err);
-
-    res.status(500).json({
-      error: "Unable to add employee."
-    });
+    res.status(500).json({ error: "Unable to add employee." });
   }
 });
+
 // ===== S&K AUTO - RESET EMPLOYEE PASSWORD =====
 app.post("/api/employees/:id/reset-password", async (req, res) => {
   try {
@@ -3249,8 +3178,8 @@ app.post("/api/employees/:id/reset-password", async (req, res) => {
     const employee = db.prepare(`
       SELECT id, name
       FROM employees
-      WHERE id = ?
-    `).get(employeeId);
+      WHERE id = ? AND shop_id = ?
+    `).get(employeeId, req.session.employee.shop_id);
 
     if (!employee) {
       return res.status(404).json({
@@ -3268,10 +3197,11 @@ app.post("/api/employees/:id/reset-password", async (req, res) => {
       SET
         password_hash = ?,
         must_change_password = 1
-      WHERE id = ?
+      WHERE id = ? AND shop_id = ?
     `).run(
       passwordHash,
-      employeeId
+      employeeId,
+      req.session.employee.shop_id
     );
 
     res.json({
@@ -4227,61 +4157,35 @@ res.json({
 // ===== S&K AUTO - GET ALL APPOINTMENTS =====
 app.get("/api/appointments", (req, res) => {
   try {
-
-    const appointments = db.prepare(`
-      SELECT *
-      FROM bookings
-      ORDER BY date ASC, time ASC
-    `).all();
-
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const appointments = db.prepare(`SELECT * FROM bookings WHERE shop_id = ? ORDER BY date ASC, time ASC`).all(shopId);
     res.json(appointments);
-
   } catch (err) {
-
     console.error("Get appointments error:", err);
-
-    res.status(500).json({
-      error: "Unable to retrieve appointments."
-    });
-
+    res.status(500).json({ error: "Unable to retrieve appointments." });
   }
 });
+
 // ===== S&K AUTO - DELETE APPOINTMENT =====
 app.delete("/api/appointments/:id", (req, res) => {
   try {
-    const appointment = db.prepare(`
-      SELECT id
-      FROM bookings
-      WHERE id = ?
-    `).get(req.params.id);
-
-    if (!appointment) {
-      return res.status(404).json({
-        error: "Appointment not found."
-      });
-    }
-
-    db.prepare(`
-      DELETE FROM bookings
-      WHERE id = ?
-    `).run(req.params.id);
-
-    res.json({
-      success: true,
-      message: "Appointment deleted."
-    });
-
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const result = db.prepare(`DELETE FROM bookings WHERE id = ? AND shop_id = ?`).run(req.params.id, shopId);
+    if (result.changes !== 1) return res.status(404).json({ error: "Appointment not found." });
+    res.json({ success: true, message: "Appointment deleted." });
   } catch (err) {
     console.error("Delete appointment error:", err);
-
-    res.status(500).json({
-      error: "Unable to delete appointment."
-    });
+    res.status(500).json({ error: "Unable to delete appointment." });
   }
 });
+
 // ===== S&K AUTO - UPDATE APPOINTMENT =====
 app.patch("/api/appointments/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const id = req.params.id;
 
     const {
@@ -4320,7 +4224,7 @@ app.patch("/api/appointments/:id", (req, res) => {
       });
     }
 
-    if (isBlockedDate(date)) {
+    if (isBlockedDate(date, shopId)) {
       return res.status(400).json({
         error: "S&K Auto is closed on this date."
       });
@@ -4329,8 +4233,8 @@ app.patch("/api/appointments/:id", (req, res) => {
     const blockedTime = db.prepare(`
       SELECT 1
       FROM blocked_times
-      WHERE date = ? AND time = ?
-    `).get(date, time);
+      WHERE date = ? AND time = ? AND shop_id = ?
+    `).get(date, time, shopId);
 
     if (blockedTime) {
       return res.status(400).json({
@@ -4344,7 +4248,8 @@ app.patch("/api/appointments/:id", (req, res) => {
       WHERE date = ?
         AND time = ?
         AND id != ?
-    `).get(date, time, id);
+        AND shop_id = ?
+    `).get(date, time, id, shopId);
 
     if (existingBooking) {
       return res.status(409).json({
@@ -4355,8 +4260,8 @@ app.patch("/api/appointments/:id", (req, res) => {
     const appointment = db.prepare(`
       SELECT id
       FROM bookings
-      WHERE id = ?
-    `).get(id);
+      WHERE id = ? AND shop_id = ?
+    `).get(id, shopId);
 
     if (!appointment) {
       return res.status(404).json({
@@ -4374,7 +4279,7 @@ app.patch("/api/appointments/:id", (req, res) => {
           vehicle = ?,
           service = ?,
           notes = ?
-      WHERE id = ?
+      WHERE id = ? AND shop_id = ?
     `).run(
       date,
       time,
@@ -4384,7 +4289,8 @@ app.patch("/api/appointments/:id", (req, res) => {
       vehicle.trim(),
       service.trim(),
       (notes || "").trim(),
-      id
+      id,
+      shopId
     );
 
     res.json({
@@ -4404,52 +4310,17 @@ app.patch("/api/appointments/:id", (req, res) => {
 // ===== S&K AUTO - UPDATE APPOINTMENT STATUS =====
 app.patch("/api/appointments/:id/status", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const { status } = req.body;
-
-    const allowedStatuses = [
-      "scheduled",
-      "checked_in",
-      "in_progress",
-      "completed",
-      "cancelled"
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        error: "Invalid appointment status."
-      });
-    }
-
-    const appointment = db.prepare(`
-      SELECT id
-      FROM bookings
-      WHERE id = ?
-    `).get(req.params.id);
-
-    if (!appointment) {
-      return res.status(404).json({
-        error: "Appointment not found."
-      });
-    }
-
-    db.prepare(`
-      UPDATE bookings
-      SET status = ?
-      WHERE id = ?
-    `).run(status, req.params.id);
-
-    res.json({
-      success: true,
-      id: Number(req.params.id),
-      status: status
-    });
-
+    const allowedStatuses = ["scheduled", "checked_in", "in_progress", "completed", "cancelled"];
+    if (!allowedStatuses.includes(status)) return res.status(400).json({ error: "Invalid appointment status." });
+    const result = db.prepare(`UPDATE bookings SET status = ? WHERE id = ? AND shop_id = ?`).run(status, req.params.id, shopId);
+    if (result.changes !== 1) return res.status(404).json({ error: "Appointment not found." });
+    res.json({ success: true, id: Number(req.params.id), status });
   } catch (err) {
     console.error("Update appointment status error:", err);
-
-    res.status(500).json({
-      error: "Unable to update appointment status."
-    });
+    res.status(500).json({ error: "Unable to update appointment status." });
   }
 });
 
@@ -4707,6 +4578,8 @@ repairOrder.balance_due = Math.max(
 // ===== S&K AUTO - EMAIL / RESEND PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrder = db.prepare(`
       SELECT
         r.id,
@@ -4869,6 +4742,8 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
 // ===== S&K AUTO - TEXT PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrderId = Number(req.params.id);
     const paymentId = Number(req.params.paymentId);
 
@@ -4879,8 +4754,8 @@ app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, 
         c.phone AS customer_phone
       FROM repair_orders r
       LEFT JOIN customers c ON r.customer_id = c.id
-      WHERE r.id = ?
-    `).get(repairOrderId);
+      WHERE r.id = ? AND r.shop_id = ?
+    `).get(repairOrderId, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -5705,6 +5580,8 @@ recordCustomerCommunication({
 // ===== S&K AUTO - EMAIL PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrderId = Number(req.params.id);
     const paymentId = Number(req.params.paymentId);
 
@@ -5721,8 +5598,8 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
         ON r.customer_id = c.id
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
-      WHERE r.id = ?
-    `).get(repairOrderId);
+      WHERE r.id = ? AND r.shop_id = ?
+    `).get(repairOrderId, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -6121,6 +5998,8 @@ app.post("/api/repair-orders/:id/items", (req, res) => {
 // ===== S&K AUTO - ADD RECOMMENDED REPAIR =====
 app.post("/api/repair-orders/:id/recommendations", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const { description, parts, labor } = req.body;
 
     if (!description || !description.trim()) {
@@ -6137,8 +6016,8 @@ app.post("/api/repair-orders/:id/recommendations", async (req, res) => {
         c.phone AS customer_phone
     FROM repair_orders ro
     JOIN customers c ON c.id = ro.customer_id
-    WHERE ro.id = ?
-`).get(req.params.id);
+    WHERE ro.id = ? AND ro.shop_id = ?
+`).get(req.params.id, shopId);
     if (!repairOrder) {
       return res.status(404).json({
         error: "Repair order not found."
@@ -6269,64 +6148,38 @@ app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
 // ===== S&K AUTO - GET RECOMMENDED REPAIRS =====
 app.get("/api/repair-orders/:id/recommendations", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const order = db.prepare(`SELECT id FROM repair_orders WHERE id = ? AND shop_id = ?`).get(req.params.id, shopId);
+    if (!order) return res.status(404).json({ error: "Repair order not found." });
     const recommendations = db.prepare(`
       SELECT id, repair_order_id, description, parts, labor, status, created_at
-      FROM repair_order_recommendations
-      WHERE repair_order_id = ?
-      ORDER BY id ASC
+      FROM repair_order_recommendations WHERE repair_order_id = ? ORDER BY id ASC
     `).all(req.params.id);
-
     res.json(recommendations);
-
   } catch (err) {
     console.error("Get recommended repairs error:", err);
-
-    res.status(500).json({
-      error: "Unable to load recommended repairs."
-    });
+    res.status(500).json({ error: "Unable to load recommended repairs." });
   }
 });
 
 // ===== S&K AUTO - DELETE RECOMMENDED REPAIR =====
 app.delete("/api/repair-orders/:repairOrderId/recommendations/:recommendationId", (req, res) => {
   try {
-    const recommendation = db.prepare(`
-      SELECT id
-      FROM repair_order_recommendations
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).get(
-      req.params.recommendationId,
-      req.params.repairOrderId
-    );
-
-    if (!recommendation) {
-      return res.status(404).json({
-        error: "Recommended repair not found."
-      });
-    }
-
-    db.prepare(`
-      DELETE FROM repair_order_recommendations
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).run(
-      req.params.recommendationId,
-      req.params.repairOrderId
-    );
-
-    res.json({
-      success: true
-    });
-
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const order = db.prepare(`SELECT id, status, quickbooks_invoice_id, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(req.params.repairOrderId, shopId);
+    if (!order) return res.status(404).json({ error: "Repair order not found." });
+    if (order.status === 'completed' || order.quickbooks_invoice_id || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Finalized repair orders cannot be changed." });
+    const result = db.prepare(`DELETE FROM repair_order_recommendations WHERE id = ? AND repair_order_id = ? AND status = 'pending'`).run(req.params.recommendationId, req.params.repairOrderId);
+    if (result.changes !== 1) return res.status(404).json({ error: "Pending recommended repair not found." });
+    res.json({ success: true });
   } catch (err) {
     console.error("Delete recommended repair error:", err);
-
-    res.status(500).json({
-      error: "Unable to delete recommended repair."
-    });
+    res.status(500).json({ error: "Unable to delete recommended repair." });
   }
 });
+
 // ===== S&K AUTO - APPROVE RECOMMENDED REPAIR =====
 app.patch(
   "/api/repair-orders/:repairOrderId/recommendations/:recommendationId/approve",
@@ -7280,6 +7133,8 @@ app.patch("/api/repair-orders/:id/notes", (req, res) => {
 // ===== S&K AUTO - UPDATE CUSTOMER AUTHORIZATION =====
 app.patch("/api/repair-orders/:id/authorization", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
 
     const {
       authorized_by,
@@ -7309,8 +7164,8 @@ app.patch("/api/repair-orders/:id/authorization", (req, res) => {
     const repairOrder = db.prepare(`
       SELECT id
       FROM repair_orders
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = ? AND shop_id = ?
+    `).get(req.params.id, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -7328,7 +7183,7 @@ app.patch("/api/repair-orders/:id/authorization", (req, res) => {
         authorization_method = ?,
         authorization_notes = ?,
         authorized_at = ?
-      WHERE id = ?
+      WHERE id = ? AND shop_id = ?
     `).run(
       authorized_by.trim(),
       authorization_method,
@@ -7336,7 +7191,8 @@ app.patch("/api/repair-orders/:id/authorization", (req, res) => {
         ? authorization_notes.trim()
         : "",
       authorizedAt,
-      req.params.id
+      req.params.id,
+      shopId
     );
 
     res.json({
@@ -7765,185 +7621,11 @@ app.get('/api/repair-orders/:id/communication-history', (req, res) => {
 });
 
 // ===== S&K AUTO - TEXT INVOICE =====
-app.post('/api/text-invoice', async (req, res) => {
-  try {
-    const {
-      phone,
-      customerName,
-      invoiceNumber,
-      total,
-      balanceDue,
-      invoiceUrl
-    } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({
-        error: 'Customer phone number is required.'
-      });
-    }
-
-    // Convert customer phone number to +1XXXXXXXXXX format
-    const digits = String(phone).replace(/\D/g, '');
-    const customerPhone =
-      digits.length === 10 ? '+1' + digits :
-      digits.length === 11 && digits.startsWith('1') ? '+' + digits :
-      null;
-
-    if (!customerPhone) {
-      return res.status(400).json({
-        error: 'Customer phone number is invalid.'
-      });
-    }
-
-    const balance = Number(balanceDue || 0);
-    const invoiceTotal = Number(total || 0);
-
-    let messageBody;
-
-    if (balance <= 0) {
-      messageBody =
-`S&K Auto
-Payment received - thank you${customerName ? ', ' + customerName : ''}!
-
-Invoice: ${invoiceNumber || ''}
-Total: $${invoiceTotal.toFixed(2)}
-Balance Due: $0.00
-
-View Invoice:
-${invoiceUrl}
-
-Thank you for choosing S&K Auto!
-(620) 899-0425`;
-    } else {
-      messageBody =
-`S&K Auto
-Your invoice is ready${customerName ? ', ' + customerName : ''}.
-
-Invoice: ${invoiceNumber || ''}
-Total: $${invoiceTotal.toFixed(2)}
-Balance Due: $${balance.toFixed(2)}
-
-View Invoice:
-${invoiceUrl}
-
-Questions? Call (620) 899-0425`;
-    }
-
-    const message = await twilioClient.messages.create({
-      body: messageBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: customerPhone
-    });
-
-    console.log('Invoice SMS sent:', message.sid);
-
-    res.json({
-      success: true,
-      message: 'Invoice text sent successfully.'
-    });
-
-  } catch (err) {
-    console.error('Invoice SMS failed:', err);
-
-    res.status(500).json({
-      error: 'Unable to send invoice text.'
-    });
-  }
+app.post('/api/text-invoice', (req, res) => {
+  return res.status(410).json({ error: 'Legacy endpoint disabled. Use the repair-order invoice text action.' });
 });
 
 // ===== S&K AUTO - TEXT REPAIR AUTHORIZATION =====
-app.post('/api/text-authorization', async (req, res) => {
-  try {
-    const {
-      phone,
-      customerName,
-      description,
-      parts,
-      labor,
-      authorizationUrl
-    } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({
-        error: 'Customer phone number is required.'
-      });
-    }
-
-    if (!authorizationUrl) {
-      return res.status(400).json({
-        error: 'Authorization link is required.'
-      });
-    }
-
-    // Convert customer phone number to +1XXXXXXXXXX format
-    const digits = String(phone).replace(/\D/g, '');
-    const customerPhone =
-      digits.length === 10 ? '+1' + digits :
-      digits.length === 11 && digits.startsWith('1') ? '+' + digits :
-      null;
-
-    if (!customerPhone) {
-      return res.status(400).json({
-        error: 'Customer phone number is invalid.'
-      });
-    }
-
-    const partsAmount = Number(parts || 0);
-    const laborAmount = Number(labor || 0);
-    const total = partsAmount + laborAmount;
-
-    const messageBody =
-`S&K Auto
-
-${customerName ? customerName + ', ' : ''}we have a recommended repair that requires your authorization.
-
-Recommended Repair:
-${description || 'Additional repair'}
-
-Parts: $${partsAmount.toFixed(2)}
-Labor: $${laborAmount.toFixed(2)}
-Total: $${total.toFixed(2)}
-
-Review and approve or decline here:
-${authorizationUrl}
-
-Questions? Call (620) 899-0425`;
-
-    const message = await twilioClient.messages.create({
-      body: messageBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: customerPhone
-    });
-
-    console.log('Authorization SMS sent:', message.sid);
-
-    res.json({
-      success: true,
-      message: 'Authorization text sent successfully.'
-    });
-
-  } catch (err) {
-    console.error('Authorization SMS failed:', err);
-
-    res.status(500).json({
-      error: 'Unable to send authorization text.'
-    });
-  }
+app.post('/api/text-authorization', (req, res) => {
+  return res.status(410).json({ error: 'Legacy endpoint disabled. Use the repair-order authorization text action.' });
 });
-
-app.listen(PORT, () => {
-  console.log(`S&K Auto website running on http://localhost:${PORT}`);
-
-  // ===== AUTOMATIC BALANCE REMINDER SCHEDULER =====
-  // Wait 5 minutes after startup before the first check.
-  setTimeout(() => {
-    runAutomaticBalanceReminders();
-
-    // Check once every hour after that.
-    setInterval(() => {
-      runAutomaticBalanceReminders();
-    }, 60 * 60 * 1000);
-
-  }, 5 * 60 * 1000);
-});
-
