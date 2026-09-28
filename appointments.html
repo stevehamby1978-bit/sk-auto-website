@@ -7,249 +7,13 @@
   <title>S&K Auto | Appointments</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
 
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #111827;
-      color: #222;
-    }
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--panel2:#11161b;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23;--danger:#b43b3b}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.header{background:#15191e;border-bottom:3px solid var(--accent);padding:16px 22px}.header-inner{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{display:flex;align-items:center;gap:13px}.brand img{width:64px;height:auto}.brand h1{margin:0;font-size:24px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}.dashboard-btn,.refresh-btn,button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer;color:#fff;background:#303841;text-decoration:none}.dashboard-btn{background:var(--accent)}.page{max-width:1200px;margin:auto;min-height:calc(100vh - 100px);padding:27px 18px 45px}.page-title{margin-bottom:20px}.page-title h2{margin:0 0 6px;font-size:30px}.page-title p{margin:0;color:var(--muted)}.workflow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.step{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;color:var(--muted);font-size:13px}.step strong{display:block;color:#fff;margin-bottom:4px}.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}.search{flex:1;min-width:260px}.search,input,select,textarea{padding:11px 12px;border:1px solid #46505a;border-radius:7px;background:#11161b;color:#fff;font-size:15px}textarea{min-height:90px;resize:vertical}.appointment-count{margin-bottom:13px;color:var(--muted);font-weight:bold}.appointment-list{display:grid;gap:12px}.appointment-card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:17px}.appointment-card.status-scheduled{border-left-color:#3498db}.appointment-card.status-checked_in{border-left-color:#f39c12}.appointment-card.status-in_progress{border-left-color:#f1c40f}.appointment-card.status-completed{border-left-color:#28a745}.appointment-card.status-cancelled{border-left-color:#dc3545}.appointment-date{font-size:19px;font-weight:800;color:#fff}.appointment-card h3{margin:10px 0 7px}.appointment-card p{margin:5px 0;color:#c8cfd6}.appointment-status{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.edit-btn{background:#303841}.delete-btn{background:var(--danger)}.message{background:var(--panel);border:1px solid var(--line);text-align:center;padding:30px;border-radius:9px;color:var(--muted)}.footer{text-align:center;color:#77818b;padding:28px 0 8px;font-size:13px}
+#newAppointmentForm{background:var(--panel)!important;border:1px solid var(--line);border-radius:10px!important;padding:20px!important}#newAppointmentForm h3{margin-top:0;color:var(--accent)}#newAppointmentForm input,#newAppointmentForm select,#newAppointmentForm textarea{display:block;width:100%;margin-bottom:10px}
+@media(max-width:700px){.header-inner{align-items:flex-start;flex-direction:column}.workflow{grid-template-columns:1fr}.page{padding:20px 15px}.toolbar>*{width:100%}.appointment-status select,.appointment-status button,.edit-btn,.delete-btn{width:100%;margin:4px 0}}
 
-    .header {
-      background: #1f2933;
-      border-bottom: 4px solid #ef3e23;
-      padding: 18px 25px;
-    }
-
-    .header-inner {
-      max-width: 1200px;
-      margin: auto;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      color: white;
-    }
-
-    .brand img {
-      width: 75px;
-      height: auto;
-    }
-
-    .brand h1 {
-      margin: 0;
-      font-size: 25px;
-    }
-
-    .brand p {
-      margin: 4px 0 0;
-      color: #ccc;
-      font-size: 14px;
-    }
-
-    .dashboard-btn {
-      display: inline-block;
-      background: #ef3e23;
-      color: white;
-      text-decoration: none;
-      padding: 11px 16px;
-      border-radius: 6px;
-      font-weight: bold;
-    }
-
-    .page {
-      max-width: 1200px;
-      margin: auto;
-      background: #f5f5f5;
-      min-height: calc(100vh - 115px);
-      padding: 30px;
-    }
-
-    .page-title {
-      margin-bottom: 25px;
-    }
-
-    .page-title h2 {
-      margin: 0 0 6px;
-      font-size: 28px;
-    }
-
-    .page-title p {
-      margin: 0;
-      color: #666;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 12px;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .search {
-      width: 100%;
-      max-width: 430px;
-      padding: 12px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 15px;
-    }
-
-    .refresh-btn {
-      border: 0;
-      background: #333;
-      color: white;
-      padding: 12px 18px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-
-    .appointment-count {
-      margin-bottom: 15px;
-      color: #555;
-      font-weight: bold;
-    }
-
-    .appointment-list {
-      display: grid;
-      gap: 15px;
-    }
-
-    .appointment-card {
-      background: white;
-      border-left: 5px solid #ef3e23;
-      border-radius: 7px;
-      padding: 18px;
-      box-shadow: 0 2px 7px rgba(0,0,0,.08);
-    }
-.appointment-card.status-scheduled {
-  border-left-color: #3498db;
-}
-
-.appointment-card.status-checked_in {
-  border-left-color: #f39c12;
-}
-
-.appointment-card.status-in_progress {
-  border-left-color: #f1c40f;
-}
-
-.appointment-card.status-completed {
-  border-left-color: #28a745;
-}
-
-.appointment-card.status-cancelled {
-  border-left-color: #dc3545;
-}
-    .appointment-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 15px;
-      flex-wrap: wrap;
-      margin-bottom: 15px;
-    }
-
-    .appointment-date {
-      font-size: 20px;
-      font-weight: bold;
-    }
-
-    .appointment-time {
-      font-size: 18px;
-      font-weight: bold;
-      color: #ef3e23;
-    }
-
-    .appointment-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 25px;
-    }
-
-    .field {
-      line-height: 1.5;
-    }
-
-    .field strong {
-      color: #555;
-    }
-
-    .notes {
-      margin-top: 15px;
-      padding-top: 12px;
-      border-top: 1px solid #ddd;
-    }
-
-    .message {
-      text-align: center;
-      padding: 35px;
-      background: white;
-      border-radius: 7px;
-      color: #666;
-    }
-
-    .footer {
-      text-align: center;
-      color: #777;
-      padding: 30px 0 10px;
-      font-size: 13px;
-    }
-
-    @media (max-width: 700px) {
-      .header-inner {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .page {
-        padding: 20px 15px;
-      }
-
-      .appointment-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    .edit-btn,
-.delete-btn {
-    padding: 8px 14px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: 600;
-    margin-top: 8px;
-    margin-right: 6px;
-}
-
-.edit-btn {
-    background: #333;
-    color: white;
-}
-
-.edit-btn:hover {
-    background: #111;
-}
-
-.delete-btn {
-    background: #c62828;
-    color: white;
-}
-
-.delete-btn:hover {
-    background: #a61f1f;
-}
-  </style>
+</style>
 </head>
 
 <body>
@@ -281,6 +45,13 @@
       <p>View and manage scheduled service appointments.</p>
     </div>
 
+
+    <div class="workflow">
+  <div class="step"><strong>1. Scheduled</strong>Customer books or shop creates appointment</div>
+  <div class="step"><strong>2. Check In</strong>Vehicle arrives at the shop</div>
+  <div class="step"><strong>3. Repair Workflow</strong>Create/open customer and repair order</div>
+  <div class="step"><strong>4. Complete</strong>Repair, invoice and payment</div>
+</div>
 
     <div class="toolbar">
 
@@ -495,7 +266,25 @@ function editAppointment(id) {
   editingAppointmentId = id;
 
   document.getElementById('newDate').value = appointment.date || '';
-  document.getElementById('newTime').value = appointment.time || '';
+
+  // Refresh available times for the appointment date, then preserve the
+  // appointment's existing time while it is being edited.
+  loadManualAvailability().then(() => {
+    const timeSelect = document.getElementById('newTime');
+    const existingTime = appointment.time || '';
+
+    if (
+      existingTime &&
+      !Array.from(timeSelect.options).some(option => option.value === existingTime)
+    ) {
+      const option = document.createElement('option');
+      option.value = existingTime;
+      option.textContent = existingTime + ' (current appointment)';
+      timeSelect.appendChild(option);
+    }
+
+    timeSelect.value = existingTime;
+  });
   document.getElementById('newName').value = appointment.name || '';
   document.getElementById('newPhone').value = appointment.phone || '';
   document.getElementById('newEmail').value = appointment.email || '';
@@ -653,6 +442,15 @@ async function saveNewAppointment() {
     alert('Unable to create appointment.');
   }
 }
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 async function loadAppointments() {
 
   const appointmentList =
@@ -698,32 +496,32 @@ window.currentAppointments = appointments;
         return `
           <div class="appointment-card status-${appointment.status || 'scheduled'}">
             <div class="appointment-date">
-              ${appointment.date || ''}
+              ${escapeHtml(appointment.date || '')}
               &nbsp; • &nbsp;
-              ${appointment.time || ''}
+              ${escapeHtml(appointment.time || '')}
             </div>
 
-            <h3>${appointment.name || 'Customer'}</h3>
+            <h3>${escapeHtml(appointment.name || 'Customer')}</h3>
 
             <p><strong>Phone:</strong>
-              ${appointment.phone || ''}
+              ${escapeHtml(appointment.phone || '')}
             </p>
 
             <p><strong>Email:</strong>
-              ${appointment.email || ''}
+              ${escapeHtml(appointment.email || '')}
             </p>
 
             <p><strong>Vehicle:</strong>
-              ${appointment.vehicle || ''}
+              ${escapeHtml(appointment.vehicle || '')}
             </p>
 
             <p><strong>Service:</strong>
-              ${appointment.service || ''}
+              ${escapeHtml(appointment.service || '')}
             </p>
 
             ${
               appointment.notes
-                ? `<p><strong>Notes:</strong> ${appointment.notes}</p>`
+                ? `<p><strong>Notes:</strong> ${escapeHtml(appointment.notes)}</p>`
                 : ''
             }
 <div class="appointment-status">
