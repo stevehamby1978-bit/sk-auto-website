@@ -6974,7 +6974,7 @@ try {
 });
 
 // ===== S&K AUTO - DELETE REPAIR ORDER =====
-app.delete("/api/repair-orders/:id", (req, res) => {
+app.delete("/api/repair-orders/:id", requireOwner, (req, res) => {
   try {
     if (!req.session.employee || !req.session.employee.id) {
       return res.status(401).json({
@@ -7011,16 +7011,18 @@ app.delete("/api/repair-orders/:id", (req, res) => {
       });
     }
 
-    // Financial/completed repair orders are permanent accounting records.
+    // Never permanently delete a repair order that has payment history.
+    // Completed TEST orders may be deleted by the owner as long as they
+    // have no payments and are not linked to QuickBooks.
     const paymentCount = db.prepare(`
       SELECT COUNT(*) AS count
       FROM repair_order_payments
       WHERE repair_order_id = ?
     `).get(repairOrderId);
 
-    if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
+    if (Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
       return res.status(409).json({
-        error: "Completed or paid repair orders cannot be permanently deleted. Keep this order as part of the service and accounting history."
+        error: "Repair orders with payment history cannot be permanently deleted."
       });
     }
 
@@ -7033,6 +7035,18 @@ app.delete("/api/repair-orders/:id", (req, res) => {
     }
 
     const deleteRepairOrder = db.transaction(() => {
+      // Delete communication history tied to this repair order first.
+      db.prepare(`
+        DELETE FROM customer_communication_history
+        WHERE repair_order_id = ?
+          AND shop_id = ?
+      `).run(repairOrderId, shopId);
+
+      db.prepare(`
+        DELETE FROM invoice_email_history
+        WHERE repair_order_id = ?
+      `).run(repairOrderId);
+
       // Delete child records first
       db.prepare(`
         DELETE FROM repair_order_recommendations
