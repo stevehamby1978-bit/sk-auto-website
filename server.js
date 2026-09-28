@@ -4792,66 +4792,57 @@ app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, 
 // ===== S&K AUTO - UPDATE REPAIR ORDER STATUS =====
 app.patch("/api/repair-orders/:id/status", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
+    const repairOrderId = Number(req.params.id);
     const { status } = req.body;
+    const allowedStatuses = ["waiting", "in_progress", "cancelled"];
 
-    const allowedStatuses = [
-      "waiting",
-      "in_progress",
-      "completed",
-      "cancelled"
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        error: "Invalid repair order status."
+    if (!Number.isInteger(repairOrderId) || repairOrderId <= 0) {
+      return res.status(400).json({ error: "Invalid repair order ID." });
+    }
+    if (status === "completed") {
+      return res.status(409).json({
+        error: "Use Mark Repair Complete to complete this repair order so the invoice and customer notifications are handled correctly."
       });
+    }
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid repair order status." });
     }
 
     const repairOrder = db.prepare(`
-      SELECT id
+      SELECT id, status, quickbooks_invoice_id, amount_paid
       FROM repair_orders
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = ? AND shop_id = ?
+    `).get(repairOrderId, shopId);
 
-    if (!repairOrder) {
-      return res.status(404).json({
-        error: "Repair order not found."
+    if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
+    if (repairOrder.status === "completed" || repairOrder.quickbooks_invoice_id || Number(repairOrder.amount_paid || 0) > 0) {
+      return res.status(409).json({
+        error: "Completed, invoiced, or paid repair orders are locked. Create a new repair order for additional work."
       });
     }
 
-    const completedAt =
-  status === "completed"
-    ? new Date().toISOString()
-    : null;
+    db.prepare(`
+      UPDATE repair_orders
+      SET status = ?, completed_at = NULL
+      WHERE id = ? AND shop_id = ?
+    `).run(status, repairOrderId, shopId);
 
-db.prepare(`
-  UPDATE repair_orders
-  SET status = ?,
-      completed_at = ?
-  WHERE id = ?
-`).run(
-  status,
-  completedAt,
-  req.params.id
-);
-
-    res.json({
-      success: true,
-      id: Number(req.params.id),
-      status: status
-    });
-
+    res.json({ success: true, id: repairOrderId, status });
   } catch (err) {
     console.error("Update repair order status error:", err);
-
-    res.status(500).json({
-      error: "Unable to update repair order status."
-    });
+    res.status(500).json({ error: "Unable to update repair order status." });
   }
 });
+
 // ===== S&K AUTO - UPDATE PAYMENT STATUS =====
 app.patch("/api/repair-orders/:id/payment", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
     const {
   payment_status,
   payment_method,
@@ -4905,7 +4896,8 @@ app.patch("/api/repair-orders/:id/payment", async (req, res) => {
   LEFT JOIN vehicles v
     ON r.vehicle_id = v.id
   WHERE r.id = ?
-`).get(req.params.id);
+    AND r.shop_id = ?
+`).get(req.params.id, shopId);
     if (!repairOrder) {
       return res.status(404).json({
         error: "Repair order not found."
@@ -4926,13 +4918,14 @@ db.prepare(`
       payment_method = ?,
       paid_at = ?,
       amount_paid = ?
-  WHERE id = ?
+  WHERE id = ? AND shop_id = ?
 `).run(
   payment_status,
   method,
   paidAt,
   amountPaid,
-  req.params.id
+  req.params.id,
+  shopId
 );
 
   // ===== S&K AUTO - RECORD PAYMENT HISTORY =====
@@ -5908,60 +5901,31 @@ app.post("/api/repair-orders", (req, res) => {
 // ===== S&K AUTO - ADD REPAIR ORDER ITEM =====
 app.post("/api/repair-orders/:id/items", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const repairOrderId = Number(req.params.id);
     const { description, parts, labor } = req.body;
-
-    if (!description || !description.trim()) {
-      return res.status(400).json({
-        error: "Repair description is required."
-      });
-    }
+    if (!description || !description.trim()) return res.status(400).json({ error: "Repair description is required." });
 
     const repairOrder = db.prepare(`
-      SELECT id
-      FROM repair_orders
-      WHERE id = ?
-    `).get(req.params.id);
-
-    if (!repairOrder) {
-      return res.status(404).json({
-        error: "Repair order not found."
-      });
+      SELECT id, status, quickbooks_invoice_id, amount_paid
+      FROM repair_orders WHERE id = ? AND shop_id = ?
+    `).get(repairOrderId, shopId);
+    if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
+    if (repairOrder.status === "completed" || repairOrder.quickbooks_invoice_id || Number(repairOrder.amount_paid || 0) > 0) {
+      return res.status(409).json({ error: "This repair order is locked because it has been completed, invoiced, or paid." });
     }
 
     const partsAmount = Number(parts) || 0;
     const laborAmount = Number(labor) || 0;
+    if (partsAmount < 0 || laborAmount < 0) return res.status(400).json({ error: "Parts and labor cannot be negative." });
 
-    if (partsAmount < 0 || laborAmount < 0) {
-      return res.status(400).json({
-        error: "Parts and labor cannot be negative."
-      });
-    }
-
-    const result = db.prepare(`
-      INSERT INTO repair_order_items
-      (repair_order_id, description, parts, labor)
-      VALUES (?, ?, ?, ?)
-    `).run(
-      req.params.id,
-      description.trim(),
-      partsAmount,
-      laborAmount
-    );
-
-    res.status(201).json({
-      success: true,
-      id: Number(result.lastInsertRowid),
-      description: description.trim(),
-      parts: partsAmount,
-      labor: laborAmount
-    });
-
+    const result = db.prepare(`INSERT INTO repair_order_items (repair_order_id, description, parts, labor) VALUES (?, ?, ?, ?)`)
+      .run(repairOrderId, description.trim(), partsAmount, laborAmount);
+    res.status(201).json({ success: true, id: Number(result.lastInsertRowid), description: description.trim(), parts: partsAmount, labor: laborAmount });
   } catch (err) {
     console.error("Add repair order item error:", err);
-
-    res.status(500).json({
-      error: "Unable to add repair item."
-    });
+    res.status(500).json({ error: "Unable to add repair item." });
   }
 });
 
@@ -6072,110 +6036,44 @@ res.status(201).json({
 // ===== S&K AUTO - DELETE REPAIR ORDER ITEM =====
 app.delete("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
   try {
-
-    const item = db.prepare(`
-      SELECT id
-      FROM repair_order_items
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).get(
-      req.params.itemId,
-      req.params.repairOrderId
-    );
-
-    if (!item) {
-      return res.status(404).json({
-        error: "Repair item not found."
-      });
-    }
-
-    db.prepare(`
-      DELETE FROM repair_order_items
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).run(
-      req.params.itemId,
-      req.params.repairOrderId
-    );
-
-    res.json({
-      success: true
-    });
-
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const repairOrderId = Number(req.params.repairOrderId);
+    const itemId = Number(req.params.itemId);
+    const order = db.prepare(`SELECT id, status, quickbooks_invoice_id, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(repairOrderId, shopId);
+    if (!order) return res.status(404).json({ error: "Repair order not found." });
+    if (order.status === "completed" || order.quickbooks_invoice_id || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Completed, invoiced, or paid repair orders cannot be edited." });
+    const result = db.prepare(`DELETE FROM repair_order_items WHERE id = ? AND repair_order_id = ?`).run(itemId, repairOrderId);
+    if (result.changes !== 1) return res.status(404).json({ error: "Repair item not found." });
+    res.json({ success: true });
   } catch (err) {
-
     console.error("Delete repair order item error:", err);
-
-    res.status(500).json({
-      error: "Unable to delete repair item."
-    });
-
+    res.status(500).json({ error: "Unable to delete repair item." });
   }
 });
 
 // ===== S&K AUTO - EDIT REPAIR ORDER ITEM =====
 app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const repairOrderId = Number(req.params.repairOrderId);
+    const itemId = Number(req.params.itemId);
     const { description, parts, labor } = req.body;
-
-    if (!description || !description.trim()) {
-      return res.status(400).json({
-        error: "Repair description is required."
-      });
-    }
-
-    const item = db.prepare(`
-      SELECT id
-      FROM repair_order_items
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).get(
-      req.params.itemId,
-      req.params.repairOrderId
-    );
-
-    if (!item) {
-      return res.status(404).json({
-        error: "Repair item not found."
-      });
-    }
-
+    if (!description || !description.trim()) return res.status(400).json({ error: "Repair description is required." });
+    const order = db.prepare(`SELECT id, status, quickbooks_invoice_id, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(repairOrderId, shopId);
+    if (!order) return res.status(404).json({ error: "Repair order not found." });
+    if (order.status === "completed" || order.quickbooks_invoice_id || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Completed, invoiced, or paid repair orders cannot be edited." });
     const partsAmount = Number(parts) || 0;
     const laborAmount = Number(labor) || 0;
-
-    if (partsAmount < 0 || laborAmount < 0) {
-      return res.status(400).json({
-        error: "Parts and labor cannot be negative."
-      });
-    }
-
-    db.prepare(`
-      UPDATE repair_order_items
-      SET description = ?, parts = ?, labor = ?
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).run(
-      description.trim(),
-      partsAmount,
-      laborAmount,
-      req.params.itemId,
-      req.params.repairOrderId
-    );
-
-    res.json({
-      success: true,
-      id: Number(req.params.itemId),
-      description: description.trim(),
-      parts: partsAmount,
-      labor: laborAmount
-    });
-
+    if (partsAmount < 0 || laborAmount < 0) return res.status(400).json({ error: "Parts and labor cannot be negative." });
+    const result = db.prepare(`UPDATE repair_order_items SET description = ?, parts = ?, labor = ? WHERE id = ? AND repair_order_id = ?`)
+      .run(description.trim(), partsAmount, laborAmount, itemId, repairOrderId);
+    if (result.changes !== 1) return res.status(404).json({ error: "Repair item not found." });
+    res.json({ success: true, id: itemId, description: description.trim(), parts: partsAmount, labor: laborAmount });
   } catch (err) {
     console.error("Edit repair order item error:", err);
-
-    res.status(500).json({
-      error: "Unable to edit repair item."
-    });
+    res.status(500).json({ error: "Unable to edit repair item." });
   }
 });
 
@@ -6729,7 +6627,7 @@ app.patch("/api/repair-orders/:id/complete", async (req, res) => {
     }
 
     const repairOrder = db.prepare(`
-      SELECT id, status
+      SELECT id, status, quickbooks_invoice_id, amount_paid
       FROM repair_orders
       WHERE id = ?
         AND shop_id = ?
@@ -6879,7 +6777,7 @@ app.delete("/api/repair-orders/:id", (req, res) => {
 
     // Make sure this repair order belongs to the logged-in shop
     const repairOrder = db.prepare(`
-      SELECT id, quickbooks_invoice_id
+      SELECT id, status, quickbooks_invoice_id, amount_paid
       FROM repair_orders
       WHERE id = ?
         AND shop_id = ?
@@ -6888,6 +6786,19 @@ app.delete("/api/repair-orders/:id", (req, res) => {
     if (!repairOrder) {
       return res.status(404).json({
         error: "Repair order not found."
+      });
+    }
+
+    // Financial/completed repair orders are permanent accounting records.
+    const paymentCount = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM repair_order_payments
+      WHERE repair_order_id = ?
+    `).get(repairOrderId);
+
+    if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
+      return res.status(409).json({
+        error: "Completed or paid repair orders cannot be permanently deleted. Keep this order as part of the service and accounting history."
       });
     }
 
