@@ -1239,6 +1239,59 @@ db.prepare(`
       ON DELETE CASCADE
   );
 `).run();
+// ===== S&K AUTO - CUSTOMER COMMUNICATION HISTORY =====
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS customer_communication_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER NOT NULL,
+    repair_order_id INTEGER,
+    customer_id INTEGER,
+    recommendation_id INTEGER,
+    channel TEXT NOT NULL,
+    communication_type TEXT NOT NULL,
+    destination TEXT,
+    status TEXT NOT NULL DEFAULT 'sent',
+    provider_message_id TEXT,
+    dedupe_key TEXT UNIQUE,
+    details TEXT,
+    sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`).run();
+
+function recordCustomerCommunication({
+  shopId,
+  repairOrderId = null,
+  customerId = null,
+  recommendationId = null,
+  channel,
+  type,
+  destination = null,
+  status = 'sent',
+  providerMessageId = null,
+  dedupeKey = null,
+  details = null
+}) {
+  db.prepare(`
+    INSERT OR IGNORE INTO customer_communication_history (
+      shop_id, repair_order_id, customer_id, recommendation_id,
+      channel, communication_type, destination, status,
+      provider_message_id, dedupe_key, details
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    shopId, repairOrderId, customerId, recommendationId,
+    channel, type, destination, status,
+    providerMessageId, dedupeKey, details
+  );
+}
+
+function communicationAlreadySent(dedupeKey) {
+  if (!dedupeKey) return false;
+  return !!db.prepare(`
+    SELECT id FROM customer_communication_history
+    WHERE dedupe_key = ? AND status = 'sent'
+  `).get(dedupeKey);
+}
+
 // ===== S&K AUTO SaaS - CREATE PRIMARY SHOP =====
 db.prepare(`
   INSERT OR IGNORE INTO shops (
@@ -4546,7 +4599,8 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
       LEFT JOIN customers c ON r.customer_id = c.id
       LEFT JOIN vehicles v ON r.vehicle_id = v.id
       WHERE r.id = ?
-    `).get(req.params.id);
+        AND r.shop_id = ?
+    `).get(req.params.id, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -5260,6 +5314,9 @@ app.get("/api/customer-invoice/:token", (req, res) => {
 // ===== S&K AUTO - EMAIL INVOICE =====
 app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+
     const repairOrder = db.prepare(`
       SELECT
         r.id,
@@ -5307,8 +5364,8 @@ if (!invoiceToken) {
     db.prepare(`
         UPDATE repair_orders
         SET invoice_token = ?
-        WHERE id = ?
-    `).run(invoiceToken, repairOrder.id);
+        WHERE id = ? AND shop_id = ?
+    `).run(invoiceToken, repairOrder.id, shopId);
 }
 
 const invoiceUrl =
@@ -5499,6 +5556,15 @@ db.prepare(`
   repairOrder.id,
   repairOrder.customer_email
 );
+recordCustomerCommunication({
+  shopId,
+  repairOrderId: repairOrder.id,
+  customerId: repairOrder.customer_id,
+  channel: 'email',
+  type: 'invoice',
+  destination: repairOrder.customer_email,
+  details: `Balance due: $${balance.toFixed(2)}`
+});
     res.json({
       success: true,
       email: repairOrder.customer_email
@@ -5780,17 +5846,17 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
 // ===== S&K AUTO - GET INVOICE EMAIL HISTORY =====
 app.get("/api/repair-orders/:id/invoice-email-history", (req, res) => {
   try {
-    const repairOrderId = req.params.id;
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const repairOrderId = Number(req.params.id);
 
     const history = db.prepare(`
-      SELECT
-        id,
-        email,
-        sent_at
-      FROM invoice_email_history
-      WHERE repair_order_id = ?
-      ORDER BY id DESC
-    `).all(repairOrderId);
+      SELECT h.id, h.email, h.sent_at
+      FROM invoice_email_history h
+      JOIN repair_orders r ON r.id = h.repair_order_id
+      WHERE h.repair_order_id = ? AND r.shop_id = ?
+      ORDER BY h.id DESC
+    `).all(repairOrderId, shopId);
 
     res.json(history);
 
@@ -6694,7 +6760,8 @@ try {
           AND r.shop_id = ?
     `).get(req.params.id, shopId);
 
-    if (readyInfo && readyInfo.customer_phone) {
+    const readyDedupeKey = `vehicle-ready:${shopId}:${req.params.id}`;
+    if (readyInfo && readyInfo.customer_phone && !communicationAlreadySent(readyDedupeKey)) {
         const customerPhone =
             normalizePhoneNumber(readyInfo.customer_phone);
 
@@ -6712,7 +6779,7 @@ try {
                 .filter(Boolean)
                 .join(" ");
 
-            await twilioClient.messages.create({
+            const message = await twilioClient.messages.create({
                 body:
                     `S&K Auto: ` +
                     `${customerFirstName ? customerFirstName + ", " : ""}` +
@@ -6724,6 +6791,15 @@ try {
                 to: customerPhone
             });
 
+            recordCustomerCommunication({
+                shopId,
+                repairOrderId: Number(req.params.id),
+                channel: 'sms',
+                type: 'vehicle_ready',
+                destination: readyInfo.customer_phone,
+                providerMessageId: message.sid,
+                dedupeKey: readyDedupeKey
+            });
             console.log(
                 `Vehicle ready SMS sent for repair order ${req.params.id}`
             );
@@ -7463,6 +7539,105 @@ twilioClient.messages.create({
     res.status(500).json({
       error: "Unable to create estimate."
     });
+  }
+});
+
+// ===== S&K AUTO - SECURE CUSTOMER COMMUNICATION ROUTES =====
+app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const repairOrderId = Number(req.params.id);
+
+    const order = db.prepare(`
+      SELECT r.id, r.customer_id, r.amount_paid, r.invoice_token,
+             c.name AS customer_name, c.phone AS customer_phone
+      FROM repair_orders r
+      JOIN customers c ON c.id = r.customer_id
+      WHERE r.id = ? AND r.shop_id = ?
+    `).get(repairOrderId, shopId);
+    if (!order) return res.status(404).json({ error: 'Repair order not found.' });
+    if (!order.customer_phone) return res.status(400).json({ error: 'This customer does not have a phone number.' });
+
+    const phone = normalizePhoneNumber(order.customer_phone);
+    if (!phone) return res.status(400).json({ error: 'Customer phone number is invalid.' });
+
+    let invoiceToken = order.invoice_token;
+    if (!invoiceToken) {
+      invoiceToken = require('crypto').randomBytes(32).toString('hex');
+      db.prepare(`UPDATE repair_orders SET invoice_token = ? WHERE id = ? AND shop_id = ?`)
+        .run(invoiceToken, repairOrderId, shopId);
+    }
+
+    const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(repairOrderId);
+    const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
+    const total = Math.round((subtotal * 1.075) * 100) / 100;
+    const amountPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
+    const balance = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
+    const invoiceUrl = `https://skautohutch.com/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
+    const firstName = String(order.customer_name || '').trim().split(/\s+/)[0];
+
+    const body = balance <= 0.009
+      ? `S&K Auto: ${firstName ? firstName + ', ' : ''}payment received - thank you! Invoice #${repairOrderId} is paid in full. View invoice: ${invoiceUrl}`
+      : `S&K Auto: ${firstName ? firstName + ', ' : ''}your invoice #${repairOrderId} is ready. Total: $${total.toFixed(2)}. Balance due: $${balance.toFixed(2)}. View/pay: ${invoiceUrl}`;
+
+    const message = await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: phone });
+    recordCustomerCommunication({ shopId, repairOrderId, customerId: order.customer_id, channel: 'sms', type: 'invoice', destination: order.customer_phone, providerMessageId: message.sid, details: `Balance due: $${balance.toFixed(2)}` });
+    res.json({ success: true, message: 'Invoice text sent successfully.' });
+  } catch (err) {
+    console.error('Secure invoice SMS failed:', err);
+    res.status(500).json({ error: 'Unable to send invoice text.' });
+  }
+});
+
+app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/text-authorization', async (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const repairOrderId = Number(req.params.repairOrderId);
+    const recommendationId = Number(req.params.recommendationId);
+
+    const rec = db.prepare(`
+      SELECT rr.id, rr.description, rr.parts, rr.labor, rr.authorization_token, rr.status,
+             r.customer_id, c.name AS customer_name, c.phone AS customer_phone
+      FROM repair_order_recommendations rr
+      JOIN repair_orders r ON r.id = rr.repair_order_id
+      JOIN customers c ON c.id = r.customer_id
+      WHERE rr.id = ? AND rr.repair_order_id = ? AND r.shop_id = ?
+    `).get(recommendationId, repairOrderId, shopId);
+    if (!rec) return res.status(404).json({ error: 'Recommended repair not found.' });
+    if ((rec.status || '').toLowerCase() !== 'pending') return res.status(409).json({ error: 'This recommendation has already been decided.' });
+    const phone = normalizePhoneNumber(rec.customer_phone);
+    if (!phone) return res.status(400).json({ error: 'Customer phone number is missing or invalid.' });
+
+    const total = Number(rec.parts || 0) + Number(rec.labor || 0);
+    const url = `https://skautohutch.com/repair-authorization.html?order=${encodeURIComponent(repairOrderId)}&repair=${encodeURIComponent(recommendationId)}&token=${encodeURIComponent(rec.authorization_token)}`;
+    const firstName = String(rec.customer_name || '').trim().split(/\s+/)[0];
+    const body = `S&K Auto: ${firstName ? firstName + ', ' : ''}we recommend: ${rec.description}. Total: $${total.toFixed(2)}. Review and approve or decline here: ${url}`;
+    const message = await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: phone });
+    recordCustomerCommunication({ shopId, repairOrderId, customerId: rec.customer_id, recommendationId, channel: 'sms', type: 'repair_authorization', destination: rec.customer_phone, providerMessageId: message.sid });
+    res.json({ success: true, message: 'Authorization text sent successfully.' });
+  } catch (err) {
+    console.error('Secure authorization SMS failed:', err);
+    res.status(500).json({ error: 'Unable to send authorization text.' });
+  }
+});
+
+app.get('/api/repair-orders/:id/communication-history', (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const rows = db.prepare(`
+      SELECT id, channel, communication_type, destination, status, details, sent_at
+      FROM customer_communication_history
+      WHERE repair_order_id = ? AND shop_id = ?
+      ORDER BY id DESC
+      LIMIT 100
+    `).all(Number(req.params.id), shopId);
+    res.json(rows);
+  } catch (err) {
+    console.error('Communication history error:', err);
+    res.status(500).json({ error: 'Unable to load communication history.' });
   }
 });
 
