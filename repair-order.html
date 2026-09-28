@@ -228,7 +228,6 @@ button {
     style="padding:8px 12px; margin-left:8px; border-radius:5px;">
     <option value="waiting">Waiting</option>
     <option value="in_progress">In Progress</option>
-    <option value="completed">Completed</option>
     <option value="cancelled">Cancelled</option>
   </select>
 
@@ -1016,6 +1015,22 @@ if (order.status === 'completed' && order.completed_at) {
 }
 statusSelect.value =
   order.status || 'waiting';
+
+// Completed/invoiced/paid repair orders are accounting records and are locked.
+const workflowLocked =
+  order.status === 'completed' ||
+  Boolean(order.quickbooks_invoice_id) ||
+  Number(order.amount_paid || 0) > 0;
+
+if (workflowLocked) {
+  statusSelect.disabled = true;
+  document.getElementById('updateStatusBtn').style.display = 'none';
+  const addItemSection = document.getElementById('addItemSection');
+  if (addItemSection) addItemSection.style.display = 'none';
+  const recommendedSection = document.getElementById('recommendedRepairsSection');
+  if (recommendedSection) recommendedSection.style.display = 'none';
+  if (deleteRepairBtn) deleteRepairBtn.style.display = 'none';
+}
     document.getElementById('customerConcern').value =
     order.customer_concern || '';
    document.getElementById('technicianDiagnosis').value =
@@ -1289,30 +1304,17 @@ if (order.authorized_at) {
   <td>${money(labor)}</td>
   <td>${money(itemTotal)}</td>
   <td>
-   
- <td>
-  <button
-    type="button"
-    class="editItemBtn"
-    data-item-id="${item.id}"
-    style="background:#0b4dbb;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;margin-right:5px;">
-    Edit
-  </button>
-
-  <button
-    type="button"
-    class="deleteItemBtn"
-    data-item-id="${item.id}"
-    style="background:#dc3545;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;">
-    Delete
-  </button>
-</td>
+    ${workflowLocked ? '<span style="color:#6b7280;font-weight:bold;">Locked</span>' : `
+      <button type="button" class="editItemBtn" data-item-id="${item.id}" style="background:#0b4dbb;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;margin-right:5px;">Edit</button>
+      <button type="button" class="deleteItemBtn" data-item-id="${item.id}" style="background:#dc3545;color:white;border:none;padding:7px 12px;border-radius:5px;font-weight:bold;cursor:pointer;">Delete</button>
+    `}
+  </td>
 `;
         itemsBody.appendChild(row);
         const editButton =
   row.querySelector('.editItemBtn');
 
-editButton.addEventListener('click', async () => {
+if (editButton) editButton.addEventListener('click', async () => {
 
   const newDescription =
     prompt('Repair description:', item.description || '');
@@ -1400,7 +1402,7 @@ editButton.addEventListener('click', async () => {
 const deleteButton =
   row.querySelector('.deleteItemBtn');
 
-deleteButton.addEventListener('click', async () => {
+if (deleteButton) deleteButton.addEventListener('click', async () => {
 
   const confirmed =
     confirm('Are you sure you want to delete this repair item?');
