@@ -8150,7 +8150,7 @@ app.get('/api/stripe-connect/status', requireLoggedInOwner, async (req, res) => 
     }
 
     const account = await stripeRequest(
-      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant&include[]=requirements`
+      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include=${encodeURIComponent('configuration.merchant')}&include=${encodeURIComponent('requirements')}`
     );
     const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
     const connected = cardStatus === 'active';
@@ -8268,7 +8268,7 @@ app.get('/stripe-connect/return', requireLoggedInOwner, async (req, res) => {
     const shop = db.prepare(`SELECT stripe_account_id FROM shops WHERE id = ?`).get(shopId);
     if (shop?.stripe_account_id) {
       const account = await stripeRequest(
-        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant`
+        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include=${encodeURIComponent('configuration.merchant')}`
       );
       const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
       if (cardStatus === 'active') {
