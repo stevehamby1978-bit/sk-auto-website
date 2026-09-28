@@ -2580,10 +2580,21 @@ app.get('/api/estimates/:token', (req, res) => {
         v.make AS vehicle_make,
         v.model AS vehicle_model,
         v.vin AS vehicle_vin,
-        v.mileage AS vehicle_mileage
+        v.mileage AS vehicle_mileage,
+        s.name AS shop_name,
+        s.phone AS shop_phone,
+        s.email AS shop_email,
+        s.address AS shop_address,
+        s.city AS shop_city,
+        s.state AS shop_state,
+        s.zip AS shop_zip,
+        s.tagline AS shop_tagline,
+        s.website AS shop_website,
+        s.logo_filename AS shop_logo_filename
       FROM estimates e
       LEFT JOIN customers c ON e.customer_id = c.id
       LEFT JOIN vehicles v ON e.vehicle_id = v.id
+      LEFT JOIN shops s ON e.shop_id = s.id
       WHERE e.token = ?
     `).get(req.params.token);
 if (!estimate) {
@@ -2610,6 +2621,13 @@ estimate.tax = Math.round(subtotal * taxRate * 100) / 100;
 
 estimate.total =
     Math.round((subtotal + estimate.tax) * 100) / 100;
+
+// Public estimate links are not tied to an employee session, so return only
+// the branding for the shop that owns this estimate.
+estimate.shop_logo_url = estimate.shop_logo_filename
+    ? `/api/shop-logo/${encodeURIComponent(estimate.shop_logo_filename)}`
+    : null;
+delete estimate.shop_logo_filename;
 
     res.json(estimate);
 
