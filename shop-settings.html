@@ -27,6 +27,12 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:
 </div><button type="submit" style="margin-top:18px">Save Shop Profile</button><div id="profileMessage" class="message"></div></form>
 </section>
 <section class="card"><h2>Shop Logo</h2><div class="logo-row"><div id="logoPreview" class="logo-preview">No shop logo uploaded</div><div style="flex:1;min-width:240px"><form id="logoForm"><label for="logo">Upload Logo</label><input id="logo" name="logo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" required><div class="hint">PNG, JPG or WebP works best. This logo is stored separately for this shop and does not expose customer-uploaded images.</div><button type="submit" style="margin-top:14px">Upload Logo</button><div id="logoMessage" class="message"></div></form></div></div></section>
+<section class="card"><h2>Integrated Payments · Stripe Connect</h2>
+<p class="lead" style="margin-top:0">Connect this shop's own Stripe account so customer invoice payments deposit directly to this shop. Each Garavex shop connects separately.</p>
+<div id="stripeStatus" class="hint" style="font-size:15px;margin-bottom:14px">Checking Stripe status...</div>
+<button type="button" id="stripeConnectBtn">Connect Stripe</button>
+<div id="stripeMessage" class="message"></div>
+</section>
 <div class="copyright">Powered by Garavex · © 2026 S&amp;K Auto. All rights reserved.</div>
 </main>
 <script>
@@ -35,6 +41,26 @@ function showMessage(id,text,ok){const el=document.getElementById(id);el.textCon
 async function loadProfile(){try{const r=await fetch('/api/shop-profile');const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to load shop profile.');fields.forEach(k=>document.getElementById(k).value=d[k]||'');const preview=document.getElementById('logoPreview');preview.innerHTML=d.logo_url?`<img src="${d.logo_url}" alt="Shop logo">`:'No shop logo uploaded';}catch(e){showMessage('profileMessage',e.message,false)}}
 document.getElementById('profileForm').addEventListener('submit',async e=>{e.preventDefault();const body={};fields.forEach(k=>body[k]=document.getElementById(k).value.trim());try{const r=await fetch('/api/shop-profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to save shop profile.');showMessage('profileMessage','Shop profile saved successfully.',true);await loadProfile();}catch(err){showMessage('profileMessage',err.message,false)}});
 document.getElementById('logoForm').addEventListener('submit',async e=>{e.preventDefault();const file=document.getElementById('logo').files[0];if(!file)return;const fd=new FormData();fd.append('logo',file);try{const r=await fetch('/api/shop-profile/logo',{method:'POST',body:fd});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to upload logo.');document.getElementById('logoPreview').innerHTML=`<img src="${d.logo_url}?v=${Date.now()}" alt="Shop logo">`;showMessage('logoMessage','Shop logo uploaded successfully.',true);document.getElementById('logo').value='';}catch(err){showMessage('logoMessage',err.message,false)}});
+async function loadStripeStatus(){
+  const status=document.getElementById('stripeStatus');
+  const btn=document.getElementById('stripeConnectBtn');
+  try{
+    const r=await fetch('/api/stripe/status'); const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Unable to check Stripe.');
+    if(d.onboarding_complete&&d.charges_enabled){status.textContent='✓ Stripe connected — online card payments are enabled.';btn.textContent='Manage / Update Stripe';}
+    else if(d.connected){status.textContent='Stripe account created — finish onboarding to accept payments.';btn.textContent='Continue Stripe Setup';}
+    else{status.textContent='Stripe is not connected for this shop.';btn.textContent='Connect Stripe';}
+  }catch(e){status.textContent=e.message;}
+}
+document.getElementById('stripeConnectBtn').addEventListener('click',async()=>{
+  const btn=document.getElementById('stripeConnectBtn'); btn.disabled=true;
+  try{const r=await fetch('/api/stripe/connect',{method:'POST'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Unable to connect Stripe.');window.location.href=d.url;}
+  catch(e){showMessage('stripeMessage',e.message,false);btn.disabled=false;}
+});
+const stripeParam=new URLSearchParams(location.search).get('stripe');
+if(stripeParam==='return')showMessage('stripeMessage','Returned from Stripe. Checking account status...',true);
+if(stripeParam==='refresh')showMessage('stripeMessage','Stripe setup needs to be continued.',false);
+loadStripeStatus();
 loadProfile();
 </script>
 </body></html>
