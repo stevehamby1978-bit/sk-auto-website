@@ -8212,14 +8212,18 @@ app.post('/api/stripe-connect/start', requireLoggedInOwner, async (req, res) => 
     }
 
     const base = requestBaseUrl(req);
-    const link = await stripeRequest('/v1/account_links', {
+    const link = await stripeRequest('/v2/core/account_links', {
       method: 'POST',
-      form: true,
       body: {
         account: accountId,
-        refresh_url: `${base}/stripe-connect/refresh`,
-        return_url: `${base}/stripe-connect/return`,
-        type: 'account_onboarding'
+        use_case: {
+          type: 'account_onboarding',
+          account_onboarding: {
+            configurations: ['merchant'],
+            refresh_url: `${base}/stripe-connect/refresh`,
+            return_url: `${base}/stripe-connect/return`
+          }
+        }
       }
     });
 
@@ -8237,14 +8241,18 @@ app.get('/stripe-connect/refresh', requireLoggedInOwner, async (req, res) => {
     if (!shop?.stripe_account_id) return res.redirect('/shop-settings.html?stripe=not-started');
 
     const base = requestBaseUrl(req);
-    const link = await stripeRequest('/v1/account_links', {
+    const link = await stripeRequest('/v2/core/account_links', {
       method: 'POST',
-      form: true,
       body: {
         account: shop.stripe_account_id,
-        refresh_url: `${base}/stripe-connect/refresh`,
-        return_url: `${base}/stripe-connect/return`,
-        type: 'account_onboarding'
+        use_case: {
+          type: 'account_onboarding',
+          account_onboarding: {
+            configurations: ['merchant'],
+            refresh_url: `${base}/stripe-connect/refresh`,
+            return_url: `${base}/stripe-connect/return`
+          }
+        }
       }
     });
     return res.redirect(link.url);
