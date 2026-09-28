@@ -7,154 +7,11 @@
   <title>S&K Auto | Customers</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
 
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #111;
-      color: #222;
-    }
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.page{max-width:1200px;margin:auto;min-height:100vh}.header{background:#15191e;border-bottom:3px solid var(--accent);padding:20px 26px}.header h1{margin:0;font-size:29px}.header p{margin:5px 0 0;color:var(--muted)}.content{padding:26px 18px 50px}.toolbar{display:flex;gap:11px;align-items:center;margin-bottom:20px;flex-wrap:wrap}.search{flex:1;min-width:250px;padding:12px 13px;font-size:15px;border:1px solid #46505a;border-radius:7px;background:#171b20;color:#fff}.back-btn,.view-btn{display:inline-block;padding:11px 15px;background:#303841;color:#fff;text-decoration:none;border:0;border-radius:7px;font-weight:700;cursor:pointer}.view-btn{background:var(--accent)}.customer-count{margin-bottom:14px;font-weight:bold;color:var(--muted)}.customer-list{display:grid;gap:12px}.customer-card,.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}.customer-card{border-left:5px solid var(--accent);display:flex;justify-content:space-between;align-items:center;gap:20px}.customer-info h2{margin:0 0 8px;font-size:20px}.customer-info p{margin:4px 0;color:#c2c9d0}.stats{margin-top:10px;font-size:14px;font-weight:bold;color:#e4e8ec}.message{background:var(--panel);border:1px solid var(--line);padding:25px;border-radius:9px;text-align:center;color:var(--muted)}#addCustomerForm{margin-bottom:20px}#addCustomerForm .search{width:100%;margin-bottom:0}@media(max-width:650px){.content{padding:18px}.customer-card{flex-direction:column;align-items:stretch}.view-btn{text-align:center}.toolbar>*{width:100%}}
 
-    .page {
-      max-width: 1200px;
-      margin: 0 auto;
-      min-height: 100vh;
-      background: #f4f4f4;
-    }
-
-    .header {
-      background: #151515;
-      color: white;
-      padding: 24px 30px;
-      border-bottom: 4px solid #ef3e23;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 30px;
-    }
-
-    .header p {
-      margin: 6px 0 0;
-      color: #ccc;
-    }
-
-    .content {
-      padding: 30px;
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      margin-bottom: 25px;
-      flex-wrap: wrap;
-    }
-
-    .search {
-      flex: 1;
-      min-width: 250px;
-      padding: 13px 15px;
-      font-size: 16px;
-      border: 1px solid #bbb;
-      border-radius: 6px;
-    }
-
-    .back-btn {
-      display: inline-block;
-      padding: 12px 18px;
-      background: #333;
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      font-weight: bold;
-    }
-
-    .back-btn:hover {
-      background: #555;
-    }
-
-    .customer-count {
-      margin-bottom: 15px;
-      font-weight: bold;
-      color: #555;
-    }
-
-    .customer-list {
-      display: grid;
-      gap: 14px;
-    }
-
-    .customer-card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.10);
-      border-left: 5px solid #ef3e23;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .customer-info h2 {
-      margin: 0 0 8px;
-      font-size: 20px;
-    }
-
-    .customer-info p {
-      margin: 4px 0;
-      color: #555;
-    }
-
-    .stats {
-      margin-top: 10px;
-      font-size: 14px;
-      font-weight: bold;
-      color: #333;
-    }
-
-    .view-btn {
-      display: inline-block;
-      padding: 10px 16px;
-      background: #ef3e23;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-      font-weight: bold;
-      white-space: nowrap;
-    }
-
-    .view-btn:hover {
-      background: #c9321d;
-    }
-
-    .message {
-      background: white;
-      padding: 25px;
-      border-radius: 8px;
-      text-align: center;
-      color: #666;
-    }
-
-    @media(max-width: 650px) {
-      .content {
-        padding: 18px;
-      }
-
-      .customer-card {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .view-btn {
-        text-align: center;
-      }
-    }
-  </style>
+</style>
 </head>
 
 <body>
@@ -182,9 +39,8 @@
   onclick="showAddCustomer()">
   + Add Customer
 </button>
-        <a href="repair-orders.html" class="back-btn">
-          Repair Orders
-        </a>
+        <a href="repair-orders.html" class="back-btn">Repair Orders</a>
+        <a href="dashboard.html" class="back-btn">Dashboard</a>
 
       </div>
 <div
