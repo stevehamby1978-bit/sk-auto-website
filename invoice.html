@@ -1246,20 +1246,10 @@ if (textInvoiceBtn) {
             textInvoiceBtn.disabled = true;
             textInvoiceBtn.textContent = 'Sending...';
 
-            const response = await fetch('/api/text-invoice', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    phone: currentInvoice.customer_phone,
-                    customerName: currentInvoice.customer_name,
-                    invoiceNumber: currentInvoice.invoice_number,
-                    total: currentInvoice.total,
-                    balanceDue: currentInvoice.balance_due,
-                    invoiceUrl: window.location.href
-                })
-            });
+            const response = await fetch(
+                '/api/repair-orders/' + encodeURIComponent(id) + '/text-invoice',
+                { method: 'POST' }
+            );
 
             const result = await response.json();
 
