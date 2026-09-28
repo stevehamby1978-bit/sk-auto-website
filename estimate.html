@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>S&K Auto | Vehicle Repair Estimate</title>
+  <title>Vehicle Repair Estimate</title>
   <style>
     *{box-sizing:border-box} :root{--accent:#e44b2e;--dark:#20252b;--ink:#1f2933;--muted:#667085;--line:#e5e7eb;--soft:#f7f8fa;--ok:#137333;--bad:#b42318}
     body{margin:0;padding:28px 14px;background:#171b20;font-family:Arial,Helvetica,sans-serif;color:var(--ink)}
@@ -32,8 +32,8 @@
   <div id="error" class="error" style="display:none;">Unable to load this estimate.</div>
   <div id="estimateContent" style="display:none;">
     <div class="header">
-      <img src="ChatGPT Image Aug 9, 2026, 02_51_46 PM.png" alt="S&K Auto" class="logo">
-      <div class="business-info"><h1>S&amp;K Auto</h1><span class="tagline">The Art of Automotive Repair</span><br>3107 Homestead<br>Hutchinson, KS 67502<br>(620) 899-0425</div>
+      <img id="shopLogo" alt="Shop logo" class="logo" style="display:none;">
+      <div class="business-info"><h1 id="shopName"></h1><span id="shopTagline" class="tagline"></span><div id="shopAddress"></div><div id="shopContact"></div><div id="shopWebsite"></div></div>
     </div>
     <div class="title-row">
       <div class="estimate-title">VEHICLE REPAIR ESTIMATE</div>
@@ -49,12 +49,12 @@
     <div class="summary-wrap"><div class="totals"><div class="total-row"><span>Subtotal</span><strong id="subtotal">$0.00</strong></div><div class="total-row"><span>Tax</span><strong id="tax">$0.00</strong></div><div class="total-row grand-total"><span>ESTIMATE TOTAL</span><span id="total">$0.00</span></div></div></div>
     <div class="notes"><h3>Estimate Notes</h3><div id="notes"></div></div>
     <div class="approval">
-      <h3>Customer Authorization</h3><p>Please review the repairs and estimated total above. Choose Approve to authorize S&amp;K Auto to proceed with the work shown on this estimate, or Decline if you do not wish to authorize it.</p>
+      <h3>Customer Authorization</h3><p>Please review the repairs and estimated total above. Choose Approve to authorize <span id="authorizationShopName">the repair shop</span> to proceed with the work shown on this estimate, or Decline if you do not wish to authorize it.</p>
       <div id="responseButtons" class="buttons"><button type="button" id="approveButton" class="approve" onclick="respondToEstimate('approved')">✓ Approve Estimate</button><button type="button" id="declineButton" class="decline" onclick="respondToEstimate('declined')">Decline Estimate</button></div>
       <div id="responseMessage"></div>
     </div>
     <div class="buttons"><button class="print-button" onclick="window.print()">Print / Save PDF</button><button class="back-button" onclick="window.close()">Close</button></div>
-    <div class="disclaimer">This document is an estimate based on the repairs and information shown above. Additional repairs or changes should be authorized separately before work outside this estimate is performed.</div>
+    <div class="disclaimer">This document is an estimate based on the repairs and information shown above. Additional repairs or changes should be authorized separately before work outside this estimate is performed.<div style="margin-top:12px;text-align:center;font-size:12px;">Powered by Garavex · © 2026 Garavex</div></div>
   </div>
 </div></div>
 <script>
@@ -77,6 +77,34 @@
       }
 
       const estimate = await response.json();
+
+      const shopName = estimate.shop_name || 'Repair Shop';
+      document.title = shopName + ' | Vehicle Repair Estimate';
+      document.getElementById('shopName').textContent = shopName;
+      document.getElementById('authorizationShopName').textContent = shopName;
+
+      const tagline = document.getElementById('shopTagline');
+      tagline.textContent = estimate.shop_tagline || '';
+      tagline.style.display = estimate.shop_tagline ? '' : 'none';
+
+      const addressParts = [estimate.shop_address, [estimate.shop_city, estimate.shop_state].filter(Boolean).join(', '), estimate.shop_zip].filter(Boolean);
+      document.getElementById('shopAddress').textContent = addressParts.join(' · ');
+
+      const contactParts = [estimate.shop_phone, estimate.shop_email].filter(Boolean);
+      document.getElementById('shopContact').textContent = contactParts.join(' · ');
+
+      const website = document.getElementById('shopWebsite');
+      website.textContent = estimate.shop_website || '';
+      website.style.display = estimate.shop_website ? '' : 'none';
+
+      const logo = document.getElementById('shopLogo');
+      if (estimate.shop_logo_url) {
+        logo.src = estimate.shop_logo_url;
+        logo.alt = shopName + ' logo';
+        logo.style.display = 'block';
+      } else {
+        logo.style.display = 'none';
+      }
 
       document.getElementById('customerName').textContent =
         estimate.customer_name || '';
