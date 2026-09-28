@@ -944,6 +944,7 @@ const protectedPages = [
 app.get(protectedPages, requireLogin);
 // ===== S&K AUTO - OWNER ONLY PAGES =====
 app.get('/employees.html', requireLogin, requireOwner);
+app.get('/shop-settings.html', requireLogin, requireOwner);
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
@@ -1040,6 +1041,21 @@ quickBooksShopColumns.forEach(([name, type]) => {
     if (!existingShopColumns.has(name)) {
         db.exec(`ALTER TABLE shops ADD COLUMN ${name} ${type}`);
         console.log(`Added shops.${name}`);
+    }
+});
+
+// ===== SHOP PROFILE / WHITE-LABEL COLUMNS =====
+const shopProfileColumns = [
+    ['tagline', 'TEXT'],
+    ['website', 'TEXT'],
+    ['logo_filename', 'TEXT']
+];
+
+shopProfileColumns.forEach(([name, type]) => {
+    if (!existingShopColumns.has(name)) {
+        db.exec(`ALTER TABLE shops ADD COLUMN ${name} ${type}`);
+        console.log(`Added shops.${name}`);
+        existingShopColumns.add(name);
     }
 });
 db.exec(`
@@ -3098,6 +3114,113 @@ app.get("/api/current-employee", (req, res) => {
   res.json({
     employee: req.session.employee
   });
+});
+
+// ===== SHOP PROFILE / WHITE-LABEL FOUNDATION =====
+app.get('/api/shop-profile', (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: 'Not logged in.' });
+
+    const shop = db.prepare(`
+      SELECT id, name, slug, phone, email, address, city, state, zip,
+             tagline, website, logo_filename, active, created_at
+      FROM shops
+      WHERE id = ?
+      LIMIT 1
+    `).get(shopId);
+
+    if (!shop) return res.status(404).json({ error: 'Shop not found.' });
+
+    res.json({
+      ...shop,
+      logo_url: shop.logo_filename
+        ? `/api/shop-logo/${encodeURIComponent(shop.logo_filename)}`
+        : null
+    });
+  } catch (err) {
+    console.error('Get shop profile error:', err);
+    res.status(500).json({ error: 'Unable to load shop profile.' });
+  }
+});
+
+app.put('/api/shop-profile', requireOwner, (req, res) => {
+  try {
+    const shopId = req.session.employee.shop_id;
+    const { name, phone, email, address, city, state, zip, tagline, website } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Shop name is required.' });
+    }
+
+    db.prepare(`
+      UPDATE shops
+      SET name = ?, phone = ?, email = ?, address = ?, city = ?, state = ?,
+          zip = ?, tagline = ?, website = ?
+      WHERE id = ?
+    `).run(
+      String(name).trim(),
+      String(phone || '').trim(),
+      String(email || '').trim().toLowerCase(),
+      String(address || '').trim(),
+      String(city || '').trim(),
+      String(state || '').trim().toUpperCase(),
+      String(zip || '').trim(),
+      String(tagline || '').trim(),
+      String(website || '').trim(),
+      shopId
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update shop profile error:', err);
+    res.status(500).json({ error: 'Unable to update shop profile.' });
+  }
+});
+
+app.post('/api/shop-profile/logo', requireOwner, upload.single('logo'), (req, res) => {
+  try {
+    const shopId = req.session.employee.shop_id;
+    if (!req.file) return res.status(400).json({ error: 'Please select a logo image.' });
+
+    const old = db.prepare('SELECT logo_filename FROM shops WHERE id = ?').get(shopId);
+    db.prepare('UPDATE shops SET logo_filename = ? WHERE id = ?').run(req.file.filename, shopId);
+
+    // Remove the previous shop logo only. Other uploaded customer images are untouched.
+    if (old?.logo_filename && old.logo_filename !== req.file.filename) {
+      const oldPath = path.join(uploadsDir, path.basename(old.logo_filename));
+      try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch (cleanupErr) {
+        console.warn('Unable to remove old shop logo:', cleanupErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      logo_url: `/api/shop-logo/${encodeURIComponent(req.file.filename)}`
+    });
+  } catch (err) {
+    console.error('Upload shop logo error:', err);
+    res.status(500).json({ error: 'Unable to upload shop logo.' });
+  }
+});
+
+// Public logo delivery is intentionally restricted to filenames currently assigned
+// as a shop logo. This does NOT expose the general uploads directory.
+app.get('/api/shop-logo/:filename', (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename || '');
+    if (!filename) return res.status(404).end();
+
+    const shop = db.prepare('SELECT id FROM shops WHERE logo_filename = ? LIMIT 1').get(filename);
+    if (!shop) return res.status(404).end();
+
+    const filePath = path.join(uploadsDir, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).end();
+    res.sendFile(filePath);
+  } catch (err) {
+    console.error('Shop logo error:', err);
+    res.status(500).end();
+  }
 });
 
 
