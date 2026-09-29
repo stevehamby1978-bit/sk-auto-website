@@ -20,7 +20,7 @@ body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background
 
     <div class="brand">
       <h1>GARAVEX</h1>
-      <p>Shop Management System</p>
+      <p>Shop Management System</p><p style="margin-top:10px;color:#ffb3a7;font-weight:700;">30-Day Free Trial • No Credit Card Required</p>
     </div>
 
     <form id="registerForm">
@@ -157,7 +157,7 @@ body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background
       </div>
 
       <button id="submitButton" type="submit">
-        Create Shop Account
+        Start 30-Day Free Trial
       </button>
 
       <div id="message"></div>
@@ -254,7 +254,7 @@ body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background
         }
 
         message.textContent =
-          'Shop account created successfully. Redirecting to login...';
+          'Your 30-day Garavex free trial has started. Redirecting to login...';
 
         message.className = 'success';
 
@@ -274,7 +274,7 @@ body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background
       } finally {
 
         submitButton.disabled = false;
-        submitButton.textContent = 'Create Shop Account';
+        submitButton.textContent = 'Start 30-Day Free Trial';
 
       }
     });
