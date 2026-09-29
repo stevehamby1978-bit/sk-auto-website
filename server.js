@@ -29,9 +29,11 @@ const fs = require('fs');
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 
-const STRIPE_WEBHOOK_SECRET =
-  process.env.STRIPE_SANDBOX_WEBHOOK_SECRET ||
-  process.env.STRIPE_WEBHOOK_SECRET;
+// Keep live and sandbox webhook signing secrets separate. Stripe gives each
+// webhook destination its own whsec_ value, so either environment may sign a
+// request that reaches this shared endpoint.
+const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+const STRIPE_SANDBOX_WEBHOOK_SECRET = String(process.env.STRIPE_SANDBOX_WEBHOOK_SECRET || '').trim();
 
 const STRIPE_API_VERSION = '2026-08-26.dahlia';
 
@@ -121,8 +123,9 @@ console.log(`Using booking database: ${dbPath}`);
 // are verified against the exact raw request body.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   try {
-    if (!STRIPE_WEBHOOK_SECRET) {
-      console.error('Stripe webhook error: STRIPE_WEBHOOK_SECRET is not configured.');
+    const webhookSecrets = [STRIPE_WEBHOOK_SECRET, STRIPE_SANDBOX_WEBHOOK_SECRET].filter(Boolean);
+    if (!webhookSecrets.length) {
+      console.error('Stripe webhook error: no Stripe webhook signing secret is configured.');
       return res.status(503).send('Webhook secret is not configured.');
     }
 
@@ -140,17 +143,28 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
     if (!timestamp || !v1.length) return res.status(400).send('Invalid Stripe signature header.');
 
     const payload = req.body.toString('utf8');
-    const expected = crypto.createHmac('sha256', STRIPE_WEBHOOK_SECRET)
-      .update(`${timestamp}.${payload}`, 'utf8')
-      .digest('hex');
-    const valid = v1.some(sig => {
-      try {
-        const a = Buffer.from(expected, 'hex');
-        const b = Buffer.from(sig, 'hex');
-        return a.length === b.length && crypto.timingSafeEqual(a, b);
-      } catch { return false; }
+    const signedPayload = `${timestamp}.${payload}`;
+
+    // Try every configured destination secret. This keeps the production and
+    // sandbox webhook destinations independent without ever replacing one
+    // secret with the other in Railway.
+    const valid = webhookSecrets.some(secret => {
+      const expected = crypto.createHmac('sha256', secret)
+        .update(signedPayload, 'utf8')
+        .digest('hex');
+
+      return v1.some(sig => {
+        try {
+          const a = Buffer.from(expected, 'hex');
+          const b = Buffer.from(sig, 'hex');
+          return a.length === b.length && crypto.timingSafeEqual(a, b);
+        } catch { return false; }
+      });
     });
-    if (!valid) return res.status(400).send('Invalid Stripe signature.');
+    if (!valid) {
+      console.error(`Stripe webhook signature verification failed (${webhookSecrets.length} configured signing secret(s)).`);
+      return res.status(400).send('Invalid Stripe signature.');
+    }
 
     const event = JSON.parse(payload);
     if (event.type !== 'payment_intent.succeeded') return res.json({ received: true });
