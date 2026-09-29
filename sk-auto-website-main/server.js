@@ -988,6 +988,17 @@ app.get(protectedPages, requireLogin);
 // ===== S&K AUTO - OWNER ONLY PAGES =====
 app.get('/employees.html', requireLogin, requireOwner);
 app.get('/shop-settings.html', requireLogin, requireOwner);
+// ===== GARAVEX INVOICE CACHE GUARD =====
+app.use((req, res, next) => {
+  if (req.path === '/invoice.html' || req.path === '/invoice-stripe.html') {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
+// ===== END GARAVEX INVOICE CACHE GUARD =====
+
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
@@ -5678,7 +5689,7 @@ if (!invoiceToken) {
 }
 
 const invoiceUrl =
-    `https://skautohutch.com/invoice.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
+    `https://skautohutch.com/invoice-stripe.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
     const items = db.prepare(`
       SELECT
         description,
@@ -7883,7 +7894,7 @@ app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
     const total = Math.round((subtotal * 1.075) * 100) / 100;
     const amountPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
     const balance = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
-    const invoiceUrl = `https://skautohutch.com/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
+    const invoiceUrl = `https://skautohutch.com/invoice-stripe.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
     const firstName = String(order.customer_name || '').trim().split(/\s+/)[0];
 
     const body = balance <= 0.009
@@ -8150,8 +8161,8 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     const base = `${req.protocol}://${req.get('host')}`;
     const form = new URLSearchParams();
     form.set('mode', 'payment');
-    form.set('success_url', `${base}/invoice.html?token=${encodeURIComponent(token)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`);
-    form.set('cancel_url', `${base}/invoice.html?token=${encodeURIComponent(token)}&stripe=cancelled`);
+    form.set('success_url', `${base}/invoice-stripe.html?token=${encodeURIComponent(token)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`);
+    form.set('cancel_url', `${base}/invoice-stripe.html?token=${encodeURIComponent(token)}&stripe=cancelled`);
     form.set('line_items[0][price_data][currency]', 'usd');
     form.set('line_items[0][price_data][unit_amount]', String(amountCents));
     form.set('line_items[0][price_data][product_data][name]', `S&K Auto Invoice #${order.id}`);

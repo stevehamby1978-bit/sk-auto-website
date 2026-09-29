@@ -332,7 +332,7 @@ if (order.status === 'completed' && order.completed_at) {
 
   viewInvoiceBtn.onclick = () => {
     window.location.href =
-      '/invoice.html?id=' + encodeURIComponent(order.id);
+      '/invoice-stripe.html?id=' + encodeURIComponent(order.id);
   };
 
 } else {
