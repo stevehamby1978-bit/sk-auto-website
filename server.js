@@ -15,6 +15,7 @@ const twilio = require('twilio');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
+const Stripe = require('stripe');
 const SQLiteStore = require('connect-sqlite3')(session);
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -28,6 +29,7 @@ const fs = require('fs');
 
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
 // Stripe creates a different signing secret for each webhook destination.
 // Keep sandbox and live secrets separate, and accept a valid signature from either
@@ -121,50 +123,58 @@ const db = new Database(dbPath);
 console.log(`Using booking database: ${dbPath}`);
 
 // ===== GARAVEX - STRIPE CONNECT WEBHOOK =====
-// IMPORTANT: This route must stay BEFORE express.json() so Stripe signatures
-// are verified against the exact raw request body.
+// IMPORTANT: This route must stay BEFORE express.json(). Stripe requires the
+// exact raw request bytes to verify the Stripe-Signature header.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   try {
     if (!STRIPE_WEBHOOK_SECRETS.length) {
-      console.error('Stripe webhook error: no Stripe webhook signing secret is configured.');
+      console.error('Stripe webhook error: no webhook signing secret is configured.');
       return res.status(503).send('Webhook secret is not configured.');
     }
+    if (!stripe) {
+      console.error('Stripe webhook error: STRIPE_SECRET_KEY is not configured.');
+      return res.status(503).send('Stripe is not configured.');
+    }
 
-    const signature = String(req.headers['stripe-signature'] || '');
+    const signature = req.headers['stripe-signature'];
     if (!signature) return res.status(400).send('Missing Stripe-Signature header.');
+    if (!Buffer.isBuffer(req.body)) {
+      console.error('Stripe webhook error: request body was parsed before signature verification.');
+      return res.status(500).send('Webhook raw body is unavailable.');
+    }
 
-    const parts = Object.fromEntries(
-      signature.split(',').map(part => {
-        const i = part.indexOf('=');
-        return i > 0 ? [part.slice(0, i), part.slice(i + 1)] : ['', ''];
-      }).filter(([k]) => k)
-    );
-    const timestamp = parts.t;
-    const v1 = signature.split(',').filter(p => p.startsWith('v1=')).map(p => p.slice(3));
-    if (!timestamp || !v1.length) return res.status(400).send('Invalid Stripe signature header.');
+    // A live destination and a sandbox destination have different whsec_ values.
+    // Verify independently against every configured signing secret. This allows
+    // the same endpoint URL to receive either environment without one secret
+    // masking the other.
+    let event = null;
+    let lastVerificationError = null;
+    for (const secret of STRIPE_WEBHOOK_SECRETS) {
+      try {
+        event = stripe.webhooks.constructEvent(req.body, signature, secret);
+        break;
+      } catch (err) {
+        lastVerificationError = err;
+      }
+    }
 
-    const payload = req.body.toString('utf8');
-    const valid = STRIPE_WEBHOOK_SECRETS.some(secret => {
-      const expected = crypto.createHmac('sha256', secret)
-        .update(`${timestamp}.${payload}`, 'utf8')
-        .digest('hex');
-      return v1.some(sig => {
-        try {
-          const a = Buffer.from(expected, 'hex');
-          const b = Buffer.from(sig, 'hex');
-          return a.length === b.length && crypto.timingSafeEqual(a, b);
-        } catch { return false; }
-      });
-    });
-    if (!valid) return res.status(400).send('Invalid Stripe signature.');
+    if (!event) {
+      console.error('Stripe webhook signature verification failed:', lastVerificationError?.message || 'unknown error');
+      return res.status(400).send('Invalid Stripe signature.');
+    }
 
-    const event = JSON.parse(payload);
-    if (event.type !== 'payment_intent.succeeded') return res.json({ received: true });
+    // Direct charges created on a connected account produce an event.account.
+    // payment_intent.succeeded is the primary event configured for Garavex.
+    if (event.type !== 'payment_intent.succeeded') {
+      return res.json({ received: true, type: event.type });
+    }
 
     const pi = event.data?.object || {};
     const repairOrderId = Number(pi.metadata?.repair_order_id || 0);
     const connectedAccountId = String(event.account || '');
-    if (!repairOrderId || !pi.id) return res.json({ received: true, ignored: true });
+    if (!repairOrderId || !pi.id) {
+      return res.json({ received: true, ignored: true, reason: 'missing repair order metadata' });
+    }
 
     const order = db.prepare(`
       SELECT r.id, r.shop_id, r.amount_paid, s.stripe_account_id
@@ -173,7 +183,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
       WHERE r.id = ?
       LIMIT 1
     `).get(repairOrderId);
-    if (!order) return res.json({ received: true, ignored: true });
+    if (!order) return res.json({ received: true, ignored: true, reason: 'repair order not found' });
+
     if (connectedAccountId && String(order.stripe_account_id || '') !== connectedAccountId) {
       console.error('Stripe webhook account mismatch for repair order', repairOrderId);
       return res.status(400).send('Connected account mismatch.');
@@ -183,7 +194,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
     if (existing) return res.json({ received: true, alreadyRecorded: true });
 
     const amount = Number(pi.amount_received || pi.amount || 0) / 100;
-    if (!(amount > 0)) return res.json({ received: true, ignored: true });
+    if (!(amount > 0)) return res.json({ received: true, ignored: true, reason: 'zero payment amount' });
 
     const { total } = invoiceTotalsForOrder(order.id);
     const newAmountPaid = Math.min(total, Math.round((Number(order.amount_paid || 0) + amount) * 100) / 100);
@@ -197,9 +208,12 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
     });
     tx();
 
+    console.log(`Stripe payment recorded: repair order ${order.id}, payment intent ${pi.id}, amount $${amount.toFixed(2)}`);
     return res.json({ received: true });
   } catch (err) {
-    if (String(err?.message || '').includes('UNIQUE constraint failed')) return res.json({ received: true, alreadyRecorded: true });
+    if (String(err?.message || '').includes('UNIQUE constraint failed')) {
+      return res.json({ received: true, alreadyRecorded: true });
+    }
     console.error('Stripe webhook error:', err);
     return res.status(500).send('Webhook handler failed.');
   }
