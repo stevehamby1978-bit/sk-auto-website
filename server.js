@@ -26,6 +26,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const fs = require('fs');
 
+// ===== GARAVEX - PERMANENT APPLICATION DOMAIN =====
+const GARAVEX_BASE_URL = 'https://app.garavex.com';
+// ===== END GARAVEX - PERMANENT APPLICATION DOMAIN =====
+
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_API_VERSION = '2026-08-26.dahlia';
@@ -174,9 +178,9 @@ app.get(protectedPages, requireLogin);
 app.get('/employees.html', requireLogin, requireOwner);
 app.get('/shop-settings.html', requireLogin, requireOwner);
 
-// ===== GARAVEX / S&K AUTO - HOSTNAME HOME PAGE ROUTING =====
-// app.garavex.com should open the Garavex login instead of the S&K public website.
-// skautohutch.com (and Railway's generated domain) continue to use index.html normally.
+// ===== GARAVEX - DOMAIN ROUTING =====
+// Keep skautohutch.com on the S&K Auto public website, while the Garavex
+// application domain opens the software login page.
 app.get('/', (req, res, next) => {
   const hostname = String(req.hostname || '').toLowerCase();
 
@@ -186,7 +190,7 @@ app.get('/', (req, res, next) => {
 
   return next();
 });
-// ===== END HOSTNAME HOME PAGE ROUTING =====
+// ===== END GARAVEX - DOMAIN ROUTING =====
 
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
@@ -4281,7 +4285,7 @@ app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, 
     }
 
     const receiptUrl =
-      `https://skautohutch.com/receipt.html?orderId=${encodeURIComponent(repairOrderId)}` +
+      `${GARAVEX_BASE_URL}/receipt.html?orderId=${encodeURIComponent(repairOrderId)}` +
       `&paymentId=${encodeURIComponent(paymentId)}`;
 
     const messageBody =
@@ -5660,7 +5664,7 @@ const result = db.prepare(`
 try {
   if (repairOrder.customer_phone) {
     const authorizationUrl =
-      `https://skautohutch.com/repair-authorization.html?order=${encodeURIComponent(req.params.id)}` +
+      `${GARAVEX_BASE_URL}/repair-authorization.html?order=${encodeURIComponent(req.params.id)}` +
       `&repair=${encodeURIComponent(result.lastInsertRowid)}` +
       `&token=${encodeURIComponent(authorizationToken)}`;
 
@@ -7071,7 +7075,7 @@ WHERE id = ?
     const estimateId = createEstimate();
 // Text the customer their estimate link
 const estimateUrl =
-  `https://skautohutch.com/estimate.html?token=${encodeURIComponent(token)}`;
+  `${GARAVEX_BASE_URL}/estimate.html?token=${encodeURIComponent(token)}`;
 
 const customerMessage =
   `S&K Auto: Hi ${customer.name.trim()}, your vehicle repair estimate is ready. ` +
@@ -7160,7 +7164,7 @@ app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
     const total = Math.round((subtotal * 1.075) * 100) / 100;
     const amountPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
     const balance = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
-    const invoiceUrl = `https://skautohutch.com/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
+    const invoiceUrl = `${GARAVEX_BASE_URL}/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
     const firstName = String(order.customer_name || '').trim().split(/\s+/)[0];
 
     const body = balance <= 0.009
@@ -7197,7 +7201,7 @@ app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/te
     if (!phone) return res.status(400).json({ error: 'Customer phone number is missing or invalid.' });
 
     const total = Number(rec.parts || 0) + Number(rec.labor || 0);
-    const url = `https://skautohutch.com/repair-authorization.html?order=${encodeURIComponent(repairOrderId)}&repair=${encodeURIComponent(recommendationId)}&token=${encodeURIComponent(rec.authorization_token)}`;
+    const url = `${GARAVEX_BASE_URL}/repair-authorization.html?order=${encodeURIComponent(repairOrderId)}&repair=${encodeURIComponent(recommendationId)}&token=${encodeURIComponent(rec.authorization_token)}`;
     const firstName = String(rec.customer_name || '').trim().split(/\s+/)[0];
     const body = `S&K Auto: ${firstName ? firstName + ', ' : ''}we recommend: ${rec.description}. Total: $${total.toFixed(2)}. Review and approve or decline here: ${url}`;
     const message = await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: phone });
