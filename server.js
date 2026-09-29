@@ -32,6 +32,7 @@ const GARAVEX_BASE_URL = 'https://app.garavex.com';
 
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const STRIPE_API_VERSION = '2026-08-26.dahlia';
 
 async function stripeRequest(pathname, { method = 'GET', body, form = false } = {}) {
@@ -114,6 +115,80 @@ const dbPath = path.join(dataDir, 'bookings.db');
 const db = new Database(dbPath);
 
 console.log(`Using booking database: ${dbPath}`);
+
+// ===== GARAVEX - STRIPE LIVE WEBHOOK =====
+// IMPORTANT: This route must stay BEFORE express.json() so Stripe's signature
+// is verified against the exact raw request body.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    if (!STRIPE_WEBHOOK_SECRET) {
+      console.error('Stripe webhook secret is not configured.');
+      return res.status(503).send('Webhook not configured.');
+    }
+
+    const signatureHeader = String(req.get('stripe-signature') || '');
+    if (!signatureHeader) {
+      return res.status(400).send('Missing Stripe signature.');
+    }
+
+    const parts = signatureHeader.split(',');
+    const timestampPart = parts.find(part => part.startsWith('t='));
+    const signatureParts = parts.filter(part => part.startsWith('v1='));
+    const timestamp = timestampPart ? timestampPart.slice(2) : '';
+
+    if (!timestamp || signatureParts.length === 0 || !Buffer.isBuffer(req.body)) {
+      return res.status(400).send('Invalid Stripe signature.');
+    }
+
+    // Reject stale signed requests (5-minute tolerance) to reduce replay risk.
+    const timestampNumber = Number(timestamp);
+    if (!Number.isFinite(timestampNumber) || Math.abs(Math.floor(Date.now() / 1000) - timestampNumber) > 300) {
+      return res.status(400).send('Expired Stripe signature.');
+    }
+
+    const signedPayload = `${timestamp}.${req.body.toString('utf8')}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', STRIPE_WEBHOOK_SECRET)
+      .update(signedPayload, 'utf8')
+      .digest('hex');
+
+    const signatureValid = signatureParts.some(part => {
+      const supplied = part.slice(3);
+      if (!/^[0-9a-fA-F]{64}$/.test(supplied)) return false;
+      const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+      const suppliedBuffer = Buffer.from(supplied, 'hex');
+      return expectedBuffer.length === suppliedBuffer.length &&
+        crypto.timingSafeEqual(expectedBuffer, suppliedBuffer);
+    });
+
+    if (!signatureValid) {
+      return res.status(400).send('Invalid Stripe signature.');
+    }
+
+    const event = JSON.parse(req.body.toString('utf8'));
+
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      const session = event?.data?.object;
+
+      // checkout.session.completed can also represent delayed payment methods.
+      // Only record money after Stripe says the Checkout Session is actually paid.
+      if (session?.payment_status === 'paid') {
+        const connectedAccountId = String(event.account || '').trim();
+        recordStripeCheckoutPayment(session, connectedAccountId);
+      }
+    }
+
+    return res.json({ received: true });
+  } catch (err) {
+    if (String(err?.message || '').includes('UNIQUE constraint failed')) {
+      // Stripe retries webhooks. A duplicate payment event is safe to acknowledge.
+      return res.json({ received: true, alreadyRecorded: true });
+    }
+    console.error('Stripe webhook error:', err);
+    return res.status(500).send('Webhook processing failed.');
+  }
+});
+// ===== END GARAVEX - STRIPE LIVE WEBHOOK =====
 
 app.use(express.json());
 // ===== S&K AUTO - EMPLOYEE SESSIONS =====
@@ -4698,6 +4773,81 @@ if (!stripePaymentColumns.has('stripe_payment_intent_id')) {
 }
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_repair_order_payments_stripe_session ON repair_order_payments(stripe_session_id) WHERE stripe_session_id IS NOT NULL`);
 
+function recordStripeCheckoutPayment(session, connectedAccountId) {
+  const sessionId = String(session?.id || '').trim();
+  const repairOrderId = Number(session?.metadata?.repair_order_id || 0);
+
+  if (!sessionId || !repairOrderId) {
+    throw new Error('Stripe Checkout Session is missing Garavex payment metadata.');
+  }
+
+  const order = db.prepare(`
+    SELECT r.id, r.shop_id, r.amount_paid, s.stripe_account_id
+    FROM repair_orders r
+    JOIN shops s ON s.id = r.shop_id
+    WHERE r.id = ?
+    LIMIT 1
+  `).get(repairOrderId);
+
+  if (!order) {
+    throw new Error(`Repair order ${repairOrderId} was not found for Stripe payment.`);
+  }
+
+  // Connect webhooks include event.account. Require it to match the shop that owns
+  // the repair order so one connected shop can never credit another shop's invoice.
+  if (connectedAccountId && String(order.stripe_account_id || '') !== connectedAccountId) {
+    throw new Error('Stripe connected account does not match the Garavex shop.');
+  }
+
+  const existing = db.prepare(`
+    SELECT id FROM repair_order_payments WHERE stripe_session_id = ?
+  `).get(sessionId);
+  if (existing) {
+    return { alreadyRecorded: true };
+  }
+
+  const amount = Number(session?.amount_total || 0) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Stripe Checkout Session has an invalid paid amount.');
+  }
+
+  const { total } = invoiceTotalsForOrder(order.id);
+  const currentPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
+  const remainingBalance = Math.max(0, Math.round((total - currentPaid) * 100) / 100);
+
+  if (remainingBalance < 0.01) {
+    return { alreadyRecorded: true, invoiceAlreadyPaid: true };
+  }
+
+  // Never let an unexpected Stripe amount over-credit the Garavex invoice.
+  const creditedAmount = Math.min(amount, remainingBalance);
+  const newAmountPaid = Math.min(total, Math.round((currentPaid + creditedAmount) * 100) / 100);
+  const paymentStatus = newAmountPaid >= total - 0.009 ? 'paid' : 'partial';
+  const paymentIntentId = typeof session?.payment_intent === 'string'
+    ? session.payment_intent
+    : (session?.payment_intent?.id || null);
+
+  const tx = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO repair_order_payments
+        (repair_order_id, amount, payment_method, stripe_session_id, stripe_payment_intent_id)
+      VALUES (?, ?, 'Stripe', ?, ?)
+    `).run(order.id, creditedAmount, sessionId, paymentIntentId);
+
+    db.prepare(`
+      UPDATE repair_orders
+      SET amount_paid = ?,
+          payment_status = ?,
+          payment_method = 'Stripe',
+          paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END
+      WHERE id = ? AND shop_id = ?
+    `).run(newAmountPaid, paymentStatus, paymentStatus, order.id, order.shop_id);
+  });
+
+  tx();
+  return { alreadyRecorded: false, amount_paid: newAmountPaid, payment_status: paymentStatus };
+}
+
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   try {
     const token = String(req.body?.token || '').trim();
@@ -4780,19 +4930,8 @@ app.post('/api/stripe/confirm-checkout-session', async (req, res) => {
     if (session.payment_status !== 'paid') return res.status(409).json({ success: false, error: 'Stripe has not marked this payment paid.' });
     if (String(session.metadata?.repair_order_id || '') !== String(order.id)) return res.status(409).json({ success: false, error: 'Stripe payment does not match this invoice.' });
 
-    const amount = Number(session.amount_total || 0) / 100;
-    const { total } = invoiceTotalsForOrder(order.id);
-    const newAmountPaid = Math.min(total, Math.round((Number(order.amount_paid || 0) + amount) * 100) / 100);
-    const paymentStatus = newAmountPaid >= total - 0.009 ? 'paid' : 'partial';
-
-    const tx = db.transaction(() => {
-      db.prepare(`INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_session_id, stripe_payment_intent_id) VALUES (?, ?, 'Stripe', ?, ?)`)
-        .run(order.id, amount, sessionId, session.payment_intent || null);
-      db.prepare(`UPDATE repair_orders SET amount_paid = ?, payment_status = ?, payment_method = 'Stripe', paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END WHERE id = ? AND shop_id = ?`)
-        .run(newAmountPaid, paymentStatus, paymentStatus, order.id, order.shop_id);
-    });
-    tx();
-    return res.json({ success: true, amount_paid: newAmountPaid, payment_status: paymentStatus });
+    const result = recordStripeCheckoutPayment(session, order.stripe_account_id);
+    return res.json({ success: true, ...result });
   } catch (err) {
     if (String(err?.message || '').includes('UNIQUE constraint failed')) return res.json({ success: true, alreadyRecorded: true });
     console.error('Stripe confirmation error:', err);
