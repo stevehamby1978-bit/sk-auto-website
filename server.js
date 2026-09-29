@@ -28,7 +28,11 @@ const fs = require('fs');
 
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+
+const STRIPE_WEBHOOK_SECRET =
+  process.env.STRIPE_SANDBOX_WEBHOOK_SECRET ||
+  process.env.STRIPE_WEBHOOK_SECRET;
+
 const STRIPE_API_VERSION = '2026-08-26.dahlia';
 
 async function stripeRequest(pathname, { method = 'GET', body, form = false } = {}) {
