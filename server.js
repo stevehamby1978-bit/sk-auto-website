@@ -268,7 +268,31 @@ app.get(protectedPages, requireLogin);
 // ===== S&K AUTO - OWNER ONLY PAGES =====
 app.get('/employees.html', requireLogin, requireOwner);
 app.get('/shop-settings.html', requireLogin, requireOwner);
-app.use(express.static(__dirname));
+
+// ===== DOMAIN ROOT ROUTING =====
+// Keep the public S&K Auto website and the Garavex app on separate domains
+// while continuing to use this same backend/database.
+app.get('/', (req, res) => {
+  // Railway/proxies may supply X-Forwarded-Host. Fall back to Host.
+  const forwardedHost = req.get('x-forwarded-host');
+  const rawHost = (forwardedHost || req.get('host') || '').split(',')[0].trim();
+  const hostname = rawHost.split(':')[0].toLowerCase();
+
+  if (hostname === 'app.garavex.com') {
+    if (req.session && req.session.employee) {
+      return res.redirect('/dashboard.html');
+    }
+    return res.sendFile(path.join(__dirname, 'login.html'));
+  }
+
+  // skautohutch.com, www.skautohutch.com, Railway preview domains, and
+  // localhost keep the existing S&K Auto public homepage behavior.
+  return res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Disable express.static's automatic index.html handling because '/' is
+// intentionally routed by hostname above. All other static files remain served.
+app.use(express.static(__dirname, { index: false }));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
 });
