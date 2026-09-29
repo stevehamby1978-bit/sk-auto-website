@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Customer Profile</title>
+
+  <style>
+
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--panel2:#11161b;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23;--danger:#a93636;--green:#29965a}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.page{max-width:1200px;margin:auto;min-height:100vh}.header{background:#15191e;border-bottom:3px solid var(--accent);padding:20px 26px}.header h1{margin:0;font-size:29px}.header p{margin:5px 0 0;color:var(--muted)}.content{padding:26px 18px 50px}.back-btn,.view-btn,button{display:inline-block;border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer;text-decoration:none;color:#fff;background:#303841}.back-btn{margin-bottom:18px}.view-btn{background:var(--accent);margin-top:8px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:21px;margin-bottom:18px}.card h2{margin:0 0 16px;color:var(--accent);border-bottom:1px solid var(--line);padding-bottom:10px}.customer-name{font-size:28px;font-weight:800;margin-bottom:10px}.info p{margin:7px 0;color:#d6dbe0}.vehicle,.repair{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:16px;margin-bottom:12px}.vehicle{border-left:4px solid var(--accent)}.vehicle h3,.repair h3{margin:0 0 8px}.vehicle p{margin:5px 0;color:#c5ccd3}.delete-vehicle-btn,.delete-customer-btn{background:var(--danger);color:#fff}.repair-top{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}.status{font-weight:800;text-transform:capitalize}.items{margin-top:13px;border-top:1px solid var(--line);padding-top:9px}.item{padding:7px 0;border-bottom:1px solid #293038;color:#d4dae0}.total{margin-top:11px;font-size:18px;font-weight:bold;text-align:right}.message{background:var(--panel);border:1px solid var(--line);padding:25px;border-radius:9px;text-align:center;color:var(--muted)}
+input,select{width:100%;padding:11px 12px;border:1px solid #46505a;border-radius:7px;background:#0f1317;color:#fff;font-size:15px;margin-bottom:9px}.search{width:100%}
+#editCustomerForm,#mergeCustomerForm,#addVehicleForm{background:#11161b!important;border:1px solid var(--line)!important;border-radius:9px;padding:15px!important}
+@media(max-width:650px){.content{padding:18px}.customer-name{font-size:24px}.vehicle button,.card>.view-btn,.delete-customer-btn{width:100%;margin:5px 0}}
+
+</style>
+</head>
+
+<body>
+
+<div class="page">
+
+  <div class="header">
+    <h1>S&amp;K Auto</h1>
+    <p>Customer &amp; Vehicle Service History</p>
+  </div>
+
+  <div class="content">
+
+    <a href="customers.html" class="back-btn">← Back to Customers</a>
+    <a href="dashboard.html" class="back-btn">Dashboard</a>
+
+    <div id="customerContent">
+      <div class="message">Loading customer...</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+
+const params =
+  new URLSearchParams(window.location.search);
+
+const customerId =
+  params.get('id');
+
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function showEditCustomer() {
+
+  const customer = window.currentCustomer;
+
+  if (!customer) return;
+
+  document.getElementById('editCustomerName').value =
+    customer.name || '';
+
+  document.getElementById('editCustomerPhone').value =
+    customer.phone || '';
+
+  document.getElementById('editCustomerEmail').value =
+    customer.email || '';
+
+  document.getElementById('editCustomerMessage').textContent = '';
+
+  document.getElementById('editCustomerForm').style.display =
+    'block';
+}
+
+
+function hideEditCustomer() {
+
+  document.getElementById('editCustomerForm').style.display =
+    'none';
+
+  document.getElementById('editCustomerMessage').textContent = '';
+}
+
+
+async function saveCustomerChanges() {
+
+  const name =
+    document.getElementById('editCustomerName').value.trim();
+
+  const phone =
+    document.getElementById('editCustomerPhone').value.trim();
+
+  const email =
+    document.getElementById('editCustomerEmail').value.trim();
+
+  const message =
+    document.getElementById('editCustomerMessage');
+
+  if (!name) {
+    message.textContent = 'Customer name is required.';
+    return;
+  }
+
+  try {
+
+    message.textContent = 'Saving changes...';
+
+    const response = await fetch(
+      '/api/customers/' + encodeURIComponent(customerId),
+      {
+        method: 'PATCH',
+
+        headers: {
+          'Content-Type': 'application/json'
+        },
+
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          email: email
+        })
+      }
+    );
+
+    const result = await response.json();
+
+  if (response.status === 409 && result.duplicate) {
+  const duplicate = result.duplicate;
+
+  const details = [
+    'Possible duplicate customer found:',
+    '',
+    duplicate.name || 'Unnamed Customer',
+    duplicate.phone || '',
+    duplicate.email || '',
+    '',
+    'Changes were NOT saved.'
+  ].filter(line => line !== '').join('\n');
+
+  alert(details);
+
+  message.textContent =
+    'Customer not updated — possible duplicate found.';
+
+  return;
+}
+
+if (!response.ok) {
+  throw new Error(
+    result.error || 'Unable to update customer.'
+  );
+}
+    await loadCustomer();
+
+  } catch (error) {
+
+    console.error(error);
+
+    message.textContent =
+      error.message || 'Unable to update customer.';
+
+  }
+}
+function editVehicle(vehicleId) {
+    const customer = window.currentCustomer;
+
+    if (!customer || !customer.vehicles) {
+        alert('Unable to find vehicle information.');
+        return;
+    }
+
+    const vehicle = customer.vehicles.find(
+        v => Number(v.id) === Number(vehicleId)
+    );
+
+    if (!vehicle) {
+        alert('Vehicle not found.');
+        return;
+    }
+
+    const year = prompt('Year:', vehicle.year || '');
+    if (year === null) return;
+
+    const make = prompt('Make:', vehicle.make || '');
+    if (make === null) return;
+
+    const model = prompt('Model:', vehicle.model || '');
+    if (model === null) return;
+
+    const vin = prompt('VIN:', vehicle.vin || '');
+    if (vin === null) return;
+
+    const mileage = prompt('Mileage:', vehicle.mileage || '');
+    if (mileage === null) return;
+
+    updateVehicle(vehicleId, {
+        year: year.trim(),
+        make: make.trim(),
+        model: model.trim(),
+        vin: vin.trim(),
+        mileage: mileage.trim()
+    });
+}
+async function updateVehicle(vehicleId, vehicleData) {
+    try {
+        const response = await fetch(
+            '/api/vehicles/' + encodeURIComponent(vehicleId),
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(vehicleData)
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to update vehicle.'
+            );
+        }
+
+        await loadCustomer();
+
+    } catch (error) {
+        console.error('Update vehicle error:', error);
+        alert(error.message || 'Unable to update vehicle.');
+    }
+}  
+async function createRepairOrder(vehicleId) {
+    if (!customerId) {
+        alert('Customer ID is missing.');
+        return;
+    }
+
+    const confirmed = confirm(
+        'Create a new repair order for this vehicle?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/repair-orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                customer_id: customerId,
+                vehicle_id: vehicleId
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to create repair order.'
+            );
+        }
+
+       window.location.href =
+  '/repair-order.html?id=' + encodeURIComponent(result.repair_order_id);
+
+    } catch (error) {
+        console.error('Create repair order error:', error);
+        alert(error.message || 'Unable to create repair order.');
+    }
+}
+  
+async function deleteVehicle(vehicleId) {
+  const confirmed = confirm(
+    'Are you sure you want to delete this vehicle? This cannot be undone.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      '/api/vehicles/' + encodeURIComponent(vehicleId),
+      {
+        method: 'DELETE'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to delete vehicle.'
+      );
+    }
+
+    await loadCustomer();
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Unable to delete vehicle.');
+  }
+}
+function showAddVehicleForm() {
+    document.getElementById('addVehicleForm').style.display = 'block';
+    document.getElementById('showAddVehicleBtn').style.display = 'none';
+}
+
+function hideAddVehicleForm() {
+    document.getElementById('addVehicleForm').style.display = 'none';
+    document.getElementById('showAddVehicleBtn').style.display = 'inline-block';
+
+    document.getElementById('vehicleYear').value = '';
+    document.getElementById('vehicleMake').value = '';
+    document.getElementById('vehicleModel').value = '';
+    document.getElementById('vehicleVin').value = '';
+    document.getElementById('vehicleMileage').value = '';
+    document.getElementById('vehicleMessage').textContent = '';
+}
+
+async function saveVehicle() {
+    const message = document.getElementById('vehicleMessage');
+
+    const year = document.getElementById('vehicleYear').value.trim();
+    const make = document.getElementById('vehicleMake').value.trim();
+    const model = document.getElementById('vehicleModel').value.trim();
+    const vin = document.getElementById('vehicleVin').value.trim();
+    const mileage = document.getElementById('vehicleMileage').value.trim();
+
+    if (!customerId) {
+        message.textContent = 'Customer ID is missing.';
+        return;
+    }
+
+    if (!year || !make || !model) {
+        message.textContent = 'Please enter the year, make, and model.';
+        return;
+    }
+
+    try {
+        message.textContent = 'Saving vehicle...';
+
+        const response = await fetch('/api/vehicles', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                customer_id: customerId,
+                year: year,
+                make: make,
+                model: model,
+                vin: vin || null,
+                mileage: mileage || null
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Unable to add vehicle.'
+            );
+        }
+
+        hideAddVehicleForm();
+        await loadCustomer();
+
+    } catch (error) {
+        console.error('Add vehicle error:', error);
+        message.textContent =
+            error.message || 'Unable to add vehicle.';
+    }
+}
+  async function showMergeCustomer() {
+  const customer = window.currentCustomer;
+
+  if (!customer || !customer.id) {
+    alert('Unable to identify this customer.');
+    return;
+  }
+
+  const form = document.getElementById('mergeCustomerForm');
+  const select = document.getElementById('mergeCustomerSelect');
+  const message = document.getElementById('mergeCustomerMessage');
+
+  if (!form || !select) {
+    alert('Merge customer form could not be found.');
+    return;
+  }
+
+  if (form.style.display === 'block') {
+    form.style.display = 'none';
+    return;
+  }
+
+  message.textContent = '';
+  select.innerHTML =
+    '<option value="">Select duplicate customer...</option>';
+
+  try {
+    const response = await fetch('/api/customers');
+
+    if (!response.ok) {
+      throw new Error('Unable to load customers.');
+    }
+
+    const customers = await response.json();
+
+    customers
+      .filter(otherCustomer =>
+        String(otherCustomer.id) !== String(customer.id)
+      )
+      .sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '')
+      )
+      .forEach(otherCustomer => {
+        const option = document.createElement('option');
+
+        option.value = otherCustomer.id;
+
+        const phone = otherCustomer.phone
+          ? ` - ${otherCustomer.phone}`
+          : '';
+
+        option.textContent =
+          `${otherCustomer.name || 'Unnamed Customer'}${phone}`;
+
+        select.appendChild(option);
+      });
+
+    form.style.display = 'block';
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Unable to load customers.');
+  }
+}
+
+  async function mergeCustomer() {
+  const customer = window.currentCustomer;
+  const select = document.getElementById('mergeCustomerSelect');
+  const message = document.getElementById('mergeCustomerMessage');
+
+  if (!customer || !customer.id) {
+    alert('Unable to identify this customer.');
+    return;
+  }
+
+  const duplicateCustomerId = select.value;
+
+  if (!duplicateCustomerId) {
+    message.textContent = 'Please select a customer to merge.';
+    return;
+  }
+
+  const confirmed = confirm(
+    'Merge this duplicate customer into the current customer? ' +
+    'Vehicles, estimates, and repair history will be moved to this customer. ' +
+    'The duplicate customer will then be deleted.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    message.textContent = 'Merging customer...';
+
+    const response = await fetch(
+      '/api/customers/' +
+      encodeURIComponent(customer.id) +
+      '/merge',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          duplicateCustomerId: duplicateCustomerId
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to merge customer.'
+      );
+    }
+
+    message.textContent = 'Customers merged successfully.';
+
+    await loadCustomer();
+
+  } catch (error) {
+    console.error(error);
+    message.textContent =
+      error.message || 'Unable to merge customer.';
+  }
+}
+async function deleteCustomer() {
+  const customer = window.currentCustomer;
+
+  if (!customer || !customer.id) {
+    alert('Unable to identify this customer.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Are you sure you want to delete this customer? This cannot be undone.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      '/api/customers/' + encodeURIComponent(customer.id),
+      {
+        method: 'DELETE'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to delete customer.'
+      );
+    }
+
+    window.location.href = '/customers.html';
+
+  } catch (error) {
+    console.error(error);
+    alert(error.message || 'Unable to delete customer.');
+  }
+}  
+async function loadCustomer() {
+
+  const content =
+    document.getElementById('customerContent');
+
+  if (!customerId) {
+    content.innerHTML =
+      '<div class="message">Customer ID is missing.</div>';
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        '/api/customers/' +
+        encodeURIComponent(customerId)
+      );
+
+    if (!response.ok) {
+      throw new Error('Unable to load customer.');
+    }
+
+    const customer =
+      await response.json();
+
+window.currentCustomer = customer;
+    const vehicles =
+      customer.vehicles || [];
+
+    const repairs =
+      customer.repair_orders || [];
+
+
+    let vehicleHtml = '';
+
+    if (vehicles.length === 0) {
+
+      vehicleHtml =
+        '<p>No vehicles saved for this customer.</p>';
+
+    } else {
+
+      vehicleHtml = vehicles.map(vehicle => `
+        <div class="vehicle">
+
+          <h3>
+            ${escapeHtml(vehicle.year)}
+            ${escapeHtml(vehicle.make)}
+            ${escapeHtml(vehicle.model)}
+          </h3>
+
+          <p>
+            <strong>VIN:</strong>
+            ${escapeHtml(vehicle.vin || 'Not entered')}
+          </p>
+
+          <p>
+            <strong>Mileage:</strong>
+            ${escapeHtml(vehicle.mileage || 'Not entered')}
+          </p>
+<button
+    type="button"
+    onclick="editVehicle(${vehicle.id})">
+    Edit Vehicle
+</button>
+<button
+  type="button"
+  onclick="createRepairOrder(${vehicle.id})">
+  Create Repair Order
+</button>
+<button
+    type="button"
+    class="delete-vehicle-btn"
+    onclick="deleteVehicle(${vehicle.id})">
+    Delete Vehicle
+</button>
+
+        </div>
+      `).join('');
+
+    }
+
+
+    let repairHtml = '';
+
+    if (repairs.length === 0) {
+
+      repairHtml =
+        '<p>No repair history for this customer.</p>';
+
+    } else {
+
+      repairHtml = repairs.map(repair => {
+
+        const items =
+          repair.items || [];
+
+        const itemHtml =
+          items.length
+          ? items.map(item => `
+              <div class="item">
+
+                <strong>
+                  ${escapeHtml(item.description)}
+                </strong>
+
+                <br>
+
+                Parts: ${money(item.parts)}
+                &nbsp; | &nbsp;
+                Labor: ${money(item.labor)}
+
+              </div>
+            `).join('')
+          : '<p>No repair items.</p>';
+
+
+        return `
+          <div class="repair">
+
+            <div class="repair-top">
+
+              <div>
+
+                <h3>
+                  Repair Order #${escapeHtml(repair.id)}
+                </h3>
+
+                <div>
+                  ${escapeHtml(repair.vehicle_year || '')}
+                  ${escapeHtml(repair.vehicle_make || '')}
+                  ${escapeHtml(repair.vehicle_model || '')}
+                </div>
+
+              </div>
+
+              <div class="status">
+                ${escapeHtml(
+                  String(repair.status || '')
+                    .replaceAll('_', ' ')
+                )}
+              </div>
+
+            </div>
+
+            <div class="items">
+              ${itemHtml}
+            </div>
+
+            <div class="total">
+              Total: ${money(repair.total)}
+            </div>
+
+            <a
+              href="repair-order.html?id=${encodeURIComponent(repair.id)}"
+              class="view-btn">
+              View Repair Order
+            </a>
+
+          </div>
+        `;
+
+      }).join('');
+
+    }
+
+
+    content.innerHTML = `
+
+      <div class="card">
+
+        <div class="customer-name">
+          ${escapeHtml(customer.name)}
+        </div>
+<button
+  type="button"
+  class="view-btn"
+  onclick="showEditCustomer()">
+  Edit Customer
+</button>
+<button
+  type="button"
+  class="view-btn"
+  onclick="showMergeCustomer()">
+  Merge Customer
+</button>
+<div
+  id="mergeCustomerForm"
+  style="display:none; margin-top:15px; margin-bottom:15px; padding:15px; border:1px solid #ccc;">
+
+  <strong>Merge Duplicate Customer</strong>
+
+  <p style="margin-top:8px;">
+    Select the duplicate customer to merge into this customer.
+  </p>
+
+  <select
+    id="mergeCustomerSelect"
+    class="search"
+    style="width:100%; margin-bottom:10px;">
+    <option value="">Select duplicate customer...</option>
+  </select>
+
+  <button
+    type="button"
+    class="view-btn"
+    onclick="mergeCustomer()">
+    Merge Into This Customer
+  </button>
+
+  <div
+    id="mergeCustomerMessage"
+    style="margin-top:10px;">
+  </div>
+
+</div>
+<button
+  type="button"
+  class="delete-customer-btn"
+  onclick="deleteCustomer()">
+  Delete Customer
+</button>
+<div
+  id="editCustomerForm"
+  style="display:none; margin-top:15px; margin-bottom:15px;">
+
+  <input
+    type="text"
+    id="editCustomerName"
+    class="search"
+    placeholder="Customer name"
+    style="margin-bottom:10px; width:100%;">
+
+  <input
+    type="tel"
+    id="editCustomerPhone"
+    class="search"
+    placeholder="Phone number"
+    style="margin-bottom:10px; width:100%;">
+
+  <input
+    type="email"
+    id="editCustomerEmail"
+    class="search"
+    placeholder="Email address"
+    style="margin-bottom:10px; width:100%;">
+
+  <button
+    type="button"
+    class="view-btn"
+    onclick="saveCustomerChanges()">
+    Save Changes
+  </button>
+
+  <button
+    type="button"
+    class="back-btn"
+    onclick="hideEditCustomer()"
+    style="margin:0 0 0 8px;">
+    Cancel
+  </button>
+
+  <div
+    id="editCustomerMessage"
+    style="margin-top:10px;">
+  </div>
+
+</div>
+        <div class="info">
+
+          <p>
+            <strong>Phone:</strong>
+            ${escapeHtml(customer.phone || 'Not entered')}
+          </p>
+
+          <p>
+            <strong>Email:</strong>
+            ${escapeHtml(customer.email || 'Not entered')}
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="card">
+
+        <h2>Vehicles</h2>
+
+<button
+    type="button"
+    id="showAddVehicleBtn"
+    onclick="showAddVehicleForm()">
+    + Add Vehicle
+</button>
+
+<div id="addVehicleForm" style="display:none; margin-top:15px; margin-bottom:20px;">
+
+    <h3>Add Vehicle</h3>
+
+    <input
+        type="number"
+        id="vehicleYear"
+        placeholder="Year">
+
+    <input
+        type="text"
+        id="vehicleMake"
+        placeholder="Make">
+
+    <input
+        type="text"
+        id="vehicleModel"
+        placeholder="Model">
+
+    <input
+        type="text"
+        id="vehicleVin"
+        placeholder="VIN"
+        maxlength="17">
+
+    <input
+        type="number"
+        id="vehicleMileage"
+        placeholder="Mileage">
+
+    <br><br>
+
+    <button
+        type="button"
+        onclick="saveVehicle()">
+        Save Vehicle
+    </button>
+
+    <button
+        type="button"
+        onclick="hideAddVehicleForm()">
+        Cancel
+    </button>
+
+    <div id="vehicleMessage" style="margin-top:10px;"></div>
+
+</div>
+
+${vehicleHtml}
+
+      </div>
+
+
+      <div class="card">
+
+        <h2>Service History</h2>
+
+        ${repairHtml}
+
+      </div>
+    `;
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    content.innerHTML =
+      '<div class="message">Unable to load customer information.</div>';
+
+  }
+
+}
+
+
+loadCustomer();
+
+</script>
+
+</body>
+</html>

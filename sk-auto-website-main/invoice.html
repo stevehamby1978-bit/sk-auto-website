@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Invoice</title>
+
+  <style>
+
+*{box-sizing:border-box}
+:root{--bg:#0e1114;--panel:#fff;--ink:#222;--muted:#66717d;--line:#d9dee3;--accent:#ef3e23;--blue:#0b4dbb;--green:#218838}
+body{margin:0;padding:28px 15px;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--ink)}
+.invoice{max-width:950px;margin:auto;background:#fff;padding:36px;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.header{display:flex;justify-content:space-between;gap:25px;border-bottom:4px solid var(--accent);padding-bottom:18px;margin-bottom:22px}
+.invoice-logo{width:240px;height:180px;object-fit:contain;object-position:left center;display:block;margin-bottom:8px}.business p{margin:4px 0}.invoice-title{text-align:right}.invoice-title h2{margin:0;font-size:32px;color:var(--accent)}.invoice-title p{margin:6px 0}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}.info-box{border:1px solid var(--line);border-radius:8px;padding:15px}.info-box h3{color:var(--accent);margin:0 0 9px}.info-box p{margin:5px 0}
+table{width:100%;border-collapse:collapse;margin-top:18px}th{background:#252a30;color:#fff;text-align:left;padding:11px}td{padding:11px;border-bottom:1px solid #ddd}th:nth-child(n+2),td:nth-child(n+2){text-align:right}
+.totals{width:380px;max-width:100%;margin-left:auto;margin-top:22px;background:#f6f7f8;border:1px solid var(--line);border-radius:8px;padding:14px}.total-row{display:flex;justify-content:space-between;padding:7px 0}.grand-total{border-top:2px solid var(--accent);margin-top:5px;padding-top:12px;font-size:22px;font-weight:bold}
+.authorization{margin-top:20px;padding:16px;background:#e8f5e9;border:1px solid #c8e6c9;border-radius:7px;display:none}.authorization h3{margin-top:0;color:var(--green)}.authorization p{margin:5px 0}.completion{margin-top:18px;font-weight:bold;color:var(--green);display:none}
+#paymentInfo,#paymentHistorySection,#invoiceEmailHistorySection{border:1px solid var(--line)!important;border-radius:8px!important}
+.actions{margin-top:24px;display:flex;gap:9px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:20px}button{border:none;padding:11px 17px;border-radius:6px;color:#fff;font-weight:bold;cursor:pointer}.print-btn{background:var(--accent)}.back-btn{background:#333}
+#loading{text-align:center;font-weight:bold;padding:35px}#error{display:none;color:#dc3545;font-weight:bold;text-align:center;padding:30px}
+@media(max-width:650px){.header,.info-grid{display:block}.invoice-title{text-align:left;margin-top:20px}.invoice{padding:20px}table{font-size:13px}th,td{padding:8px 5px}.actions button{width:100%}}
+@media print{@page{size:letter;margin:.20in}body{background:#fff;padding:0;margin:0;font-size:11px}.invoice{max-width:none;width:100%;padding:0;margin:0;border-radius:0;box-shadow:none}.header{margin-bottom:6px;padding-bottom:6px}table{font-size:12px}tr{break-inside:avoid;page-break-inside:avoid}th,td{padding:5px 4px}#paymentInfo{margin-top:4px!important;padding:4px!important}#paymentHistorySection{margin-top:8px!important}.authorization{margin-top:10px!important}.authorization h3{margin:0 0 5px!important}.authorization p{margin:2px 0!important}.invoice-logo{width:110px!important;margin-bottom:2px!important}.actions{display:none!important}#paymentControls{display:block!important}}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="invoice">
+
+  <div id="loading">
+    Loading invoice...
+  </div>
+
+  <div id="error">
+    Unable to load invoice.
+  </div>
+
+  <div id="invoiceContent" style="display:none;">
+
+    <div class="header">
+
+      <div class="business">
+<img id="shopLogo" alt="Shop logo" class="invoice-logo" style="display:none;">
+        <p><strong id="shopName"></strong></p>
+        <p id="shopTagline"></p>
+        <p id="shopAddress"></p>
+        <p id="shopContact"></p>
+
+      </div>
+
+      <div class="invoice-title">
+
+        <h2>INVOICE</h2>
+
+        <p>
+          <strong>Invoice #:</strong>
+          <span id="invoiceNumber"></span>
+        </p>
+
+        <p>
+          <strong>Repair Order #:</strong>
+          <span id="repairOrderNumber"></span>
+        </p>
+
+        <p id="completedDate"></p>
+
+      </div>
+
+    </div>
+
+
+    <div class="info-grid">
+
+      <div class="info-box">
+
+        <h3>Customer</h3>
+
+        <p id="customerName"></p>
+        <p id="customerPhone"></p>
+        <p id="customerEmail"></p>
+
+      </div>
+
+
+      <div class="info-box">
+
+        <h3>Vehicle</h3>
+
+        <p id="vehicle"></p>
+
+        <p>
+          <strong>Mileage:</strong>
+          <span id="mileage"></span>
+        </p>
+
+        <p>
+          <strong>VIN:</strong>
+          <span id="vin"></span>
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <table>
+
+      <thead>
+
+        <tr>
+          <th>Description</th>
+          <th>Parts</th>
+          <th>Labor</th>
+          <th>Total</th>
+        </tr>
+
+      </thead>
+
+      <tbody id="itemsBody"></tbody>
+
+    </table>
+
+
+    <div class="totals">
+
+      <div class="total-row">
+        <span>Subtotal:</span>
+        <strong id="subtotal">$0.00</strong>
+      </div>
+
+      <div class="total-row">
+        <span>Tax:</span>
+        <strong id="tax">$0.00</strong>
+      </div>
+
+      <div class="total-row grand-total">
+        <span>TOTAL:</span>
+        <span id="total">$0.00</span>
+      </div>
+
+<div class="total-row" style="margin-top:10px;">
+  <span>Amount Paid:</span>
+  <strong id="amountPaid">$0.00</strong>
+</div>
+
+<div class="total-row" style="font-size:18px; font-weight:bold;">
+  <span>Balance Due:</span>
+  <strong id="balanceDue">$0.00</strong>
+</div>
+
+<div
+  id="paidStatus"
+  style="
+    display:none;
+    margin-top:12px;
+    padding:10px;
+    text-align:center;
+    font-size:22px;
+    font-weight:bold;
+    border:2px solid #28a745;
+    border-radius:5px;
+  "
+>
+  ✓ PAID IN FULL
+</div>
+      
+
+    </div>
+
+
+    <div
+      id="completionInfo"
+      class="completion">
+    </div>
+<!-- ===== S&K AUTO - PAYMENT TRACKING ===== -->
+<div
+  id="paymentInfo"
+  style="margin-top:20px; padding:16px; background:#f3f4f6; border-radius:7px;">
+
+  <h3 style="margin-top:0;">Payment</h3>
+<div
+  id="paymentBadge"
+  style="display:inline-block; margin-bottom:15px; padding:8px 16px; border-radius:20px; font-weight:bold; color:white; background:#dc3545;">
+  UNPAID
+</div>
+
+<div
+  id="paymentDetails"
+  style="display:none; margin-bottom:15px; line-height:1.6;">
+</div>
+
+ <div id="paymentSavedInfo" style="display:none; margin-bottom:15px; line-height:1.6;"></div> 
+
+<!-- ===== S&K AUTO - CUSTOMER PAYMENT CONTROLS ===== -->
+<div
+    id="paymentControls"
+    style="margin-top:15px; margin-bottom:15px;"
+>
+    <button
+        type="button"
+        id="payInvoiceBtn"
+        style="
+            width:100%;
+            padding:14px 18px;
+            background:#28a745;
+            color:white;
+            border:none;
+            border-radius:6px;
+            font-size:16px;
+            font-weight:bold;
+            cursor:pointer;
+        "
+    >
+        Pay Invoice
+    </button>
+</div>
+  
+<!-- ===== S&K AUTO - PAYMENT HISTORY ===== -->
+<div
+  id="paymentHistorySection"
+  style="margin-top:20px; padding:16px; background:#f3f4f6; border-radius:7px; display:none;"
+>
+  <h3 style="margin-top:0;">Payment History</h3>
+
+  <div id="paymentHistory"></div>
+</div>
+<!-- ===== END PAYMENT HISTORY ===== -->
+<!-- ===== S&K AUTO - INVOICE EMAIL HISTORY ===== -->
+<div
+  id="invoiceEmailHistorySection"
+  style="margin-top:20px; padding:16px; background:#f3f4f6; border-radius:7px; display:none;"
+>
+  <h3 style="margin-top:0;">Invoice Email History</h3>
+
+  <div id="invoiceEmailHistory"></div>
+</div>
+<!-- ===== END INVOICE EMAIL HISTORY ===== -->
+    <div
+      id="authorizationInfo"
+      class="authorization">
+
+      <h3>✓ CUSTOMER AUTHORIZED</h3>
+
+      <p>
+        <strong>Authorized By:</strong>
+        <span id="authorizedBy"></span>
+      </p>
+
+      <p>
+        <strong>Method:</strong>
+        <span id="authorizationMethod"></span>
+      </p>
+
+      <p>
+        <strong>Date / Time:</strong>
+        <span id="authorizationDate"></span>
+      </p>
+
+      <p id="authorizationNotesRow">
+        <strong>Notes:</strong>
+        <span id="authorizationNotes"></span>
+      </p>
+
+    </div>
+
+
+    <div style="margin-top:24px;text-align:center;font-size:12px;color:#66717d;">Powered by Garavex™</div>
+<div class="actions">
+
+      <button
+        class="print-btn"
+        type="button"
+        onclick="window.print()">
+        Print / Save PDF
+      </button>
+
+      <button
+  class="print-btn"
+  type="button"
+  id="emailInvoiceBtn"
+  onclick="emailInvoice()">
+  Email Invoice
+</button>
+
+<button
+  class="print-btn"
+  type="button"
+  id="textInvoiceBtn">
+  📱 Text Invoice
+</button>
+      
+      <button
+        class="back-btn"
+        type="button"
+        id="backBtn">
+        Back to Repair Order
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function formatAuthorizationMethod(method) {
+
+  if (method === 'in_person') {
+    return 'In Person';
+  }
+
+  if (method === 'phone') {
+    return 'Phone';
+  }
+
+  if (method === 'text') {
+    return 'Text Message';
+  }
+
+  if (method === 'email') {
+    return 'Email';
+  }
+
+  return method || '';
+}
+
+
+let currentInvoice = null;
+async function loadInvoice() {
+  const params = new URLSearchParams(window.location.search);
+ const id = params.get('id');
+const token = params.get('token');
+
+if (!id && !token) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    return;
+}
+
+
+  const backBtn = document.getElementById('backBtn');
+  if (token) {
+    backBtn.style.display = 'none';
+  } else {
+    backBtn.onclick = () => {
+      window.location.href =
+        '/repair-order.html?id=' +
+        encodeURIComponent(id);
+    };
+  }
+
+
+  try {
+
+    const apiUrl = token
+    ? '/api/customer-invoice/' + encodeURIComponent(token)
+    : '/api/repair-orders/' + encodeURIComponent(id);
+
+const response = await fetch(apiUrl);
+
+
+    if (!response.ok) {
+      throw new Error(
+        'Unable to retrieve repair order'
+      );
+    }
+
+
+  const data = await response.json();
+
+// Employee API returns the order directly.
+// Secure customer API returns { success: true, invoice: {...} }.
+const order = data.invoice || data;
+if (order.vehicle) {
+    order.vehicle_year = order.vehicle.year;
+    order.vehicle_make = order.vehicle.make;
+    order.vehicle_model = order.vehicle.model;
+    order.vehicle_vin = order.vehicle.vin;
+    order.vehicle_mileage = order.vehicle.mileage;
+}
+currentInvoice = order;
+const shopName = order.shop_name || 'Repair Shop';
+document.title = shopName + ' | Invoice';
+document.getElementById('shopName').textContent = shopName;
+document.getElementById('shopTagline').textContent = order.shop_tagline || '';
+document.getElementById('shopAddress').textContent = [order.shop_address, [order.shop_city, order.shop_state].filter(Boolean).join(', '), order.shop_zip].filter(Boolean).join(' · ');
+document.getElementById('shopContact').textContent = [order.shop_phone, order.shop_email].filter(Boolean).join(' · ');
+const shopLogo = document.getElementById('shopLogo');
+if (order.shop_logo_url) { shopLogo.src = order.shop_logo_url; shopLogo.alt = shopName + ' logo'; shopLogo.style.display = 'block'; }
+// ===== QUICKBOOKS PAYMENT STATUS =====
+// Only run this from the logged-in employee invoice view.
+if (!token && id && order.quickbooks_invoice_id) {
+  try {
+    const syncResponse = await fetch(
+      `/api/repair-orders/${encodeURIComponent(id)}/sync-quickbooks-payment`,
+      {
+        method: 'POST'
+      }
+    );
+
+    const syncResult = await syncResponse.json();
+
+    if (syncResponse.ok && syncResult.synced) {
+      // Update the invoice data currently being displayed
+      order.payment_status =
+        syncResult.paymentStatus;
+
+      order.amount_paid =
+        syncResult.amountPaid;
+
+      order.balance =
+        syncResult.balance;
+
+      console.log(
+        'QuickBooks payment status synced:',
+        syncResult
+      );
+    } else {
+      console.log(
+        'QuickBooks payment status not synced:',
+        syncResult
+      );
+    }
+
+  } catch (syncError) {
+    // Do not prevent the invoice from loading
+    // if QuickBooks is temporarily unavailable.
+    console.error(
+      'QuickBooks payment status check failed:',
+      syncError
+    );
+  }
+}
+// ===== END QUICKBOOKS PAYMENT STATUS SYNC =====
+    document.getElementById('invoiceNumber').textContent =
+      'SK-' + String(order.id).padStart(5, '0');
+
+
+    document.getElementById('repairOrderNumber').textContent =
+      order.id;
+
+
+    document.getElementById('customerName').textContent =
+      order.customer_name || '';
+
+
+    document.getElementById('customerPhone').textContent =
+      order.customer_phone || '';
+
+
+    document.getElementById('customerEmail').textContent =
+      order.customer_email || '';
+
+
+    document.getElementById('vehicle').textContent =
+      [
+        order.vehicle_year,
+        order.vehicle_make,
+        order.vehicle_model
+      ]
+      .filter(Boolean)
+      .join(' ');
+
+
+    document.getElementById('mileage').textContent =
+      order.vehicle_mileage || '';
+
+
+    document.getElementById('vin').textContent =
+      order.vehicle_vin || '';
+
+
+    const itemsBody =
+      document.getElementById('itemsBody');
+
+
+    itemsBody.innerHTML = '';
+
+
+    let subtotal = 0;
+
+
+    if (Array.isArray(order.items)) {
+
+      order.items.forEach(item => {
+
+        const parts =
+          Number(item.parts) || 0;
+
+        const labor =
+          Number(item.labor) || 0;
+
+        const itemTotal =
+          parts + labor;
+
+        subtotal += itemTotal;
+
+
+        const row =
+          document.createElement('tr');
+
+
+        row.innerHTML = `
+          <td>${item.description || ''}</td>
+          <td>${money(parts)}</td>
+          <td>${money(labor)}</td>
+          <td>${money(itemTotal)}</td>
+        `;
+
+
+        itemsBody.appendChild(row);
+
+      });
+
+    }
+
+
+    const tax =
+      Math.round(subtotal * 0.075 * 100) / 100;
+
+
+    const total =
+      Math.round((subtotal + tax) * 100) / 100;
+
+
+    document.getElementById('subtotal').textContent =
+      money(subtotal);
+
+
+    document.getElementById('tax').textContent =
+      money(tax);
+
+
+    document.getElementById('total').textContent =
+      money(total);
+const amountPaid =
+  Number(order.amount_paid) || 0;
+
+const balanceDue =
+  Math.max(0, total - amountPaid);
+
+document.getElementById('amountPaid').textContent =
+  money(amountPaid);
+
+document.getElementById('balanceDue').textContent =
+  money(balanceDue);
+    const paymentControls =
+  document.getElementById('paymentControls');
+
+const payInvoiceBtn =
+  document.getElementById('payInvoiceBtn');
+
+if (balanceDue > 0) {
+  paymentControls.style.display = 'block';
+  payInvoiceBtn.textContent =
+    'Pay ' + money(balanceDue);
+} else {
+  paymentControls.style.display = 'none';
+}
+// ===== GARAVEX - ONLINE PAYMENT ROUTING =====
+if (payInvoiceBtn) {
+  payInvoiceBtn.addEventListener('click', async () => {
+    // Secure customer invoices use the shop's Stripe Connect account when enabled.
+    if (token && order.stripe_payments_enabled) {
+      try {
+        payInvoiceBtn.disabled = true;
+        payInvoiceBtn.textContent = 'Opening secure payment...';
+        const response = await fetch('/api/stripe/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.url) throw new Error(result.error || 'Unable to start payment.');
+        window.location.href = result.url;
+        return;
+      } catch (err) {
+        alert(err.message || 'Unable to start online payment.');
+        payInvoiceBtn.disabled = false;
+        payInvoiceBtn.textContent = 'Pay ' + money(balanceDue);
+        return;
+      }
+    }
+
+    // Existing QuickBooks payment link remains available for shops that use it.
+    if (order.quickbooks_invoice_url) {
+      window.location.href = order.quickbooks_invoice_url;
+      return;
+    }
+
+    alert('Online payment is not available for this invoice yet.');
+  });
+}
+// ===== END ONLINE PAYMENT ROUTING =====
+const paidStatus = document.getElementById('paidStatus');
+
+if (balanceDue <= 0 && total > 0) {
+  paidStatus.style.display = 'block';
+} else {
+  paidStatus.style.display = 'none';
+}
+    if (order.completed_at) {
+
+      const completedDate =
+       new Date(order.completed_at.endsWith('Z') ? order.completed_at : order.completed_at + 'Z');
+
+
+      document.getElementById('completedDate').innerHTML =
+        '<strong>Completed:</strong> ' +
+        completedDate.toLocaleString();
+
+
+      const completionInfo =
+        document.getElementById('completionInfo');
+
+
+      completionInfo.style.display =
+        'block';
+
+
+      completionInfo.textContent =
+        '✓ Repair completed: ' +
+        completedDate.toLocaleString();
+
+    }
+// ===== S&K AUTO - DISPLAY PAYMENT STATUS =====
+  window.currentAmountPaid = amountPaid;  
+
+const paymentBadge =
+  document.getElementById('paymentBadge');
+
+const paymentDetails =
+  document.getElementById('paymentDetails');
+// ===== S&K AUTO - DISPLAY PAYMENT HISTORY =====
+const paymentHistorySection =
+  document.getElementById('paymentHistorySection');
+
+const paymentHistory =
+  document.getElementById('paymentHistory');
+
+const activePayments = (order.payments || []).filter(payment => !payment.voided);
+const localActivePaid = activePayments.reduce(
+  (sum, payment) => sum + Number(payment.amount || 0),
+  0
+);
+const quickBooksOnlyPaid = Math.max(0, amountPaid - localActivePaid);
+
+if (activePayments.length > 0 || quickBooksOnlyPaid > 0.009) {
+
+    paymentHistorySection.style.display = 'block';
+
+    paymentHistory.innerHTML = activePayments.map(payment => {
+
+    let method = payment.payment_method || '';
+
+    if (method === 'card') {
+      method = 'Credit / Debit Card';
+    } else if (method === 'cash') {
+      method = 'Cash';
+    } else if (method === 'check') {
+      method = 'Check';
+    } else if (method === 'other') {
+      method = 'Other';
+    }
+
+  const paidDate = payment.paid_at
+  ? new Date(
+      payment.paid_at.replace(' ', 'T') + 'Z'
+    ).toLocaleString('en-US', {
+      timeZone: 'America/Chicago',
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  : '';
+
+  return `
+    <div style="
+        padding:8px 0;
+        border-bottom:1px solid #ddd;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:15px;
+    ">
+        <div>
+            <strong>${money(Number(payment.amount) || 0)}</strong>
+            &nbsp;–&nbsp; ${method}
+            <br>
+            <span style="font-size:13px;">${paidDate}</span>
+        </div>
+
+        <button
+            type="button"
+            onclick="window.location.href='/receipt.html?orderId=${order.id}&paymentId=${payment.id}'"
+            style="
+                background:#28a745;
+                color:white;
+                border:none;
+                border-radius:5px;
+                padding:7px 12px;
+                font-weight:bold;
+                cursor:pointer;
+                white-space:nowrap;
+            "
+        >
+            View Receipt
+        </button>
+    </div>
+`;
+
+}).join('') + (quickBooksOnlyPaid > 0.009 ? `
+    <div style="padding:8px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;gap:15px;">
+      <div><strong>${money(quickBooksOnlyPaid)}</strong>&nbsp;–&nbsp; QuickBooks Payment<br><span style="font-size:13px;">Synced from QuickBooks</span></div>
+    </div>
+` : '');
+
+}
+
+    
+    
+   if (amountPaid >= total) {
+const paymentControls =
+  document.getElementById('paymentControls');
+
+if (paymentControls) paymentControls.style.display = 'none';
+  paymentBadge.textContent = '✓ PAID';
+  paymentBadge.style.background = '#28a745';
+
+let methodText = '';
+
+const validPayments = (order.payments || []).filter(
+    payment => !payment.voided
+);
+
+if (validPayments.length > 0) {
+    methodText =
+        validPayments[validPayments.length - 1].payment_method || '';
+} else if (amountPaid > 0) {
+    methodText = order.payment_method || 'QuickBooks';
+}
+
+  if (methodText === 'card') {
+    methodText = 'Credit / Debit Card';
+  } else if (methodText === 'cash') {
+    methodText = 'Cash';
+  } else if (methodText === 'check') {
+    methodText = 'Check';
+  } else if (methodText === 'other') {
+    methodText = 'Other';
+  }
+
+  paymentDetails.style.display = 'block';
+
+  paymentDetails.innerHTML =
+    '<strong>Payment Method:</strong> ' +
+    methodText;
+
+  if (order.paid_at) {
+    const paidDate = new Date(order.paid_at);
+
+    paymentDetails.innerHTML +=
+      '<br><strong>Paid:</strong> ' +
+      paidDate.toLocaleString();
+  }
+
+} else if (amountPaid > 0) {
+
+  paymentBadge.textContent = 'PARTIALLY PAID';
+  paymentBadge.style.background = '#f0ad4e';
+  paymentDetails.style.display = 'block';
+
+if (order.paid_at) {
+  const partialPaidDate = new Date(order.paid_at);
+
+  paymentDetails.innerHTML =
+    '<strong>Payment Received:</strong> ' +
+    money(amountPaid) +
+    '<br><strong>Date:</strong> ' +
+    partialPaidDate.toLocaleString();
+}
+
+} else {
+
+  paymentBadge.textContent = 'UNPAID';
+  paymentBadge.style.background = '#dc3545';
+  paymentDetails.style.display = 'none';
+
+}
+    const paymentSavedInfo =
+  document.getElementById('paymentSavedInfo');
+if (order.paid_at) {
+
+  const paidDate =
+    new Date(order.paid_at);
+
+  paymentSavedInfo.style.display = 'block';
+
+  paymentSavedInfo.textContent =
+  '✓ PAYMENT RECEIVED: ' +
+  money(amountPaid) +
+  ' - ' +
+  paidDate.toLocaleString();
+}
+
+    if (order.authorized_at) {
+
+      const authorizationInfo =
+        document.getElementById('authorizationInfo');
+
+
+      authorizationInfo.style.display =
+        'block';
+
+
+      document.getElementById('authorizedBy').textContent =
+        order.authorized_by || '';
+
+
+      document.getElementById('authorizationMethod').textContent =
+        formatAuthorizationMethod(
+          order.authorization_method
+        );
+
+
+      document.getElementById('authorizationDate').textContent =
+        new Date(
+          order.authorized_at
+        ).toLocaleString();
+
+
+      const notesRow =
+        document.getElementById(
+          'authorizationNotesRow'
+        );
+
+
+      if (order.authorization_notes) {
+
+        document.getElementById(
+          'authorizationNotes'
+        ).textContent =
+          order.authorization_notes;
+
+      } else {
+
+        notesRow.style.display =
+          'none';
+
+      }
+
+    }
+
+// ===== S&K AUTO - LOAD INVOICE EMAIL HISTORY =====
+if (!token && id) try {
+  const emailHistoryResponse = await fetch(
+    `/api/repair-orders/${id}/invoice-email-history`
+  );
+
+  if (emailHistoryResponse.ok) {
+    const emailHistory = await emailHistoryResponse.json();
+
+    const emailHistorySection =
+      document.getElementById('invoiceEmailHistorySection');
+
+    const emailHistoryContainer =
+      document.getElementById('invoiceEmailHistory');
+
+    if (emailHistory.length > 0) {
+      emailHistorySection.style.display = 'block';
+
+      emailHistoryContainer.innerHTML = emailHistory.map(entry => {
+        const sentDate = new Date(
+  entry.sent_at.replace(' ', 'T') + 'Z'
+).toLocaleString('en-US', {
+  timeZone: 'America/Chicago',
+  month: 'numeric',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit'
+});
+
+        return `
+          <div style="padding:10px 0;border-bottom:1px solid #ddd;">
+            <strong>Sent to:</strong> ${entry.email}<br>
+            <strong>Sent:</strong> ${sentDate}
+          </div>
+        `;
+      }).join('');
+    } else {
+      emailHistorySection.style.display = 'none';
+      emailHistoryContainer.innerHTML = '';
+    }
+  }
+} catch (emailHistoryError) {
+  console.error(
+    'Unable to load invoice email history:',
+    emailHistoryError
+  );
+}
+    document.getElementById('loading').style.display =
+      'none';
+
+
+    document.getElementById('invoiceContent').style.display =
+      'block';
+
+
+  } catch (error) {
+
+    console.error(error);
+
+
+    document.getElementById('loading').style.display =
+      'none';
+
+
+    document.getElementById('error').style.display =
+      'block';
+
+  }
+
+}
+
+  async function emailInvoice() {
+  const params =
+    new URLSearchParams(window.location.search);
+
+  const id = params.get('id');
+
+  if (!id) {
+    alert('Unable to identify this invoice.');
+    return;
+  }
+
+  const button =
+    document.getElementById('emailInvoiceBtn');
+
+  const confirmed = confirm(
+    'Email this invoice to the customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Sending...';
+
+    const response = await fetch(
+      '/api/repair-orders/' +
+      encodeURIComponent(id) +
+      '/email-invoice',
+      {
+        method: 'POST'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to email invoice.'
+      );
+    }
+
+    alert('Invoice emailed successfully.');
+
+  } catch (error) {
+    console.error('Email invoice error:', error);
+
+    alert(
+      error.message ||
+      'Unable to email invoice.'
+    );
+
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Email Invoice';
+  }
+}
+
+// ===== S&K AUTO - TEXT INVOICE =====
+const textInvoiceBtn = document.getElementById('textInvoiceBtn');
+
+if (textInvoiceBtn) {
+    textInvoiceBtn.addEventListener('click', async () => {
+        const originalText = textInvoiceBtn.textContent;
+
+        try {
+            if (!currentInvoice) {
+                throw new Error('Invoice information is not loaded.');
+            }
+
+            textInvoiceBtn.disabled = true;
+            textInvoiceBtn.textContent = 'Sending...';
+
+            const response = await fetch(
+                '/api/repair-orders/' + encodeURIComponent(id) + '/text-invoice',
+                { method: 'POST' }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || 'Unable to text invoice.'
+                );
+            }
+
+            alert('Invoice text sent successfully!');
+
+        } catch (error) {
+            console.error('Text invoice error:', error);
+
+            alert(
+                error.message || 'Unable to text invoice.'
+            );
+
+        } finally {
+            textInvoiceBtn.disabled = false;
+            textInvoiceBtn.textContent = originalText;
+        }
+    });
+}
+
+  
+loadInvoice();
+
+</script>
+
+</body>
+</html>

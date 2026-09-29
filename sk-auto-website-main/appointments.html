@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>S&K Auto | Appointments</title>
+
+  <style>
+
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--panel2:#11161b;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23;--danger:#b43b3b}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.header{background:#15191e;border-bottom:3px solid var(--accent);padding:16px 22px}.header-inner{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{display:flex;align-items:center;gap:13px}.brand img{width:64px;height:auto}.brand h1{margin:0;font-size:24px}.brand p{margin:4px 0 0;color:var(--muted);font-size:13px}.dashboard-btn,.refresh-btn,button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer;color:#fff;background:#303841;text-decoration:none}.dashboard-btn{background:var(--accent)}.page{max-width:1200px;margin:auto;min-height:calc(100vh - 100px);padding:27px 18px 45px}.page-title{margin-bottom:20px}.page-title h2{margin:0 0 6px;font-size:30px}.page-title p{margin:0;color:var(--muted)}.workflow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0}.step{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px;color:var(--muted);font-size:13px}.step strong{display:block;color:#fff;margin-bottom:4px}.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}.search{flex:1;min-width:260px}.search,input,select,textarea{padding:11px 12px;border:1px solid #46505a;border-radius:7px;background:#11161b;color:#fff;font-size:15px}textarea{min-height:90px;resize:vertical}.appointment-count{margin-bottom:13px;color:var(--muted);font-weight:bold}.appointment-list{display:grid;gap:12px}.appointment-card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:17px}.appointment-card.status-scheduled{border-left-color:#3498db}.appointment-card.status-checked_in{border-left-color:#f39c12}.appointment-card.status-in_progress{border-left-color:#f1c40f}.appointment-card.status-completed{border-left-color:#28a745}.appointment-card.status-cancelled{border-left-color:#dc3545}.appointment-date{font-size:19px;font-weight:800;color:#fff}.appointment-card h3{margin:10px 0 7px}.appointment-card p{margin:5px 0;color:#c8cfd6}.appointment-status{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.edit-btn{background:#303841}.delete-btn{background:var(--danger)}.message{background:var(--panel);border:1px solid var(--line);text-align:center;padding:30px;border-radius:9px;color:var(--muted)}.footer{text-align:center;color:#77818b;padding:28px 0 8px;font-size:13px}
+#newAppointmentForm{background:var(--panel)!important;border:1px solid var(--line);border-radius:10px!important;padding:20px!important}#newAppointmentForm h3{margin-top:0;color:var(--accent)}#newAppointmentForm input,#newAppointmentForm select,#newAppointmentForm textarea{display:block;width:100%;margin-bottom:10px}
+@media(max-width:700px){.header-inner{align-items:flex-start;flex-direction:column}.workflow{grid-template-columns:1fr}.page{padding:20px 15px}.toolbar>*{width:100%}.appointment-status select,.appointment-status button,.edit-btn,.delete-btn{width:100%;margin:4px 0}}
+
+</style>
+</head>
+
+<body>
+
+  <div class="header">
+    <div class="header-inner">
+
+      <div class="brand">
+        <img src="sk-auto-logo.jpg" alt="S&K Auto">
+
+        <div>
+          <h1>S&amp;K Auto</h1>
+          <p>Appointment Management</p>
+        </div>
+      </div>
+
+      <a href="dashboard.html" class="dashboard-btn">
+        ← Dashboard
+      </a>
+
+    </div>
+  </div>
+
+
+  <div class="page">
+
+    <div class="page-title">
+      <h2>Appointments</h2>
+      <p>View and manage scheduled service appointments.</p>
+    </div>
+
+
+    <div class="workflow">
+  <div class="step"><strong>1. Scheduled</strong>Customer books or shop creates appointment</div>
+  <div class="step"><strong>2. Check In</strong>Vehicle arrives at the shop</div>
+  <div class="step"><strong>3. Repair Workflow</strong>Create/open customer and repair order</div>
+  <div class="step"><strong>4. Complete</strong>Repair, invoice and payment</div>
+</div>
+
+    <div class="toolbar">
+
+      <input
+        type="text"
+        id="searchInput"
+        class="search"
+        placeholder="Search customer, phone, vehicle or service...">
+
+      <button
+        type="button"
+        class="refresh-btn"
+        onclick="loadAppointments()">
+        Refresh Appointments
+      </button>
+
+      <button
+  type="button"
+  class="refresh-btn"
+  onclick="openNewAppointmentForm()">
+  + New Appointment
+</button>
+
+    </div>
+
+    <div id="newAppointmentForm" style="display:none; margin:20px 0; padding:20px; background:#fff; border-radius:8px;">
+
+  <h3 id="appointmentFormTitle">New Appointment</h3>
+      
+<input type="hidden" id="editingAppointmentId" value="">
+      
+  <input
+  type="date"
+  id="newDate"
+  onchange="loadManualAvailability()"
+  required>
+
+  <select id="newTime" required>
+  <option value="">Select Appointment Time</option>
+  <option value="8:00 AM">8:00 AM</option>
+  <option value="9:00 AM">9:00 AM</option>
+  <option value="10:00 AM">10:00 AM</option>
+  <option value="11:00 AM">11:00 AM</option>
+  <option value="12:00 PM">12:00 PM</option>
+  <option value="1:00 PM">1:00 PM</option>
+  <option value="2:00 PM">2:00 PM</option>
+  <option value="3:00 PM">3:00 PM</option>
+  <option value="4:00 PM">4:00 PM</option>
+</select>
+
+  <input type="text" id="newName"
+    placeholder="Customer Name" required>
+
+  <input type="tel" id="newPhone"
+    placeholder="Phone Number" required>
+
+  <input type="email" id="newEmail"
+    placeholder="Email Address">
+
+  <input type="text" id="newVehicle"
+    placeholder="Vehicle - Year Make Model">
+
+  <input type="text" id="newService"
+    placeholder="Service Needed">
+
+  <textarea id="newNotes"
+    placeholder="Appointment Notes"></textarea>
+
+  <br><br>
+
+ <button
+  type="button"
+  id="appointmentSaveButton"
+  class="refresh-btn"
+  onclick="saveAppointmentForm()">
+  Save Appointment
+</button>
+  <button
+    type="button"
+    onclick="closeNewAppointmentForm()">
+    Cancel
+  </button>
+
+</div>
+
+
+    <div
+      id="appointmentCount"
+      class="appointment-count">
+    </div>
+
+
+    <div
+      id="appointmentList"
+      class="appointment-list">
+
+      <div class="message">
+        Loading appointments...
+      </div>
+
+    </div>
+
+
+    <div class="footer">
+      S&amp;K Auto • The Art of Automotive Repair
+    </div>
+
+  </div>
+<script>
+async function loadManualAvailability() {
+
+  const date =
+    document.getElementById('newDate').value;
+
+  const timeSelect =
+    document.getElementById('newTime');
+
+  timeSelect.innerHTML =
+    '<option value="">Checking available times...</option>';
+
+  if (!date) {
+    timeSelect.innerHTML =
+      '<option value="">Select Appointment Time</option>';
+    return;
+  }
+
+  try {
+
+    const response = await fetch(
+      `/api/availability?date=${encodeURIComponent(date)}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Unable to load availability.');
+    }
+
+    const data = await response.json();
+
+    timeSelect.innerHTML = '';
+
+    if (!data.available || data.available.length === 0) {
+
+      timeSelect.innerHTML =
+        '<option value="">No times available</option>';
+
+      return;
+    }
+
+    const firstOption =
+      document.createElement('option');
+
+    firstOption.value = '';
+    firstOption.textContent = 'Select Appointment Time';
+
+    timeSelect.appendChild(firstOption);
+
+    data.available.forEach(time => {
+
+      const option =
+        document.createElement('option');
+
+      option.value = time;
+      option.textContent = time;
+
+      timeSelect.appendChild(option);
+    });
+
+  } catch (error) {
+
+    console.error(
+      'Availability error:',
+      error
+    );
+
+    timeSelect.innerHTML =
+      '<option value="">Unable to load times</option>';
+  }
+}
+  
+  function openNewAppointmentForm() {
+  editingAppointmentId = null;
+
+document.getElementById('appointmentSaveButton').textContent =
+  'Save Appointment';  
+  const form = document.getElementById('newAppointmentForm');
+
+  form.style.display = 'block';
+
+  document.getElementById('newDate').value =
+    new Date().toLocaleDateString('en-CA');
+
+  form.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+}
+
+
+function closeNewAppointmentForm() {
+  document.getElementById('newAppointmentForm').style.display = 'none';
+}
+function editAppointment(id) {
+  const appointment = window.currentAppointments.find(
+    appointment => appointment.id === id
+  );
+
+  if (!appointment) {
+    alert('Unable to find appointment.');
+    return;
+  }
+
+  editingAppointmentId = id;
+
+  document.getElementById('newDate').value = appointment.date || '';
+
+  // Refresh available times for the appointment date, then preserve the
+  // appointment's existing time while it is being edited.
+  loadManualAvailability().then(() => {
+    const timeSelect = document.getElementById('newTime');
+    const existingTime = appointment.time || '';
+
+    if (
+      existingTime &&
+      !Array.from(timeSelect.options).some(option => option.value === existingTime)
+    ) {
+      const option = document.createElement('option');
+      option.value = existingTime;
+      option.textContent = existingTime + ' (current appointment)';
+      timeSelect.appendChild(option);
+    }
+
+    timeSelect.value = existingTime;
+  });
+  document.getElementById('newName').value = appointment.name || '';
+  document.getElementById('newPhone').value = appointment.phone || '';
+  document.getElementById('newEmail').value = appointment.email || '';
+  document.getElementById('newVehicle').value = appointment.vehicle || '';
+  document.getElementById('newService').value = appointment.service || '';
+  document.getElementById('newNotes').value = appointment.notes || '';
+
+  document.getElementById('newAppointmentForm').style.display = 'block';
+
+  document.getElementById('appointmentSaveButton').textContent =
+    'Update Appointment';
+
+  document.getElementById('newAppointmentForm').scrollIntoView({
+    behavior: 'smooth'
+  });
+}
+async function updateExistingAppointment() {
+  const booking = {
+    service: document.getElementById('newService').value.trim(),
+    vehicle: document.getElementById('newVehicle').value.trim(),
+    date: document.getElementById('newDate').value,
+    time: document.getElementById('newTime').value,
+    name: document.getElementById('newName').value.trim(),
+    phone: document.getElementById('newPhone').value.trim(),
+    email: document.getElementById('newEmail').value.trim(),
+    notes: document.getElementById('newNotes').value.trim()
+  };
+
+  if (
+    !booking.service ||
+    !booking.vehicle ||
+    !booking.date ||
+    !booking.time ||
+    !booking.name ||
+    !booking.phone
+  ) {
+    alert('Please complete the service, vehicle, date, time, name, and phone fields.');
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      '/api/appointments/' + encodeURIComponent(editingAppointmentId),
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(booking)
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || 'Unable to update appointment.');
+      return;
+    }
+
+    alert('Appointment updated successfully.');
+
+    editingAppointmentId = null;
+
+    document.getElementById('appointmentSaveButton').textContent =
+      'Save Appointment';
+
+    closeNewAppointmentForm();
+
+    await loadAppointments();
+
+  } catch (error) {
+    console.error('Update appointment error:', error);
+    alert('Unable to update appointment.');
+  }
+}  
+let editingAppointmentId = null;
+
+async function saveAppointmentForm() {
+  if (editingAppointmentId) {
+    await updateExistingAppointment();
+  } else {
+    await saveNewAppointment();
+  }
+}
+async function saveNewAppointment() {
+
+  const booking = {
+    service: document.getElementById('newService').value.trim(),
+    vehicle: document.getElementById('newVehicle').value.trim(),
+    date: document.getElementById('newDate').value,
+    time: document.getElementById('newTime').value,
+    name: document.getElementById('newName').value.trim(),
+    phone: document.getElementById('newPhone').value.trim(),
+    email: document.getElementById('newEmail').value.trim(),
+    notes: document.getElementById('newNotes').value.trim()
+  };
+
+  if (
+    !booking.service ||
+    !booking.vehicle ||
+    !booking.date ||
+    !booking.time ||
+    !booking.name ||
+    !booking.phone
+  ) {
+    alert(
+      'Please complete the service, vehicle, date, time, name, and phone fields.'
+    );
+    return;
+  }
+
+  const formData = new FormData();
+
+  Object.entries(booking).forEach(([key, value]) => {
+    formData.append(key, value);
+  });
+
+  try {
+
+    const response = await fetch('/api/book', {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(
+        data.error ||
+        data.message ||
+        'Unable to create appointment.'
+      );
+      return;
+    }
+
+    alert('Appointment created successfully.');
+
+    document.getElementById('newDate').value = '';
+    document.getElementById('newTime').value = '';
+    document.getElementById('newName').value = '';
+    document.getElementById('newPhone').value = '';
+    document.getElementById('newEmail').value = '';
+    document.getElementById('newVehicle').value = '';
+    document.getElementById('newService').value = '';
+    document.getElementById('newNotes').value = '';
+
+    closeNewAppointmentForm();
+
+    await loadAppointments();
+
+  } catch (error) {
+
+    console.error('Create appointment error:', error);
+
+    alert('Unable to create appointment.');
+  }
+}
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+async function loadAppointments() {
+
+  const appointmentList =
+    document.getElementById('appointmentList');
+
+  const appointmentCount =
+    document.getElementById('appointmentCount');
+
+  try {
+
+    appointmentList.innerHTML =
+      '<div class="message">Loading appointments...</div>';
+
+    const response =
+      await fetch('/api/appointments');
+
+    if (!response.ok) {
+      throw new Error('Unable to load appointments.');
+    }
+
+    const appointments =
+      await response.json();
+
+window.currentAppointments = appointments;
+    
+    appointmentCount.textContent =
+      appointments.length +
+      (appointments.length === 1
+        ? ' Appointment'
+        : ' Appointments');
+
+    if (appointments.length === 0) {
+
+      appointmentList.innerHTML =
+        '<div class="message">No appointments scheduled.</div>';
+
+      return;
+    }
+
+    appointmentList.innerHTML =
+      appointments.map(appointment => {
+
+        return `
+          <div class="appointment-card status-${appointment.status || 'scheduled'}">
+            <div class="appointment-date">
+              ${escapeHtml(appointment.date || '')}
+              &nbsp; • &nbsp;
+              ${escapeHtml(appointment.time || '')}
+            </div>
+
+            <h3>${escapeHtml(appointment.name || 'Customer')}</h3>
+
+            <p><strong>Phone:</strong>
+              ${escapeHtml(appointment.phone || '')}
+            </p>
+
+            <p><strong>Email:</strong>
+              ${escapeHtml(appointment.email || '')}
+            </p>
+
+            <p><strong>Vehicle:</strong>
+              ${escapeHtml(appointment.vehicle || '')}
+            </p>
+
+            <p><strong>Service:</strong>
+              ${escapeHtml(appointment.service || '')}
+            </p>
+
+            ${
+              appointment.notes
+                ? `<p><strong>Notes:</strong> ${escapeHtml(appointment.notes)}</p>`
+                : ''
+            }
+<div class="appointment-status">
+  <strong>Status:</strong>
+
+  <select id="status-${appointment.id}">
+    <option value="scheduled" ${appointment.status === 'scheduled' ? 'selected' : ''}>
+      Scheduled
+    </option>
+
+    <option value="checked_in" ${appointment.status === 'checked_in' ? 'selected' : ''}>
+      Checked In
+    </option>
+
+    <option value="in_progress" ${appointment.status === 'in_progress' ? 'selected' : ''}>
+      In Progress
+    </option>
+
+    <option value="completed" ${appointment.status === 'completed' ? 'selected' : ''}>
+      Completed
+    </option>
+
+    <option value="cancelled" ${appointment.status === 'cancelled' ? 'selected' : ''}>
+      Cancelled
+    </option>
+  </select>
+
+  <button
+    type="button"
+    onclick="updateAppointmentStatus(${appointment.id})">
+    Update Status
+  </button>
+</div>
+
+<button
+  type="button"
+  class="edit-btn"
+  onclick="editAppointment(${appointment.id})">
+  Edit Appointment
+</button>
+  <button
+  class="delete-btn"
+  onclick="deleteAppointment(${appointment.id})">
+  Delete Appointment
+</button>
+          </div>
+        `;
+      }).join('');
+
+  } catch (error) {
+
+    console.error(
+      'Appointment load error:',
+      error
+    );
+
+    appointmentList.innerHTML =
+      '<div class="message">Unable to load appointments.</div>';
+
+  }
+}
+async function deleteAppointment(id) {
+
+  const confirmed = confirm(
+    'Are you sure you want to delete this appointment?'
+  );
+
+  if (!confirmed) return;
+
+  try {
+
+    const response = await fetch(
+      '/api/appointments/' + encodeURIComponent(id),
+      {
+        method: 'DELETE'
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || 'Unable to delete appointment.');
+      return;
+    }
+
+    await loadAppointments();
+
+  } catch (error) {
+
+    console.error(
+      'Delete appointment error:',
+      error
+    );
+
+    alert('Unable to delete appointment.');
+  }
+}
+
+  async function updateAppointmentStatus(id) {
+  const statusSelect =
+    document.getElementById('status-' + id);
+
+  const status = statusSelect.value;
+
+  try {
+    const response = await fetch(
+      '/api/appointments/' +
+      encodeURIComponent(id) +
+      '/status',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: status
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || 'Unable to update appointment status.');
+      return;
+    }
+
+    await loadAppointments();
+
+  } catch (error) {
+    console.error(
+      'Update appointment status error:',
+      error
+    );
+
+    alert('Unable to update appointment status.');
+  }
+}
+loadAppointments();
+</script>
+</body>
+</html>

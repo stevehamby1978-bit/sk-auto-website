@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Garavex | Vehicle Service History</title>
+
+  <style>
+
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.page{max-width:1250px;min-height:100vh;margin:auto}.header{background:#15191e;color:#fff;padding:22px 26px;border-bottom:3px solid var(--accent);display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}.header h1{margin:0;font-size:28px}.header p{margin:5px 0 0;color:var(--muted)}.dashboard-btn{display:inline-block;padding:10px 15px;background:#303841;color:#fff;text-decoration:none;border-radius:7px;font-weight:bold}.content{padding:27px 18px 45px}.toolbar{display:flex;gap:11px;margin-bottom:18px;flex-wrap:wrap}.search{flex:1;min-width:260px}.search,.filter{padding:12px 13px;border:1px solid #46505a;border-radius:7px;background:#171b20;color:#fff;font-size:15px}.result-count{margin-bottom:14px;color:var(--muted);font-weight:bold}.history-list{display:grid;gap:13px}.history-card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:18px}.history-top{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.history-card h2{margin:0 0 7px;font-size:21px}.history-card p{margin:5px 0;color:#c3cad1}.status{display:inline-block;padding:6px 10px;border-radius:20px;color:#fff;font-size:12px;font-weight:bold;text-transform:uppercase}.waiting{background:#b98316}.in_progress{background:#1769aa}.completed{background:#25844e}.cancelled{background:#ad3838}.items{margin-top:14px;padding-top:11px;border-top:1px solid var(--line)}.item{padding:8px 0;border-bottom:1px solid #293038}.item:last-child{border-bottom:0}.total{margin-top:12px;text-align:right;font-size:18px;font-weight:bold}.buttons{margin-top:14px;display:flex;gap:9px;flex-wrap:wrap}.btn{display:inline-block;padding:10px 14px;border-radius:6px;text-decoration:none;color:#fff;background:var(--accent);font-weight:bold}.invoice-btn{background:#303841}.message{background:var(--panel);border:1px solid var(--line);padding:25px;border-radius:9px;text-align:center;color:var(--muted)}@media(max-width:650px){.content{padding:18px}.buttons{flex-direction:column}.btn{text-align:center}}
+
+</style>
+</head>
+
+<body>
+
+<div class="page">
+
+  <header class="header">
+
+    <div>
+      <h1>Garavex — Vehicle Service History</h1>
+      <p>
+        Search completed and active vehicle repair history
+      </p>
+    </div>
+
+    <a href="dashboard.html" class="dashboard-btn">
+      ← Dashboard
+    </a>
+
+  </header>
+
+
+  <main class="content">
+
+    <div class="toolbar">
+
+      <input
+        type="text"
+        id="searchInput"
+        class="search"
+        placeholder="Search customer, vehicle, VIN, repair or RO number..."
+      >
+
+      <select id="statusFilter" class="filter">
+        <option value="all">All Statuses</option>
+        <option value="completed">Completed</option>
+        <option value="in_progress">In Progress</option>
+        <option value="waiting">Waiting</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+
+    </div>
+
+    <div
+      id="resultCount"
+      class="result-count">
+    </div>
+
+    <div
+      id="historyList"
+      class="history-list">
+
+      <div class="message">
+        Loading service history...
+      </div>
+
+    </div>
+
+  </main>
+
+</div>
+
+
+<script>
+
+let repairOrders = [];
+
+
+function money(value) {
+  return '$' + (Number(value) || 0).toFixed(2);
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+function calculateTotal(order) {
+
+  const items =
+    order.items || [];
+
+  const subtotal =
+    items.reduce(
+      (sum, item) =>
+        sum +
+        (Number(item.parts) || 0) +
+        (Number(item.labor) || 0),
+      0
+    );
+
+  const tax =
+    Math.round(
+      subtotal * 0.075 * 100
+    ) / 100;
+
+  return Math.round(
+    (subtotal + tax) * 100
+  ) / 100;
+}
+
+
+async function loadServiceHistory() {
+
+  const historyList =
+    document.getElementById('historyList');
+
+  try {
+
+    const response =
+      await fetch('/api/repair-orders');
+
+    if (!response.ok) {
+      throw new Error(
+        'Unable to load service history.'
+      );
+    }
+
+    repairOrders =
+      await response.json();
+
+    filterHistory();
+
+  } catch (error) {
+
+    console.error(error);
+
+    historyList.innerHTML =
+      '<div class="message">' +
+      'Unable to load service history.' +
+      '</div>';
+
+  }
+}
+
+
+function filterHistory() {
+
+  const search =
+    document
+      .getElementById('searchInput')
+      .value
+      .toLowerCase()
+      .trim();
+
+  const status =
+    document
+      .getElementById('statusFilter')
+      .value;
+
+
+  const filtered =
+    repairOrders.filter(order => {
+
+      if (
+        status !== 'all' &&
+        order.status !== status
+      ) {
+        return false;
+      }
+
+
+      const itemDescriptions =
+        (order.items || [])
+          .map(item => item.description)
+          .join(' ');
+
+
+      const searchable = [
+        order.id,
+        order.customer_name,
+        order.customer_phone,
+        order.customer_email,
+        order.vehicle_year,
+        order.vehicle_make,
+        order.vehicle_model,
+        order.vehicle_vin,
+        order.vehicle_mileage,
+        itemDescriptions
+      ]
+        .join(' ')
+        .toLowerCase();
+
+
+      return searchable.includes(search);
+
+    });
+
+
+  displayHistory(filtered);
+
+}
+
+
+function displayHistory(list) {
+
+  const historyList =
+    document.getElementById('historyList');
+
+  const resultCount =
+    document.getElementById('resultCount');
+
+
+  resultCount.textContent =
+    list.length +
+    (list.length === 1
+      ? ' service record'
+      : ' service records');
+
+
+  if (list.length === 0) {
+
+    historyList.innerHTML =
+      '<div class="message">' +
+      'No service records found.' +
+      '</div>';
+
+    return;
+  }
+
+
+  historyList.innerHTML =
+    list.map(order => {
+
+      const items =
+        order.items || [];
+
+      const total =
+        calculateTotal(order);
+
+      const status =
+        order.status || 'waiting';
+
+
+      const itemHtml =
+        items.length
+          ? items.map(item => `
+
+              <div class="item">
+
+                <strong>
+                  ${escapeHtml(item.description)}
+                </strong>
+
+                <br>
+
+                Parts:
+                ${money(item.parts)}
+
+                &nbsp; | &nbsp;
+
+                Labor:
+                ${money(item.labor)}
+
+              </div>
+
+            `).join('')
+
+          : '<div class="item">No repair items.</div>';
+
+
+      return `
+
+        <div class="history-card">
+
+          <div class="history-top">
+
+            <div>
+
+              <h2>
+                ${escapeHtml(
+                  order.vehicle_year || ''
+                )}
+                ${escapeHtml(
+                  order.vehicle_make || ''
+                )}
+                ${escapeHtml(
+                  order.vehicle_model || ''
+                )}
+              </h2>
+
+              <p>
+                <strong>Customer:</strong>
+                ${escapeHtml(
+                  order.customer_name || 'Unknown'
+                )}
+              </p>
+
+              <p>
+                <strong>VIN:</strong>
+                ${escapeHtml(
+                  order.vehicle_vin || 'Not entered'
+                )}
+              </p>
+
+              <p>
+                <strong>Mileage:</strong>
+                ${escapeHtml(
+                  order.vehicle_mileage || 'Not entered'
+                )}
+              </p>
+
+              <p>
+                <strong>Repair Order:</strong>
+                #${escapeHtml(order.id)}
+              </p>
+
+            </div>
+
+
+            <div>
+
+              <span class="status ${escapeHtml(status)}">
+
+                ${escapeHtml(
+                  String(status)
+                    .replaceAll('_', ' ')
+                )}
+
+              </span>
+
+            </div>
+
+          </div>
+
+
+          <div class="items">
+
+            ${itemHtml}
+
+          </div>
+
+
+          <div class="total">
+            Total: ${money(total)}
+          </div>
+
+
+          <div class="buttons">
+
+            <a
+              href="repair-order.html?id=${encodeURIComponent(order.id)}"
+              class="btn">
+              View Repair Order
+            </a>
+
+            ${status === 'completed' ? `
+            <a
+              href="invoice.html?id=${encodeURIComponent(order.id)}"
+              class="btn invoice-btn">
+              View Invoice
+            </a>` : ''}
+
+          </div>
+
+        </div>
+
+      `;
+
+    }).join('');
+
+}
+
+
+document
+  .getElementById('searchInput')
+  .addEventListener(
+    'input',
+    filterHistory
+  );
+
+
+document
+  .getElementById('statusFilter')
+  .addEventListener(
+    'change',
+    filterHistory
+  );
+
+
+loadServiceHistory();
+
+</script>
+
+</body>
+</html>

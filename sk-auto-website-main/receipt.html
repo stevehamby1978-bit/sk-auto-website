@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Payment Receipt</title>
+
+<style>
+
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#fff;--ink:#222;--muted:#66717d;--line:#d9dee3;--accent:#ef3e23;--green:#218838;--blue:#315a86}
+body{margin:0;padding:28px 15px;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--ink)}
+.receipt{width:850px;max-width:100%;margin:0 auto;background:#fff;padding:36px 40px;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.header{display:flex;justify-content:space-between;align-items:flex-start;gap:25px;border-bottom:4px solid var(--accent);padding-bottom:18px;margin-bottom:24px}
+.logo{width:240px;height:180px;max-width:100%;object-fit:contain;object-position:left center}.business-info{margin-top:8px;line-height:1.5;color:#333}.receipt-title{text-align:right}.receipt-title h1{margin:0;color:var(--accent);font-size:31px}.receipt-title div{margin-top:6px;font-weight:bold}
+.section{margin-top:24px}.section-title{color:var(--accent);font-size:18px;font-weight:bold;margin-bottom:10px}.two-column{display:grid;grid-template-columns:1fr 1fr;gap:25px}.two-column>div{border:1px solid var(--line);border-radius:8px;padding:15px}.info-line{margin:6px 0}
+.payment-box{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}.payment-row{display:flex;justify-content:space-between;gap:20px;padding:13px 17px;border-bottom:1px solid var(--line)}.payment-row:last-child{border-bottom:0}.payment-row strong:last-child{text-align:right}.payment-amount{background:#f5f6f7;font-size:21px}.balance{font-size:20px;font-weight:bold;background:#fafafa}
+.paid-full{display:none;margin-top:20px;padding:13px;text-align:center;border:2px solid var(--green);color:var(--green);font-size:23px;font-weight:bold;border-radius:7px}
+.actions{margin-top:27px;display:flex;gap:9px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:20px}button{border:0;padding:11px 16px;border-radius:6px;color:#fff;font-weight:bold;cursor:pointer;font-size:14px}.print-btn{background:var(--accent)}.back-btn{background:#303841}.error{width:850px;max-width:100%;margin:50px auto;padding:25px;background:#fff;color:#c62828;text-align:center;border-radius:8px;font-weight:bold}
+@media(max-width:600px){.header,.two-column{display:block}.receipt-title{text-align:left;margin-top:20px}.receipt{padding:23px 19px}.two-column>div{margin-bottom:12px}.actions button{width:100%}}
+@media print{@page{size:letter;margin:.3in}body{background:#fff;padding:0}.receipt{width:100%;padding:0;border-radius:0;box-shadow:none}.actions{display:none}.header{margin-bottom:15px}.section{margin-top:15px}}
+
+</style>
+</head>
+
+<body>
+
+<div id="errorBox" class="error" style="display:none;">
+    Unable to load receipt.
+</div>
+
+<div id="receipt" class="receipt" style="display:none;">
+
+    <div class="header">
+
+        <div>
+          <img id="shopLogo" alt="Shop logo" class="logo" style="display:none;">
+            <div class="business-info">
+                <strong id="shopName"></strong><br>
+                <span id="shopTagline"></span><br>
+                <span id="shopAddress"></span><br>
+                <span id="shopContact"></span>
+            </div>
+        </div>
+
+        <div class="receipt-title">
+            <h1>PAYMENT RECEIPT</h1>
+
+            <div>
+                Receipt #: <span id="receiptNumber"></span>
+            </div>
+
+            <div>
+                Repair Order #: <span id="repairOrderNumber"></span>
+            </div>
+
+            <div>
+                Invoice #: <span id="invoiceNumber"></span>
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="two-column">
+
+        <div>
+            <div class="section-title">Customer</div>
+
+            <div id="customerName" class="info-line"></div>
+            <div id="customerPhone" class="info-line"></div>
+            <div id="customerEmail" class="info-line"></div>
+        </div>
+
+        <div>
+            <div class="section-title">Vehicle</div>
+
+            <div id="vehicle" class="info-line"></div>
+
+            <div class="info-line">
+                <strong>Mileage:</strong>
+                <span id="mileage"></span>
+            </div>
+
+            <div class="info-line">
+                <strong>VIN:</strong>
+                <span id="vin"></span>
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="section">
+
+        <div class="section-title">Payment Information</div>
+
+        <div class="payment-box">
+
+            <div class="payment-row payment-amount">
+                <span>Payment Amount</span>
+                <strong id="paymentAmount">$0.00</strong>
+            </div>
+
+            <div class="payment-row">
+                <span>Payment Method</span>
+                <strong id="paymentMethod"></strong>
+            </div>
+
+            <div class="payment-row">
+                <span>Payment Date</span>
+                <strong id="paymentDate"></strong>
+            </div>
+
+            <div class="payment-row">
+                <span>Invoice Total</span>
+                <strong id="invoiceTotal">$0.00</strong>
+            </div>
+
+            <div class="payment-row">
+                <span>Previous Balance</span>
+                <strong id="previousBalance">$0.00</strong>
+            </div>
+
+            <div class="payment-row balance">
+                <span>Remaining Balance</span>
+                <strong id="remainingBalance">$0.00</strong>
+            </div>
+
+        </div>
+
+        <div id="paidFull" class="paid-full">
+            ✓ PAID IN FULL
+        </div>
+
+    </div>
+
+
+    <div style="margin-top:24px;text-align:center;font-size:12px;color:#66717d;">Powered by Garavex™</div>
+<div class="actions">
+
+        <button
+            class="print-btn"
+            onclick="window.print()"
+        >
+            Print / Save PDF
+        </button>
+<button
+    type="button"
+    class="print-btn"
+    onclick="emailReceipt()"
+>
+    Email Receipt
+</button>
+<button
+  type="button"
+  class="print-btn"
+  id="textReceiptBtn"
+  onclick="textReceipt()"
+>
+  📱 Text Receipt
+</button>
+       <button
+            class="back-btn"
+            onclick="goBack()"
+        >
+            Back to Invoice
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+
+function money(value) {
+    return '$' + Number(value || 0).toFixed(2);
+}
+
+
+function formatPaymentMethod(method) {
+
+    method = String(method || '').toLowerCase();
+
+    if (
+    method === 'card' ||
+    method === 'credit card' ||
+    method === 'credit_card'
+) {
+    return 'Credit Card';
+}
+
+    if (method === 'cash') {
+        return 'Cash';
+    }
+
+    if (method === 'check') {
+        return 'Check';
+    }
+
+    if (method === 'other') {
+        return 'Other';
+    }
+
+    return method || 'Unknown';
+}
+
+
+function goBack() {
+
+    const params =
+        new URLSearchParams(window.location.search);
+
+    const orderId =
+        params.get('orderId');
+
+    window.location.href =
+        '/invoice.html?id=' +
+        encodeURIComponent(orderId);
+}
+
+
+async function loadReceipt() {
+
+    const params =
+        new URLSearchParams(window.location.search);
+
+    const orderId =
+        params.get('orderId');
+
+    const paymentId =
+        params.get('paymentId');
+    const token = params.get('token');
+
+
+    if (!orderId || !paymentId) {
+
+        document.getElementById('errorBox').style.display =
+            'block';
+
+        return;
+    }
+
+
+    try {
+
+        const apiUrl = token
+            ? '/api/customer-receipt/' + encodeURIComponent(token) + '/' + encodeURIComponent(paymentId)
+            : '/api/repair-orders/' + encodeURIComponent(orderId);
+        const response = await fetch(apiUrl);
+
+
+        if (!response.ok) {
+            throw new Error('Unable to load repair order.');
+        }
+
+
+        const order =
+            await response.json();
+
+        const shopName = order.shop_name || 'Repair Shop';
+        document.title = shopName + ' | Payment Receipt';
+        document.getElementById('shopName').textContent = shopName;
+        document.getElementById('shopTagline').textContent = order.shop_tagline || '';
+        document.getElementById('shopAddress').textContent = [order.shop_address, [order.shop_city, order.shop_state].filter(Boolean).join(', '), order.shop_zip].filter(Boolean).join(' · ');
+        document.getElementById('shopContact').textContent = [order.shop_phone, order.shop_email].filter(Boolean).join(' · ');
+        const shopLogo = document.getElementById('shopLogo');
+        if (order.shop_logo_url) { shopLogo.src = order.shop_logo_url; shopLogo.alt = shopName + ' logo'; shopLogo.style.display = 'block'; }
+
+        const payments =
+            Array.isArray(order.payments)
+                ? order.payments
+                : [];
+
+
+        const payment =
+            payments.find(
+                p => String(p.id) === String(paymentId)
+            );
+
+
+        if (!payment || payment.voided) {
+
+            throw new Error(
+                'Payment receipt is unavailable.'
+            );
+        }
+
+
+     const subtotal = Number(order.subtotal || 0);
+
+const tax =
+    Math.round(subtotal * 0.075 * 100) / 100;
+
+const total =
+    Math.round((subtotal + tax) * 100) / 100;
+
+        /*
+         * Calculate the balance immediately
+         * before and after THIS payment.
+         *
+         * Only active payments count.
+         */
+
+        const activePayments =
+            payments
+                .filter(p => !p.voided)
+                .sort(
+                    (a, b) =>
+                        Number(a.id) - Number(b.id)
+                );
+
+
+        let paidBefore = 0;
+
+        for (const p of activePayments) {
+
+            if (String(p.id) === String(payment.id)) {
+                break;
+            }
+
+            paidBefore += Number(p.amount || 0);
+        }
+
+
+        const paymentAmount =
+            Number(payment.amount || 0);
+
+
+        const previousBalance =
+            Math.max(
+                0,
+                total - paidBefore
+            );
+
+
+        const remainingBalance =
+            Math.max(
+                0,
+                previousBalance - paymentAmount
+            );
+
+
+        let paidDate = '';
+
+        if (payment.paid_at) {
+
+            paidDate =
+                new Date(
+                    payment.paid_at.replace(' ', 'T') + 'Z'
+                ).toLocaleString(
+                    'en-US',
+                    {
+                        timeZone: 'America/Chicago',
+                        month: 'numeric',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                    }
+                );
+        }
+
+
+        document.getElementById('receiptNumber').textContent =
+            'R-' +
+            String(orderId).padStart(5, '0') +
+            '-' +
+            String(payment.id).padStart(4, '0');
+
+
+        document.getElementById('repairOrderNumber').textContent =
+            order.id;
+
+
+        document.getElementById('invoiceNumber').textContent =
+            'SK-' +
+            String(order.id).padStart(5, '0');
+
+
+        document.getElementById('customerName').textContent =
+            order.customer_name || '';
+
+
+        document.getElementById('customerPhone').textContent =
+            order.customer_phone ||
+            order.phone ||
+            '';
+
+
+        document.getElementById('customerEmail').textContent =
+            order.customer_email ||
+            order.email ||
+            '';
+
+
+        const vehicleParts = [
+            order.vehicle_year,
+            order.vehicle_make,
+            order.vehicle_model
+        ].filter(Boolean);
+
+
+        document.getElementById('vehicle').textContent =
+            vehicleParts.join(' ');
+
+
+        document.getElementById('mileage').textContent =
+            order.vehicle_mileage || order.mileage || '';
+
+
+        document.getElementById('vin').textContent =
+            order.vehicle_vin || order.vin || '';
+
+
+        document.getElementById('paymentAmount').textContent =
+            money(paymentAmount);
+
+
+        document.getElementById('paymentMethod').textContent =
+            formatPaymentMethod(
+                payment.payment_method
+            );
+
+
+        document.getElementById('paymentDate').textContent =
+            paidDate;
+
+
+        document.getElementById('invoiceTotal').textContent =
+            money(total);
+
+
+        document.getElementById('previousBalance').textContent =
+            money(previousBalance);
+
+
+        document.getElementById('remainingBalance').textContent =
+            money(remainingBalance);
+
+
+        if (remainingBalance <= 0 && total > 0) {
+
+            document.getElementById('paidFull').style.display =
+                'block';
+        }
+
+
+        document.getElementById('receipt').style.display =
+            'block';
+
+
+    } catch (error) {
+
+        console.error(
+            'Receipt error:',
+            error
+        );
+
+        const errorBox =
+            document.getElementById('errorBox');
+
+        errorBox.textContent =
+            'Unable to load receipt: ' +
+            error.message;
+
+        errorBox.style.display =
+            'block';
+    }
+}
+
+async function emailReceipt() {
+  const params = new URLSearchParams(window.location.search);
+
+ const repairOrderId = params.get('orderId');
+  const paymentId = params.get('paymentId');
+
+  if (!repairOrderId || !paymentId) {
+    alert('Unable to identify this payment receipt.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Email this payment receipt to the customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/repair-orders/${encodeURIComponent(repairOrderId)}/payments/${encodeURIComponent(paymentId)}/email-receipt`,
+      {
+        method: 'POST'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to email payment receipt.'
+      );
+    }
+
+    alert(
+      `Payment receipt emailed successfully to ${result.email}`
+    );
+
+  } catch (error) {
+    console.error('Email receipt error:', error);
+
+    alert(
+      'Unable to email payment receipt: ' +
+      error.message
+    );
+  }
+}
+
+async function textReceipt() {
+  const params = new URLSearchParams(window.location.search);
+
+  const repairOrderId =
+    params.get('orderId') || params.get('repairOrderId');
+
+  const paymentId = params.get('paymentId');
+
+  if (!repairOrderId || !paymentId) {
+    alert('Unable to identify this payment receipt.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Text this payment receipt to the customer?'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const button = document.getElementById('textReceiptBtn');
+
+  try {
+    button.disabled = true;
+    button.textContent = 'Sending...';
+
+    const response = await fetch(
+      `/api/repair-orders/${encodeURIComponent(repairOrderId)}/payments/${encodeURIComponent(paymentId)}/text-receipt`,
+      {
+        method: 'POST'
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || 'Unable to text payment receipt.'
+      );
+    }
+
+    alert(
+      `Payment receipt texted successfully to ${result.phone}`
+    );
+
+  } catch (error) {
+    console.error('Text receipt error:', error);
+
+    alert(
+      'Unable to text payment receipt: ' +
+      error.message
+    );
+
+  } finally {
+    button.disabled = false;
+    button.textContent = '📱 Text Receipt';
+  }
+}
+   
+loadReceipt();
+
+</script>
+
+</body>
+</html>

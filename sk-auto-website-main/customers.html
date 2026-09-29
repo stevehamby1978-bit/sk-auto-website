@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Garavex | Customers</title>
+
+  <style>
+
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.page{max-width:1200px;margin:auto;min-height:100vh}.header{background:#15191e;border-bottom:3px solid var(--accent);padding:20px 26px}.header h1{margin:0;font-size:29px}.header p{margin:5px 0 0;color:var(--muted)}.content{padding:26px 18px 50px}.toolbar{display:flex;gap:11px;align-items:center;margin-bottom:20px;flex-wrap:wrap}.search{flex:1;min-width:250px;padding:12px 13px;font-size:15px;border:1px solid #46505a;border-radius:7px;background:#171b20;color:#fff}.back-btn,.view-btn{display:inline-block;padding:11px 15px;background:#303841;color:#fff;text-decoration:none;border:0;border-radius:7px;font-weight:700;cursor:pointer}.view-btn{background:var(--accent)}.customer-count{margin-bottom:14px;font-weight:bold;color:var(--muted)}.customer-list{display:grid;gap:12px}.customer-card,.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}.customer-card{border-left:5px solid var(--accent);display:flex;justify-content:space-between;align-items:center;gap:20px}.customer-info h2{margin:0 0 8px;font-size:20px}.customer-info p{margin:4px 0;color:#c2c9d0}.stats{margin-top:10px;font-size:14px;font-weight:bold;color:#e4e8ec}.message{background:var(--panel);border:1px solid var(--line);padding:25px;border-radius:9px;text-align:center;color:var(--muted)}#addCustomerForm{margin-bottom:20px}#addCustomerForm .search{width:100%;margin-bottom:0}@media(max-width:650px){.content{padding:18px}.customer-card{flex-direction:column;align-items:stretch}.view-btn{text-align:center}.toolbar>*{width:100%}}
+
+</style>
+</head>
+
+<body>
+
+  <div class="page">
+
+    <div class="header">
+      <h1>Garavex Customers</h1>
+      <p>Customer &amp; Vehicle Service Database</p>
+    </div>
+
+    <div class="content">
+
+      <div class="toolbar">
+
+        <input
+          type="text"
+          id="searchInput"
+          class="search"
+          placeholder="Search name, phone or email..."
+        >
+<button
+  type="button"
+  class="back-btn"
+  onclick="showAddCustomer()">
+  + Add Customer
+</button>
+        <a href="repair-orders.html" class="back-btn">Repair Orders</a>
+        <a href="dashboard.html" class="back-btn">Dashboard</a>
+
+      </div>
+<div
+  id="addCustomerForm"
+  class="card"
+  style="display:none; margin-bottom:20px;">
+
+  <h2 style="margin-top:0;">Add Customer</h2>
+
+  <div style="display:grid; gap:12px;">
+
+    <input
+      type="text"
+      id="newCustomerName"
+      class="search"
+      placeholder="Customer name *"
+    >
+
+    <input
+      type="tel"
+      id="newCustomerPhone"
+      class="search"
+      placeholder="Phone number"
+    >
+
+    <input
+      type="email"
+      id="newCustomerEmail"
+      class="search"
+      placeholder="Email address"
+    >
+
+    <div>
+      <button
+        type="button"
+        class="back-btn"
+        onclick="saveCustomer()">
+        Save Customer
+      </button>
+
+      <button
+        type="button"
+        class="back-btn"
+        onclick="hideAddCustomer()">
+        Cancel
+      </button>
+    </div>
+
+  </div>
+
+  <div
+    id="addCustomerMessage"
+    style="margin-top:12px;">
+  </div>
+
+</div>
+      <div id="customerCount" class="customer-count"></div>
+
+      <div id="customerList" class="customer-list">
+        <div class="message">Loading customers...</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+
+    let customers = [];
+function showAddCustomer() {
+  document.getElementById('addCustomerForm').style.display = 'block';
+  document.getElementById('newCustomerName').focus();
+}
+
+
+function hideAddCustomer() {
+  document.getElementById('addCustomerForm').style.display = 'none';
+
+  document.getElementById('newCustomerName').value = '';
+  document.getElementById('newCustomerPhone').value = '';
+  document.getElementById('newCustomerEmail').value = '';
+  document.getElementById('addCustomerMessage').textContent = '';
+}
+
+
+async function saveCustomer() {
+
+  const name =
+    document.getElementById('newCustomerName').value.trim();
+
+  const phone =
+    document.getElementById('newCustomerPhone').value.trim();
+
+  const email =
+    document.getElementById('newCustomerEmail').value.trim();
+
+  const message =
+    document.getElementById('addCustomerMessage');
+
+
+  if (!name) {
+    message.textContent = 'Customer name is required.';
+    return;
+  }
+
+
+  try {
+
+    message.textContent = 'Saving customer...';
+
+    const response = await fetch('/api/customers', {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json'
+      },
+
+      body: JSON.stringify({
+        name: name,
+        phone: phone,
+        email: email
+      })
+    });
+
+
+    const result = await response.json();
+
+
+   if (response.status === 409 && result.duplicate) {
+  const duplicate = result.duplicate;
+
+  const details = [
+    'Possible duplicate customer found:',
+    '',
+    duplicate.name || 'Unnamed Customer',
+    duplicate.phone || '',
+    duplicate.email || '',
+    '',
+    'This customer was NOT added again.'
+  ].filter(line => line !== '').join('\n');
+
+  alert(details);
+
+  message.textContent =
+    'Customer not added — possible duplicate found.';
+
+  return;
+}
+
+if (!response.ok) {
+  throw new Error(
+    result.error || 'Unable to add customer.'
+  );
+}
+
+
+    hideAddCustomer();
+
+    await loadCustomers();
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    message.textContent =
+      error.message || 'Unable to add customer.';
+
+  }
+
+}
+    async function loadCustomers() {
+
+      const customerList =
+        document.getElementById('customerList');
+
+      try {
+
+        const response =
+          await fetch('/api/customers');
+
+        if (!response.ok) {
+          throw new Error('Unable to load customers.');
+        }
+
+        customers = await response.json();
+
+        displayCustomers(customers);
+
+      } catch (error) {
+
+        console.error(error);
+
+        customerList.innerHTML =
+          '<div class="message">Unable to load customers.</div>';
+
+      }
+
+    }
+
+
+    function displayCustomers(list) {
+
+      const customerList =
+        document.getElementById('customerList');
+
+      const customerCount =
+        document.getElementById('customerCount');
+
+      customerCount.textContent =
+        list.length +
+        (list.length === 1 ? ' customer' : ' customers');
+
+      if (list.length === 0) {
+
+        customerList.innerHTML =
+          '<div class="message">No customers found.</div>';
+
+        return;
+      }
+
+      customerList.innerHTML = list.map(customer => {
+
+        const name =
+          customer.name || 'Unnamed Customer';
+
+        const phone =
+          customer.phone || 'No phone';
+
+        const email =
+          customer.email || 'No email';
+
+        const vehicleCount =
+          Number(customer.vehicle_count) || 0;
+
+        const repairCount =
+          Number(customer.repair_order_count) || 0;
+
+        return `
+          <div class="customer-card">
+
+            <div class="customer-info">
+
+              <h2>${escapeHtml(name)}</h2>
+
+              <p>
+                <strong>Phone:</strong>
+                ${escapeHtml(phone)}
+              </p>
+
+              <p>
+                <strong>Email:</strong>
+                ${escapeHtml(email)}
+              </p>
+
+              <div class="stats">
+                ${vehicleCount}
+                ${vehicleCount === 1 ? 'Vehicle' : 'Vehicles'}
+                &nbsp; • &nbsp;
+                ${repairCount}
+                ${repairCount === 1 ? 'Repair Order' : 'Repair Orders'}
+              </div>
+
+            </div>
+
+            <a
+              class="view-btn"
+              href="customer.html?id=${encodeURIComponent(customer.id)}"
+            >
+              View Customer
+            </a>
+
+          </div>
+        `;
+
+      }).join('');
+
+    }
+
+
+    document
+      .getElementById('searchInput')
+      .addEventListener('input', function() {
+
+        const search =
+          this.value.toLowerCase().trim();
+
+        const filtered =
+          customers.filter(customer => {
+
+            const name =
+              String(customer.name || '').toLowerCase();
+
+            const phone =
+              String(customer.phone || '').toLowerCase();
+
+            const email =
+              String(customer.email || '').toLowerCase();
+
+            return (
+              name.includes(search) ||
+              phone.includes(search) ||
+              email.includes(search)
+            );
+
+          });
+
+        displayCustomers(filtered);
+
+      });
+
+
+    function escapeHtml(value) {
+
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+
+    }
+
+
+    loadCustomers();
+
+  </script>
+
+</body>
+</html>

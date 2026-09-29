@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Create Shop Account | Garavex</title>
+
+  <style>
+
+*{box-sizing:border-box}:root{--bg:#0e1114;--panel:#171b20;--line:#323a43;--text:#f5f7f9;--muted:#aeb7c1;--accent:#ef3e23}
+body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#fff;display:flex;align-items:center;justify-content:center;padding:30px 15px}.register-container{width:100%;max-width:740px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:34px;box-shadow:0 18px 55px rgba(0,0,0,.4)}.brand{text-align:center;margin-bottom:28px}.brand h1{margin:0;font-size:32px}.brand p{margin:8px 0 0;color:var(--muted)}.section-title{margin:25px 0 15px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:17px;color:#fff}.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.full{grid-column:1/-1}label{display:block;margin-bottom:6px;color:#d3d9df;font-size:14px;font-weight:bold}input{width:100%;padding:12px;border-radius:7px;border:1px solid #46505a;background:#0f1317;color:#fff;font-size:15px;outline:none}input:focus{border-color:var(--accent)}button{width:100%;margin-top:24px;padding:14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-size:16px;font-weight:bold;cursor:pointer}button:disabled{opacity:.6;cursor:not-allowed}#message{display:none;margin-top:18px;padding:12px;border-radius:8px;text-align:center}.success{display:block!important;background:#163e28;border:1px solid #29965a;color:#a8efbf}.error{display:block!important;background:#4b2020;border:1px solid #b43b3b;color:#ffc0c0}.login-link{text-align:center;margin-top:21px;color:var(--muted);font-size:14px}.login-link a{color:#fff}@media(max-width:600px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.register-container{padding:24px 18px}}
+
+</style>
+</head>
+
+<body>
+
+  <div class="register-container">
+
+    <div class="brand">
+      <h1>GARAVEX</h1>
+      <p>Shop Management System</p>
+    </div>
+
+    <form id="registerForm">
+
+      <div class="section-title">Shop Information</div>
+
+      <div class="grid">
+
+        <div class="full">
+          <label for="shopName">Shop Name *</label>
+          <input
+            id="shopName"
+            name="shopName"
+            type="text"
+            required
+            autocomplete="organization"
+          >
+        </div>
+
+        <div>
+          <label for="phone">Shop Phone</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            autocomplete="tel"
+          >
+        </div>
+
+        <div>
+          <label for="shopEmail">Shop Email</label>
+          <input
+            id="shopEmail"
+            name="shopEmail"
+            type="email"
+            autocomplete="email"
+          >
+        </div>
+
+        <div class="full">
+          <label for="address">Address</label>
+          <input
+            id="address"
+            name="address"
+            type="text"
+            autocomplete="street-address"
+          >
+        </div>
+
+        <div>
+          <label for="city">City</label>
+          <input
+            id="city"
+            name="city"
+            type="text"
+            autocomplete="address-level2"
+          >
+        </div>
+
+        <div>
+          <label for="state">State</label>
+          <input
+            id="state"
+            name="state"
+            type="text"
+            maxlength="2"
+            placeholder="KS"
+            autocomplete="address-level1"
+          >
+        </div>
+
+        <div>
+          <label for="zip">ZIP Code</label>
+          <input
+            id="zip"
+            name="zip"
+            type="text"
+            autocomplete="postal-code"
+          >
+        </div>
+
+      </div>
+
+      <div class="section-title">Owner Account</div>
+
+      <div class="grid">
+
+        <div class="full">
+          <label for="ownerName">Owner Name *</label>
+          <input
+            id="ownerName"
+            name="ownerName"
+            type="text"
+            required
+            autocomplete="name"
+          >
+        </div>
+
+        <div class="full">
+          <label for="ownerEmail">Owner Login Email *</label>
+          <input
+            id="ownerEmail"
+            name="ownerEmail"
+            type="email"
+            required
+            autocomplete="username"
+          >
+        </div>
+
+        <div>
+          <label for="password">Password *</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="new-password"
+          >
+        </div>
+
+        <div>
+          <label for="confirmPassword">Confirm Password *</label>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type="password"
+            minlength="8"
+            required
+            autocomplete="new-password"
+          >
+        </div>
+
+      </div>
+
+      <button id="submitButton" type="submit">
+        Create Shop Account
+      </button>
+
+      <div id="message"></div>
+
+    </form>
+
+    <div class="login-link">
+      Already have an account?
+      <a href="/login.html">Sign in</a>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById('registerForm');
+    const message = document.getElementById('message');
+    const submitButton = document.getElementById('submitButton');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      message.className = '';
+      message.style.display = 'none';
+      message.textContent = '';
+
+      const password =
+        document.getElementById('password').value;
+
+      const confirmPassword =
+        document.getElementById('confirmPassword').value;
+
+      if (password.length < 8) {
+        message.textContent = 'Password must be at least 8 characters long.';
+        message.className = 'error';
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        message.textContent = 'Passwords do not match.';
+        message.className = 'error';
+        return;
+      }
+
+      const registration = {
+        shopName:
+          document.getElementById('shopName').value.trim(),
+
+        phone:
+          document.getElementById('phone').value.trim(),
+
+        shopEmail:
+          document.getElementById('shopEmail').value.trim(),
+
+        address:
+          document.getElementById('address').value.trim(),
+
+        city:
+          document.getElementById('city').value.trim(),
+
+        state:
+          document.getElementById('state').value.trim().toUpperCase(),
+
+        zip:
+          document.getElementById('zip').value.trim(),
+
+        ownerName:
+          document.getElementById('ownerName').value.trim(),
+
+        ownerEmail:
+          document.getElementById('ownerEmail').value.trim().toLowerCase(),
+
+        password
+      };
+
+      try {
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Creating Account...';
+
+        const response = await fetch('/api/register-shop', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(registration)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || 'Unable to create shop account.'
+          );
+        }
+
+        message.textContent =
+          'Shop account created successfully. Redirecting to login...';
+
+        message.className = 'success';
+
+        form.reset();
+
+        setTimeout(() => {
+          window.location.href = '/login.html';
+        }, 1500);
+
+      } catch (error) {
+
+        message.textContent =
+          error.message || 'Unable to create shop account.';
+
+        message.className = 'error';
+
+      } finally {
+
+        submitButton.disabled = false;
+        submitButton.textContent = 'Create Shop Account';
+
+      }
+    });
+  </script>
+
+</body>
+</html>
