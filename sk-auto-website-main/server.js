@@ -48,7 +48,6 @@ const QUICKBOOKS_SCOPE =
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_API_VERSION = '2026-08-26.dahlia';
-const stripe = require('stripe')(STRIPE_SECRET_KEY || 'sk_test_placeholder');
 
 async function stripeRequest(pathname, { method = 'GET', body, form = false } = {}) {
   if (!STRIPE_SECRET_KEY) {
@@ -5529,7 +5528,6 @@ app.get("/api/customer-invoice/:token", (req, res) => {
     const repairOrder = db.prepare(`
       SELECT
         r.id,
-        r.shop_id,
         r.status,
         r.payment_status,
         r.quickbooks_invoice_url,
@@ -5582,14 +5580,6 @@ app.get("/api/customer-invoice/:token", (req, res) => {
     const amountPaid = Number(repairOrder.amount_paid || 0);
     const balance = Math.max(0, total - amountPaid);
 
-    const invoiceShop = db.prepare(`
-      SELECT stripe_account_id, stripe_connected_at
-      FROM shops
-      WHERE id = ?
-      LIMIT 1
-    `).get(repairOrder.shop_id);
-    const stripePaymentsEnabled = Boolean(invoiceShop?.stripe_account_id && invoiceShop?.stripe_connected_at);
-
     res.json({
       success: true,
 
@@ -5601,7 +5591,6 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         created_at: repairOrder.created_at,
         completed_at: repairOrder.completed_at,
         quickbooks_invoice_url: repairOrder.quickbooks_invoice_url,
-        stripe_payments_enabled: stripePaymentsEnabled,
         customer_name: repairOrder.customer_name,
 
         vehicle: {
@@ -8129,6 +8118,73 @@ Questions? Call (620) 899-0425`;
 });
 
 
+// ===== GARAVEX - CUSTOMER STRIPE CHECKOUT =====
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (!token) return res.status(400).json({ success: false, error: 'Invoice token is required.' });
+    if (!STRIPE_SECRET_KEY) return res.status(503).json({ success: false, error: 'Stripe is not configured on the server.' });
+
+    const order = db.prepare(`
+      SELECT r.id, r.shop_id, r.amount_paid, r.payment_status,
+             c.name AS customer_name, c.email AS customer_email,
+             s.stripe_account_id
+      FROM repair_orders r
+      LEFT JOIN customers c ON c.id = r.customer_id
+      LEFT JOIN shops s ON s.id = r.shop_id
+      WHERE r.invoice_token = ?
+      LIMIT 1
+    `).get(token);
+
+    if (!order) return res.status(404).json({ success: false, error: 'Invoice not found or link is invalid.' });
+    if (!order.stripe_account_id) return res.status(409).json({ success: false, error: 'This shop has not connected Stripe yet.' });
+
+    const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(order.id);
+    const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
+    const total = subtotal * 1.075;
+    const paid = Number(order.amount_paid || 0);
+    const balance = Math.max(0, total - paid);
+    if (balance < 0.005) return res.status(409).json({ success: false, error: 'This invoice is already paid.' });
+
+    const amountCents = Math.round(balance * 100);
+    const base = `${req.protocol}://${req.get('host')}`;
+    const form = new URLSearchParams();
+    form.set('mode', 'payment');
+    form.set('success_url', `${base}/invoice.html?token=${encodeURIComponent(token)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`);
+    form.set('cancel_url', `${base}/invoice.html?token=${encodeURIComponent(token)}&stripe=cancelled`);
+    form.set('line_items[0][price_data][currency]', 'usd');
+    form.set('line_items[0][price_data][unit_amount]', String(amountCents));
+    form.set('line_items[0][price_data][product_data][name]', `S&K Auto Invoice #${order.id}`);
+    form.set('line_items[0][quantity]', '1');
+    form.set('metadata[repair_order_id]', String(order.id));
+    form.set('metadata[invoice_token]', token);
+    form.set('payment_intent_data[metadata][repair_order_id]', String(order.id));
+    if (order.customer_email) form.set('customer_email', order.customer_email);
+
+    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Stripe-Version': STRIPE_API_VERSION,
+        'Stripe-Account': order.stripe_account_id,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: form.toString()
+    });
+    const data = await stripeResponse.json();
+    if (!stripeResponse.ok || !data.url) {
+      console.error('Stripe Checkout error:', data);
+      return res.status(stripeResponse.status || 500).json({ success: false, error: data?.error?.message || 'Unable to create Stripe Checkout session.' });
+    }
+
+    return res.json({ success: true, url: data.url });
+  } catch (err) {
+    console.error('Stripe Checkout route error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Unable to start Stripe payment.' });
+  }
+});
+// ===== END GARAVEX - CUSTOMER STRIPE CHECKOUT =====
+
 // ===== GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
 function requireLoggedInOwner(req, res, next) {
   if (!req.session || !req.session.employee) {
@@ -8145,104 +8201,6 @@ function requestBaseUrl(req) {
   const protocol = forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol;
   return `${protocol}://${req.get('host')}`;
 }
-
-// ===== GARAVEX - CUSTOMER STRIPE CHECKOUT =====
-app.post('/api/stripe/create-checkout-session', async (req, res) => {
-  try {
-    const token = String(req.body?.token || '').trim();
-    if (!token) return res.status(400).json({ error: 'Invoice token is required.' });
-
-    const ro = db.prepare(`
-      SELECT r.id, r.shop_id, r.amount_paid, r.payment_status,
-             s.stripe_account_id, s.stripe_connected_at
-      FROM repair_orders r
-      JOIN shops s ON s.id = r.shop_id
-      WHERE r.invoice_token = ?
-      LIMIT 1
-    `).get(token);
-
-    if (!ro) return res.status(404).json({ error: 'Invoice not found.' });
-    if (!ro.stripe_account_id || !ro.stripe_connected_at) {
-      return res.status(400).json({ error: 'Stripe payments are not active for this shop.' });
-    }
-
-    const items = db.prepare(`
-      SELECT description, parts, labor FROM repair_order_items
-      WHERE repair_order_id = ? ORDER BY id ASC
-    `).all(ro.id);
-    const subtotal = items.reduce((sum, i) => sum + Number(i.parts || 0) + Number(i.labor || 0), 0);
-    const total = Math.round((subtotal * 1.075) * 100) / 100;
-    const balance = Math.max(0, Math.round((total - Number(ro.amount_paid || 0)) * 100) / 100);
-    if (balance <= 0) return res.status(400).json({ error: 'This invoice is already paid.' });
-
-    const base = `${req.protocol}://${req.get('host')}`;
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: { name: `Repair Order #${ro.id}` },
-          unit_amount: Math.round(balance * 100)
-        },
-        quantity: 1
-      }],
-      metadata: {
-        repair_order_id: String(ro.id),
-        shop_id: String(ro.shop_id),
-        invoice_token: token
-      },
-      success_url: `${base}/stripe/payment-success?token=${encodeURIComponent(token)}&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/invoice.html?token=${encodeURIComponent(token)}&payment=cancelled`
-    }, { stripeAccount: ro.stripe_account_id });
-
-    return res.json({ success: true, url: session.url });
-  } catch (err) {
-    console.error('Stripe checkout session error:', err);
-    return res.status(500).json({ error: err?.message || 'Unable to start Stripe payment.' });
-  }
-});
-
-app.get('/stripe/payment-success', async (req, res) => {
-  try {
-    const token = String(req.query.token || '').trim();
-    const sessionId = String(req.query.session_id || '').trim();
-    if (!token || !sessionId) return res.redirect(`/invoice.html?token=${encodeURIComponent(token)}&payment=error`);
-
-    const ro = db.prepare(`
-      SELECT r.id, r.shop_id, r.amount_paid, s.stripe_account_id
-      FROM repair_orders r JOIN shops s ON s.id = r.shop_id
-      WHERE r.invoice_token = ? LIMIT 1
-    `).get(token);
-    if (!ro?.stripe_account_id) return res.redirect(`/invoice.html?token=${encodeURIComponent(token)}&payment=error`);
-
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {}, { stripeAccount: ro.stripe_account_id });
-    const meta = session.metadata || {};
-    if (session.payment_status !== 'paid' || meta.invoice_token !== token || String(meta.repair_order_id) !== String(ro.id)) {
-      return res.redirect(`/invoice.html?token=${encodeURIComponent(token)}&payment=unverified`);
-    }
-
-    const paidNow = Number(session.amount_total || 0) / 100;
-    const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(ro.id);
-    const subtotal = items.reduce((sum, i) => sum + Number(i.parts || 0) + Number(i.labor || 0), 0);
-    const total = Math.round((subtotal * 1.075) * 100) / 100;
-    const newPaid = Math.min(total, Math.round((Number(ro.amount_paid || 0) + paidNow) * 100) / 100);
-    const status = newPaid >= total ? 'paid' : 'partial';
-
-    db.prepare(`
-      UPDATE repair_orders
-      SET amount_paid = ?, payment_status = ?, payment_method = 'stripe',
-          paid_at = CASE WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE paid_at END
-      WHERE id = ? AND shop_id = ?
-    `).run(newPaid, status, status, ro.id, ro.shop_id);
-
-    return res.redirect(`/invoice.html?token=${encodeURIComponent(token)}&payment=success`);
-  } catch (err) {
-    console.error('Stripe payment success verification error:', err);
-    const token = String(req.query.token || '');
-    return res.redirect(`/invoice.html?token=${encodeURIComponent(token)}&payment=error`);
-  }
-});
-// ===== END CUSTOMER STRIPE CHECKOUT =====
 
 app.get('/api/stripe-connect/status', requireLoggedInOwner, async (req, res) => {
   try {
