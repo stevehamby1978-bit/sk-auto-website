@@ -988,6 +988,17 @@ app.get(protectedPages, requireLogin);
 // ===== S&K AUTO - OWNER ONLY PAGES =====
 app.get('/employees.html', requireLogin, requireOwner);
 app.get('/shop-settings.html', requireLogin, requireOwner);
+// ===== GARAVEX INVOICE CACHE GUARD =====
+app.use((req, res, next) => {
+  if (req.path === '/invoice.html' || req.path === '/invoice-stripe.html') {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
+// ===== END GARAVEX INVOICE CACHE GUARD =====
+
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
@@ -5678,7 +5689,7 @@ if (!invoiceToken) {
 }
 
 const invoiceUrl =
-    `https://skautohutch.com/invoice.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
+    `https://skautohutch.com/invoice-stripe.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
     const items = db.prepare(`
       SELECT
         description,
@@ -7883,7 +7894,7 @@ app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
     const total = Math.round((subtotal * 1.075) * 100) / 100;
     const amountPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
     const balance = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
-    const invoiceUrl = `https://skautohutch.com/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
+    const invoiceUrl = `https://skautohutch.com/invoice-stripe.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
     const firstName = String(order.customer_name || '').trim().split(/\s+/)[0];
 
     const body = balance <= 0.009
@@ -8118,6 +8129,73 @@ Questions? Call (620) 899-0425`;
 });
 
 
+// ===== GARAVEX - CUSTOMER STRIPE CHECKOUT =====
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (!token) return res.status(400).json({ success: false, error: 'Invoice token is required.' });
+    if (!STRIPE_SECRET_KEY) return res.status(503).json({ success: false, error: 'Stripe is not configured on the server.' });
+
+    const order = db.prepare(`
+      SELECT r.id, r.shop_id, r.amount_paid, r.payment_status,
+             c.name AS customer_name, c.email AS customer_email,
+             s.stripe_account_id
+      FROM repair_orders r
+      LEFT JOIN customers c ON c.id = r.customer_id
+      LEFT JOIN shops s ON s.id = r.shop_id
+      WHERE r.invoice_token = ?
+      LIMIT 1
+    `).get(token);
+
+    if (!order) return res.status(404).json({ success: false, error: 'Invoice not found or link is invalid.' });
+    if (!order.stripe_account_id) return res.status(409).json({ success: false, error: 'This shop has not connected Stripe yet.' });
+
+    const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(order.id);
+    const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
+    const total = subtotal * 1.075;
+    const paid = Number(order.amount_paid || 0);
+    const balance = Math.max(0, total - paid);
+    if (balance < 0.005) return res.status(409).json({ success: false, error: 'This invoice is already paid.' });
+
+    const amountCents = Math.round(balance * 100);
+    const base = `${req.protocol}://${req.get('host')}`;
+    const form = new URLSearchParams();
+    form.set('mode', 'payment');
+    form.set('success_url', `${base}/invoice-stripe.html?token=${encodeURIComponent(token)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`);
+    form.set('cancel_url', `${base}/invoice-stripe.html?token=${encodeURIComponent(token)}&stripe=cancelled`);
+    form.set('line_items[0][price_data][currency]', 'usd');
+    form.set('line_items[0][price_data][unit_amount]', String(amountCents));
+    form.set('line_items[0][price_data][product_data][name]', `S&K Auto Invoice #${order.id}`);
+    form.set('line_items[0][quantity]', '1');
+    form.set('metadata[repair_order_id]', String(order.id));
+    form.set('metadata[invoice_token]', token);
+    form.set('payment_intent_data[metadata][repair_order_id]', String(order.id));
+    if (order.customer_email) form.set('customer_email', order.customer_email);
+
+    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Stripe-Version': STRIPE_API_VERSION,
+        'Stripe-Account': order.stripe_account_id,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: form.toString()
+    });
+    const data = await stripeResponse.json();
+    if (!stripeResponse.ok || !data.url) {
+      console.error('Stripe Checkout error:', data);
+      return res.status(stripeResponse.status || 500).json({ success: false, error: data?.error?.message || 'Unable to create Stripe Checkout session.' });
+    }
+
+    return res.json({ success: true, url: data.url });
+  } catch (err) {
+    console.error('Stripe Checkout route error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Unable to start Stripe payment.' });
+  }
+});
+// ===== END GARAVEX - CUSTOMER STRIPE CHECKOUT =====
+
 // ===== GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
 function requireLoggedInOwner(req, res, next) {
   if (!req.session || !req.session.employee) {
@@ -8150,7 +8228,7 @@ app.get('/api/stripe-connect/status', requireLoggedInOwner, async (req, res) => 
     }
 
     const account = await stripeRequest(
-      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include=${encodeURIComponent('configuration.merchant')}&include=${encodeURIComponent('requirements')}`
+      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant&include[]=requirements`
     );
     const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
     const connected = cardStatus === 'active';
@@ -8268,7 +8346,7 @@ app.get('/stripe-connect/return', requireLoggedInOwner, async (req, res) => {
     const shop = db.prepare(`SELECT stripe_account_id FROM shops WHERE id = ?`).get(shopId);
     if (shop?.stripe_account_id) {
       const account = await stripeRequest(
-        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include=${encodeURIComponent('configuration.merchant')}`
+        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant`
       );
       const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
       if (cardStatus === 'active') {
