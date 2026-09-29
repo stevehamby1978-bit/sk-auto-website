@@ -173,6 +173,21 @@ app.get(protectedPages, requireLogin);
 // ===== S&K AUTO - OWNER ONLY PAGES =====
 app.get('/employees.html', requireLogin, requireOwner);
 app.get('/shop-settings.html', requireLogin, requireOwner);
+
+// ===== GARAVEX / S&K AUTO - HOSTNAME HOME PAGE ROUTING =====
+// app.garavex.com should open the Garavex login instead of the S&K public website.
+// skautohutch.com (and Railway's generated domain) continue to use index.html normally.
+app.get('/', (req, res, next) => {
+  const hostname = String(req.hostname || '').toLowerCase();
+
+  if (hostname === 'app.garavex.com') {
+    return res.sendFile(path.join(__dirname, 'login.html'));
+  }
+
+  return next();
+});
+// ===== END HOSTNAME HOME PAGE ROUTING =====
+
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
