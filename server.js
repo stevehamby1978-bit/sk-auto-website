@@ -6405,45 +6405,81 @@ try {
 app.delete("/api/repair-orders/:id", (req, res) => {
   try {
     if (!req.session.employee || !req.session.employee.id) {
-      return res.status(401).json({
-        error: "You must be signed in to delete a repair order."
-      });
+      return res.status(401).json({ error: "You must be signed in to delete a repair order." });
     }
 
     const shopId = req.session.employee.shop_id;
     const repairOrderId = Number(req.params.id);
-
-    if (!shopId) {
-      return res.status(403).json({
-        error: "No shop is associated with this employee."
-      });
-    }
-
+    if (!shopId) return res.status(403).json({ error: "No shop is associated with this employee." });
     if (!Number.isInteger(repairOrderId) || repairOrderId <= 0) {
-      return res.status(400).json({
-        error: "Invalid repair order ID."
-      });
+      return res.status(400).json({ error: "Invalid repair order ID." });
     }
 
-    // Make sure this repair order belongs to the logged-in shop
     const repairOrder = db.prepare(`
-      SELECT id, status, amount_paid
-      FROM repair_orders
-      WHERE id = ?
-        AND shop_id = ?
-    `).get(repairOrderId, shopId);
+      SELECT ro.id, ro.customer_id, ro.status, ro.amount_paid, c.name AS customer_name
+      FROM repair_orders ro
+      JOIN customers c ON c.id = ro.customer_id
+      WHERE ro.id = ? AND ro.shop_id = ? AND c.shop_id = ?
+    `).get(repairOrderId, shopId, shopId);
 
-    if (!repairOrder) {
-      return res.status(404).json({
-        error: "Repair order not found."
+    if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
+
+    // TEST CLEANUP: clicking Delete Test RO on a Steve Hamby test order removes
+    // Steve's entire local test dataset for this shop, including his vehicles.
+    if (String(repairOrder.customer_name || "").trim().toLowerCase() === "steve hamby") {
+      const customerId = Number(repairOrder.customer_id);
+
+      const cleanupSteveTestData = db.transaction(() => {
+        const roIds = db.prepare(`
+          SELECT id FROM repair_orders
+          WHERE customer_id = ? AND shop_id = ?
+        `).all(customerId, shopId).map(row => Number(row.id));
+
+        const estimateIds = db.prepare(`
+          SELECT id FROM estimates
+          WHERE customer_id = ? AND shop_id = ?
+        `).all(customerId, shopId).map(row => Number(row.id));
+
+        for (const roId of roIds) {
+          db.prepare(`DELETE FROM customer_communication_history WHERE repair_order_id = ? OR customer_id = ?`).run(roId, customerId);
+          db.prepare(`DELETE FROM invoice_email_history WHERE repair_order_id = ?`).run(roId);
+          db.prepare(`DELETE FROM repair_order_recommendations WHERE repair_order_id = ?`).run(roId);
+          db.prepare(`DELETE FROM repair_order_payments WHERE repair_order_id = ?`).run(roId);
+          db.prepare(`DELETE FROM repair_order_items WHERE repair_order_id = ?`).run(roId);
+          db.prepare(`DELETE FROM repair_orders WHERE id = ? AND shop_id = ?`).run(roId, shopId);
+        }
+
+        // Remove any customer-only communication rows that were not tied to an RO.
+        db.prepare(`DELETE FROM customer_communication_history WHERE customer_id = ? AND shop_id = ?`).run(customerId, shopId);
+
+        for (const estimateId of estimateIds) {
+          db.prepare(`DELETE FROM estimate_items WHERE estimate_id = ?`).run(estimateId);
+        }
+        db.prepare(`DELETE FROM estimates WHERE customer_id = ? AND shop_id = ?`).run(customerId, shopId);
+        db.prepare(`DELETE FROM vehicles WHERE customer_id = ? AND shop_id = ?`).run(customerId, shopId);
+
+        const customerDelete = db.prepare(`
+          DELETE FROM customers WHERE id = ? AND shop_id = ?
+        `).run(customerId, shopId);
+
+        if (customerDelete.changes !== 1) throw new Error("Steve Hamby test customer was not deleted.");
+        return { repairOrdersDeleted: roIds.length, estimatesDeleted: estimateIds.length };
+      });
+
+      const result = cleanupSteveTestData();
+      console.log(`Deleted Steve Hamby test dataset from shop ${shopId}: ${result.repairOrdersDeleted} repair orders, ${result.estimatesDeleted} estimates.`);
+      return res.json({
+        success: true,
+        testCustomerDeleted: true,
+        repairOrdersDeleted: result.repairOrdersDeleted,
+        estimatesDeleted: result.estimatesDeleted,
+        message: "Steve Hamby test customer, vehicles, repair orders, payments, and related local test records were deleted."
       });
     }
 
-    // Financial/completed repair orders are permanent accounting records.
+    // Normal production protection remains unchanged for every other customer.
     const paymentCount = db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM repair_order_payments
-      WHERE repair_order_id = ?
+      SELECT COUNT(*) AS count FROM repair_order_payments WHERE repair_order_id = ?
     `).get(repairOrderId);
 
     if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
@@ -6453,51 +6489,20 @@ app.delete("/api/repair-orders/:id", (req, res) => {
     }
 
     const deleteRepairOrder = db.transaction(() => {
-      // Delete child records first
-      db.prepare(`
-        DELETE FROM repair_order_recommendations
-        WHERE repair_order_id = ?
-      `).run(repairOrderId);
-
-      db.prepare(`
-        DELETE FROM repair_order_payments
-        WHERE repair_order_id = ?
-      `).run(repairOrderId);
-
-      db.prepare(`
-        DELETE FROM repair_order_items
-        WHERE repair_order_id = ?
-      `).run(repairOrderId);
-
-      // Delete the repair order itself
-      const result = db.prepare(`
-        DELETE FROM repair_orders
-        WHERE id = ?
-          AND shop_id = ?
-      `).run(repairOrderId, shopId);
-
-      if (result.changes !== 1) {
-        throw new Error("Repair order was not deleted.");
-      }
+      db.prepare(`DELETE FROM customer_communication_history WHERE repair_order_id = ?`).run(repairOrderId);
+      db.prepare(`DELETE FROM invoice_email_history WHERE repair_order_id = ?`).run(repairOrderId);
+      db.prepare(`DELETE FROM repair_order_recommendations WHERE repair_order_id = ?`).run(repairOrderId);
+      db.prepare(`DELETE FROM repair_order_payments WHERE repair_order_id = ?`).run(repairOrderId);
+      db.prepare(`DELETE FROM repair_order_items WHERE repair_order_id = ?`).run(repairOrderId);
+      const result = db.prepare(`DELETE FROM repair_orders WHERE id = ? AND shop_id = ?`).run(repairOrderId, shopId);
+      if (result.changes !== 1) throw new Error("Repair order was not deleted.");
     });
 
     deleteRepairOrder();
-
-    console.log(
-      `Repair order ${repairOrderId} deleted from shop ${shopId}`
-    );
-
-    res.json({
-      success: true,
-      message: "Repair order deleted successfully."
-    });
-
+    res.json({ success: true, message: "Repair order deleted successfully." });
   } catch (err) {
     console.error("Delete repair order error:", err);
-
-    res.status(500).json({
-      error: "Unable to delete repair order."
-    });
+    res.status(500).json({ error: "Unable to delete repair order." });
   }
 });
 
