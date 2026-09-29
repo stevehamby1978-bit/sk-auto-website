@@ -25,25 +25,6 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const fs = require('fs');
-// ===== S&K AUTO - QUICKBOOKS CONFIGURATION =====
-const QUICKBOOKS_CLIENT_ID =
-  process.env.QUICKBOOKS_CLIENT_ID;
-
-const QUICKBOOKS_CLIENT_SECRET =
-  process.env.QUICKBOOKS_CLIENT_SECRET;
-
-const QUICKBOOKS_REDIRECT_URI =
-  process.env.QUICKBOOKS_REDIRECT_URI;
-
-const QUICKBOOKS_AUTH_URL =
-  'https://appcenter.intuit.com/connect/oauth2';
-
-const QUICKBOOKS_TOKEN_URL =
-  'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-
-const QUICKBOOKS_SCOPE =
-  'com.intuit.quickbooks.accounting com.intuit.quickbooks.payment';
-// ===== END QUICKBOOKS CONFIGURATION =====
 
 // ===== GARAVEX - STRIPE CONNECT (ACCOUNTS V2) =====
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -151,802 +132,6 @@ app.use(session({
     }
 }));
 
-// ===== S&K AUTO - QUICKBOOKS CORE =====
-async function refreshQuickBooksToken(shopId) {
-  const shop = db.prepare(`
-    SELECT
-      quickbooks_realm_id,
-      quickbooks_access_token,
-      quickbooks_refresh_token,
-      quickbooks_access_token_expires_at,
-      quickbooks_refresh_token_expires_at
-    FROM shops
-    WHERE id = ?
-  `).get(shopId);
-
-  if (!shop || !shop.quickbooks_refresh_token) {
-    throw new Error('QuickBooks is not connected for this shop.');
-  }
-
-  const now = Date.now();
-  if (
-    shop.quickbooks_access_token &&
-    shop.quickbooks_access_token_expires_at &&
-    Number(shop.quickbooks_access_token_expires_at) > now + (5 * 60 * 1000)
-  ) {
-    return shop.quickbooks_access_token;
-  }
-
-  const credentials = Buffer.from(
-    QUICKBOOKS_CLIENT_ID + ':' + QUICKBOOKS_CLIENT_SECRET
-  ).toString('base64');
-
-  const tokenResponse = await fetch(QUICKBOOKS_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: 'Basic ' + credentials,
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: shop.quickbooks_refresh_token
-    })
-  });
-
-  const tokenData = await tokenResponse.json();
-  if (!tokenResponse.ok) {
-    console.error('QuickBooks token refresh failed:', tokenData);
-    throw new Error('Could not refresh QuickBooks access token.');
-  }
-
-  const accessTokenExpiresAt =
-    Date.now() + (Number(tokenData.expires_in || 3600) * 1000);
-  const refreshTokenExpiresAt =
-    Date.now() + (Number(tokenData.x_refresh_token_expires_in || 0) * 1000);
-
-  db.prepare(`
-    UPDATE shops
-    SET quickbooks_access_token = ?,
-        quickbooks_refresh_token = ?,
-        quickbooks_access_token_expires_at = ?,
-        quickbooks_refresh_token_expires_at = ?
-    WHERE id = ?
-  `).run(
-    tokenData.access_token,
-    tokenData.refresh_token || shop.quickbooks_refresh_token,
-    accessTokenExpiresAt,
-    refreshTokenExpiresAt,
-    shopId
-  );
-
-  return tokenData.access_token;
-}
-
-async function getQuickBooksContext(shopId) {
-  const shop = db.prepare(`
-    SELECT quickbooks_realm_id
-    FROM shops
-    WHERE id = ?
-  `).get(shopId);
-
-  if (!shop || !shop.quickbooks_realm_id) {
-    throw new Error('This shop is not connected to QuickBooks.');
-  }
-
-  return {
-    realmId: shop.quickbooks_realm_id,
-    accessToken: await refreshQuickBooksToken(shopId)
-  };
-}
-
-async function quickBooksRequest(shopId, path, options = {}) {
-  const { realmId, accessToken } = await getQuickBooksContext(shopId);
-  const response = await fetch(
-    `https://quickbooks.api.intuit.com/v3/company/${realmId}${path}`,
-    {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {})
-      }
-    }
-  );
-
-  const data = await response.json().catch(() => ({}));
-  return { response, data, realmId };
-}
-
-function normalizeQuickBooksValue(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
-async function findOrCreateQuickBooksCustomer(shopId, customer) {
-  const customerName = String(customer.name || '').trim();
-  if (!customerName) {
-    throw new Error('Customer name is required for QuickBooks.');
-  }
-
-  const escapedName = customerName.replace(/'/g, "\\'");
-  const query = `select * from Customer where DisplayName = '${escapedName}'`;
-  const { response, data } = await quickBooksRequest(
-    shopId,
-    `/query?query=${encodeURIComponent(query)}&minorversion=75`,
-    { method: 'GET' }
-  );
-
-  if (!response.ok) {
-    console.error('QuickBooks customer search failed:', JSON.stringify(data));
-    throw new Error(
-      data?.Fault?.Error?.[0]?.Detail ||
-      data?.Fault?.Error?.[0]?.Message ||
-      'QuickBooks customer search failed.'
-    );
-  }
-
-  const matches = data?.QueryResponse?.Customer || [];
-  const wantedEmail = normalizeQuickBooksValue(customer.email);
-
-  let existing = null;
-  if (matches.length === 1) {
-    existing = matches[0];
-  } else if (matches.length > 1 && wantedEmail) {
-    existing = matches.find(qbCustomer =>
-      normalizeQuickBooksValue(qbCustomer.PrimaryEmailAddr?.Address) === wantedEmail
-    ) || null;
-  }
-
-  if (existing?.Id) {
-    return String(existing.Id);
-  }
-
-  // QuickBooks requires DisplayName to be unique. If an exact-name record
-  // exists but cannot safely be matched, create a distinct S&K display name.
-  const displayName = matches.length
-    ? `${customerName} (S&K ${customer.localId || Date.now()})`
-    : customerName;
-
-  const payload = { DisplayName: displayName };
-  if (customer.email) {
-    payload.PrimaryEmailAddr = { Address: customer.email };
-  }
-  if (customer.phone) {
-    payload.PrimaryPhone = { FreeFormNumber: customer.phone };
-  }
-
-  const created = await quickBooksRequest(
-    shopId,
-    '/customer?minorversion=75',
-    { method: 'POST', body: JSON.stringify(payload) }
-  );
-
-  if (!created.response.ok || !created.data?.Customer?.Id) {
-    console.error('QuickBooks customer creation failed:', JSON.stringify(created.data));
-    throw new Error(
-      created.data?.Fault?.Error?.[0]?.Detail ||
-      created.data?.Fault?.Error?.[0]?.Message ||
-      'QuickBooks customer creation failed.'
-    );
-  }
-
-  return String(created.data.Customer.Id);
-}
-
-async function verifyQuickBooksCustomer(shopId, quickbooksCustomerId, customer) {
-  if (!quickbooksCustomerId) return false;
-
-  try {
-    const { response, data } = await quickBooksRequest(
-      shopId,
-      `/customer/${encodeURIComponent(quickbooksCustomerId)}?minorversion=75`,
-      { method: 'GET' }
-    );
-
-    if (!response.ok || !data?.Customer?.Id) return false;
-
-    const qbCustomer = data.Customer;
-    const nameMatches =
-      normalizeQuickBooksValue(qbCustomer.DisplayName) ===
-      normalizeQuickBooksValue(customer.name);
-
-    if (!nameMatches) return false;
-
-    const skEmail = normalizeQuickBooksValue(customer.email);
-    const qbEmail = normalizeQuickBooksValue(qbCustomer.PrimaryEmailAddr?.Address);
-    if (skEmail && qbEmail && skEmail !== qbEmail) return false;
-
-    return true;
-  } catch (err) {
-    console.error('QuickBooks customer verification error:', err);
-    return false;
-  }
-}
-
-async function syncRepairOrderToQuickBooks(shopId, repairOrderId) {
-  const repairOrder = db.prepare(`
-    SELECT
-      r.id,
-      r.shop_id,
-      r.customer_id,
-      r.quickbooks_invoice_id,
-      r.quickbooks_invoice_url,
-      c.name AS customer_name,
-      c.phone AS customer_phone,
-      c.email AS customer_email,
-      c.quickbooks_customer_id
-    FROM repair_orders r
-    JOIN customers c
-      ON c.id = r.customer_id
-     AND c.shop_id = r.shop_id
-    WHERE r.id = ?
-      AND r.shop_id = ?
-    LIMIT 1
-  `).get(repairOrderId, shopId);
-
-  if (!repairOrder) {
-    throw new Error('Repair order not found.');
-  }
-
-  if (repairOrder.quickbooks_invoice_id) {
-    return {
-      id: repairOrder.quickbooks_invoice_id,
-      url: repairOrder.quickbooks_invoice_url || null,
-      existing: true
-    };
-  }
-
-  let quickbooksCustomerId = repairOrder.quickbooks_customer_id;
-  const mappingIsValid = await verifyQuickBooksCustomer(
-    shopId,
-    quickbooksCustomerId,
-    {
-      name: repairOrder.customer_name,
-      email: repairOrder.customer_email || ''
-    }
-  );
-
-  if (!mappingIsValid) {
-    quickbooksCustomerId = await findOrCreateQuickBooksCustomer(
-      shopId,
-      {
-        localId: repairOrder.customer_id,
-        name: repairOrder.customer_name,
-        phone: repairOrder.customer_phone || '',
-        email: repairOrder.customer_email || ''
-      }
-    );
-
-    db.prepare(`
-      UPDATE customers
-      SET quickbooks_customer_id = ?
-      WHERE id = ?
-        AND shop_id = ?
-    `).run(quickbooksCustomerId, repairOrder.customer_id, shopId);
-  }
-
-  const items = db.prepare(`
-    SELECT id, description, parts, labor
-    FROM repair_order_items
-    WHERE repair_order_id = ?
-    ORDER BY id ASC
-  `).all(repairOrderId);
-
-  if (!items.length) {
-    throw new Error('Repair order has no items to invoice.');
-  }
-
-  const lines = [];
-  for (const item of items) {
-    const amount = Number(
-      (Number(item.parts || 0) + Number(item.labor || 0)).toFixed(2)
-    );
-    if (amount <= 0) continue;
-
-    lines.push({
-      DetailType: 'SalesItemLineDetail',
-      Amount: amount,
-      Description: item.description || 'Repair service',
-      SalesItemLineDetail: {
-        ItemRef: { value: '9', name: 'Maintenance & Repair' },
-        Qty: 1,
-        UnitPrice: amount,
-        TaxCodeRef: { value: 'TAX' }
-      }
-    });
-  }
-
-  if (!lines.length) {
-    throw new Error('Repair order has no billable items.');
-  }
-
-  const invoiceData = {
-    CustomerRef: { value: String(quickbooksCustomerId) },
-    DocNumber: `RO-${repairOrderId}`,
-    Line: lines,
-    AllowOnlineCreditCardPayment: true,
-    AllowOnlineACHPayment: true,
-    PrivateNote: `S&K Auto Repair Order #${repairOrderId}`
-  };
-
-  if (repairOrder.customer_email) {
-    invoiceData.BillEmail = { Address: repairOrder.customer_email };
-  }
-
-  const created = await quickBooksRequest(
-    shopId,
-    '/invoice?include=invoiceLink&minorversion=75',
-    { method: 'POST', body: JSON.stringify(invoiceData) }
-  );
-
-  if (!created.response.ok || !created.data?.Invoice?.Id) {
-    console.error('QuickBooks invoice creation failed:', JSON.stringify(created.data));
-    throw new Error(
-      created.data?.Fault?.Error?.[0]?.Detail ||
-      created.data?.Fault?.Error?.[0]?.Message ||
-      'QuickBooks invoice creation failed.'
-    );
-  }
-
-  const quickbooksInvoiceId = String(created.data.Invoice.Id);
-  let quickbooksInvoiceUrl = created.data.Invoice.InvoiceLink || null;
-
-  if (!quickbooksInvoiceUrl) {
-    const invoiceLookup = await quickBooksRequest(
-      shopId,
-      `/invoice/${encodeURIComponent(quickbooksInvoiceId)}?include=invoiceLink&minorversion=75`,
-      { method: 'GET' }
-    );
-    if (invoiceLookup.response.ok) {
-      quickbooksInvoiceUrl = invoiceLookup.data?.Invoice?.InvoiceLink || null;
-    }
-  }
-
-  db.prepare(`
-    UPDATE repair_orders
-    SET quickbooks_invoice_id = ?,
-        quickbooks_invoice_url = ?
-    WHERE id = ?
-      AND shop_id = ?
-  `).run(
-    quickbooksInvoiceId,
-    quickbooksInvoiceUrl,
-    repairOrderId,
-    shopId
-  );
-
-  console.log(
-    `QuickBooks invoice RO-${repairOrderId} linked to repair order ${repairOrderId} (QB ID ${quickbooksInvoiceId})`
-  );
-
-  return {
-    id: quickbooksInvoiceId,
-    url: quickbooksInvoiceUrl,
-    existing: false
-  };
-}
-
-async function syncQuickBooksInvoicePaymentStatus(shopId, repairOrderId) {
-  const repairOrder = db.prepare(`
-    SELECT id, quickbooks_invoice_id
-    FROM repair_orders
-    WHERE id = ?
-      AND shop_id = ?
-    LIMIT 1
-  `).get(repairOrderId, shopId);
-
-  if (!repairOrder) {
-    throw new Error('Repair order not found.');
-  }
-
-  if (!repairOrder.quickbooks_invoice_id) {
-    return { synced: false, reason: 'No QuickBooks invoice is linked.' };
-  }
-
-  const lookup = await quickBooksRequest(
-    shopId,
-    `/invoice/${encodeURIComponent(repairOrder.quickbooks_invoice_id)}?minorversion=75`,
-    { method: 'GET' }
-  );
-
-  if (!lookup.response.ok) {
-    const error = lookup.data?.Fault?.Error?.[0] || {};
-    const code = String(error.code || '');
-    const message = String(error.Message || '');
-    const detail = String(error.Detail || '');
-
-    if (
-      lookup.response.status === 404 ||
-      code === '610' ||
-      message.includes('Object Not Found') ||
-      detail.includes('made inactive') ||
-      detail.includes('has been deleted')
-    ) {
-      db.prepare(`
-        UPDATE repair_orders
-        SET quickbooks_invoice_id = NULL,
-            quickbooks_invoice_url = NULL
-        WHERE id = ?
-          AND shop_id = ?
-      `).run(repairOrderId, shopId);
-
-      return {
-        synced: false,
-        staleInvoiceCleared: true,
-        reason: 'QuickBooks invoice no longer exists.'
-      };
-    }
-
-    console.error('QuickBooks invoice lookup failed:', JSON.stringify(lookup.data));
-    throw new Error(detail || message || 'Unable to retrieve QuickBooks invoice.');
-  }
-
-  const qbInvoice = lookup.data?.Invoice;
-  if (!qbInvoice?.Id) {
-    throw new Error('QuickBooks did not return the invoice.');
-  }
-
-  const totalAmount = Number(qbInvoice.TotalAmt || 0);
-  const qbBalance = Math.max(0, Number(qbInvoice.Balance || 0));
-  const quickBooksPaid = Math.max(0, Number((totalAmount - qbBalance).toFixed(2)));
-
-  // Local payments are not automatically posted into QuickBooks. Never let a
-  // QuickBooks status check erase money that was already recorded in S&K Auto.
-  // Using the larger reconciled total also avoids double-counting when the same
-  // in-person payment was later entered into QuickBooks.
-  const localPaymentRow = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) AS amount_paid
-    FROM repair_order_payments
-    WHERE repair_order_id = ?
-      AND COALESCE(voided, 0) = 0
-  `).get(repairOrderId);
-  const localPaid = Math.max(0, Number(localPaymentRow?.amount_paid || 0));
-  const amountPaid = Math.max(
-    Number(quickBooksPaid.toFixed(2)),
-    Number(localPaid.toFixed(2))
-  );
-  const balance = Math.max(0, Number((totalAmount - amountPaid).toFixed(2)));
-
-  let paymentStatus = 'unpaid';
-  if (totalAmount > 0 && balance <= 0.005) {
-    paymentStatus = 'paid';
-  } else if (amountPaid > 0) {
-    paymentStatus = 'partial';
-  }
-
-  db.prepare(`
-    UPDATE repair_orders
-    SET payment_status = ?,
-        amount_paid = ?,
-        payment_method = CASE
-          WHEN ? > 0 AND ? <= 0 THEN 'quickbooks'
-          ELSE payment_method
-        END,
-        paid_at = CASE
-          WHEN ? = 'paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
-          ELSE NULL
-        END
-    WHERE id = ?
-      AND shop_id = ?
-  `).run(
-    paymentStatus,
-    amountPaid,
-    quickBooksPaid,
-    localPaid,
-    paymentStatus,
-    repairOrderId,
-    shopId
-  );
-
-  console.log(
-    `QuickBooks payment sync RO ${repairOrderId}: ${paymentStatus}, paid ${amountPaid}, balance ${balance}`
-  );
-
-  return {
-    synced: true,
-    paymentStatus,
-    totalAmount: Number(totalAmount.toFixed(2)),
-    amountPaid: Number(amountPaid.toFixed(2)),
-    balance: Number(balance.toFixed(2))
-  };
-}
-
-app.post('/api/repair-orders/:id/sync-quickbooks-payment', async (req, res) => {
-  try {
-    if (!req.session || !req.session.employee) {
-      return res.status(401).json({ success: false, error: 'Not logged in.' });
-    }
-
-    const shopId = req.session.employee.shop_id;
-    const repairOrderId = Number(req.params.id);
-    if (!Number.isInteger(repairOrderId) || repairOrderId <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid repair order ID.' });
-    }
-
-    const result = await syncQuickBooksInvoicePaymentStatus(shopId, repairOrderId);
-    return res.json({ success: true, ...result });
-  } catch (err) {
-    console.error('QuickBooks payment status sync error:', err);
-    return res.status(500).json({
-      success: false,
-      error: err.message || 'Unable to sync QuickBooks payment status.'
-    });
-  }
-});
-// Manual/retry invoice sync for an already-completed repair order.
-app.post('/api/repair-orders/:id/sync-quickbooks-invoice', async (req, res) => {
-  try {
-    if (!req.session || !req.session.employee) {
-      return res.status(401).json({ success: false, error: 'Not logged in.' });
-    }
-
-    const shopId = req.session.employee.shop_id;
-    const repairOrderId = Number(req.params.id);
-    if (!Number.isInteger(repairOrderId) || repairOrderId <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid repair order ID.' });
-    }
-
-    const repairOrder = db.prepare(`
-      SELECT id, status
-      FROM repair_orders
-      WHERE id = ? AND shop_id = ?
-    `).get(repairOrderId, shopId);
-
-    if (!repairOrder) {
-      return res.status(404).json({ success: false, error: 'Repair order not found.' });
-    }
-
-    if (repairOrder.status !== 'completed') {
-      return res.status(409).json({
-        success: false,
-        error: 'Complete the repair order before syncing an invoice to QuickBooks.'
-      });
-    }
-
-    const result = await syncRepairOrderToQuickBooks(shopId, repairOrderId);
-    return res.json({ success: true, ...result });
-  } catch (err) {
-    console.error('QuickBooks invoice sync API error:', err);
-    return res.status(500).json({
-      success: false,
-      error: err.message || 'Unable to sync QuickBooks invoice.'
-    });
-  }
-});
-
-// ===== END S&K AUTO - QUICKBOOKS CORE =====
-
-// ===== S&K AUTO - QUICKBOOKS CONNECT =====
-app.get('/quickbooks/connect', (req, res) => {
-
-  if (!QUICKBOOKS_CLIENT_ID || !QUICKBOOKS_REDIRECT_URI) {
-    return res.status(500).send(
-      'QuickBooks configuration is missing.'
-    );
-  }
-
-  const state = crypto.randomBytes(32).toString('hex');
-
-  req.session.quickbooksOAuthState = state;
-
-  const params = new URLSearchParams({
-    client_id: QUICKBOOKS_CLIENT_ID,
-    response_type: 'code',
-    scope: QUICKBOOKS_SCOPE,
-    redirect_uri: QUICKBOOKS_REDIRECT_URI,
-    state
-  });
-
-  const authorizationUrl =
-    QUICKBOOKS_AUTH_URL + '?' + params.toString();
-
-  req.session.save((err) => {
-    if (err) {
-        console.error('Failed to save QuickBooks OAuth state:', err);
-        return res.status(500).send('Could not start QuickBooks authorization.');
-    }
-
-    res.redirect(authorizationUrl);
-});
-
-});
-
-// ===== S&K AUTO - QUICKBOOKS CONNECTION STATUS =====
-app.get('/api/quickbooks/status', (req, res) => {
-  try {
-    if (!req.session || !req.session.employee) {
-      return res.status(401).json({
-        connected: false,
-        error: 'Not logged in.'
-      });
-    }
-
-    const shopId = req.session.employee.shop_id;
-
-    const shop = db.prepare(`
-      SELECT
-        quickbooks_realm_id,
-        quickbooks_access_token,
-        quickbooks_refresh_token,
-        quickbooks_access_token_expires_at,
-        quickbooks_refresh_token_expires_at
-      FROM shops
-      WHERE id = ?
-    `).get(shopId);
-
-    if (!shop) {
-      return res.status(404).json({
-        connected: false,
-        error: 'Shop not found.'
-      });
-    }
-
-    const connected = Boolean(
-      shop.quickbooks_realm_id &&
-      shop.quickbooks_refresh_token
-    );
-
-    return res.json({
-      connected,
-      realmId: shop.quickbooks_realm_id || null,
-      accessTokenExpiresAt:
-        shop.quickbooks_access_token_expires_at || null,
-      refreshTokenExpiresAt:
-        shop.quickbooks_refresh_token_expires_at || null
-    });
-
-  } catch (err) {
-    console.error('QuickBooks status error:', err);
-
-    return res.status(500).json({
-      connected: false,
-      error: 'Could not check QuickBooks connection.'
-    });
-  }
-});
-// ===== END QUICKBOOKS CONNECTION STATUS =====
-
-// ===== END QUICKBOOKS CONNECT =====
-// ===== S&K AUTO - QUICKBOOKS CALLBACK =====
-app.get('/quickbooks/callback', async (req, res) => {
-
-  try {
-
-    const { code, state, realmId, error } = req.query;
-
-    if (error) {
-      console.error('QuickBooks authorization error:', error);
-      return res.status(400).send(
-        'QuickBooks authorization was cancelled or failed.'
-      );
-    }
-
-    if (!code || !state || !realmId) {
-      return res.status(400).send(
-        'Missing QuickBooks authorization information.'
-      );
-    }
-
-    if (
-      !req.session.quickbooksOAuthState ||
-      state !== req.session.quickbooksOAuthState
-    ) {
-      return res.status(403).send(
-        'Invalid QuickBooks authorization state.'
-      );
-    }
-
-    // State can only be used once.
-    delete req.session.quickbooksOAuthState;
-
-    const credentials = Buffer.from(
-      QUICKBOOKS_CLIENT_ID +
-      ':' +
-      QUICKBOOKS_CLIENT_SECRET
-    ).toString('base64');
-
-    const tokenResponse = await fetch(
-      QUICKBOOKS_TOKEN_URL,
-      {
-        method: 'POST',
-
-        headers: {
-          'Authorization':
-            'Basic ' + credentials,
-
-          'Accept':
-            'application/json',
-
-          'Content-Type':
-            'application/x-www-form-urlencoded'
-        },
-
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code: code,
-          redirect_uri: QUICKBOOKS_REDIRECT_URI
-        })
-      }
-    );
-
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenResponse.ok) {
-
-      console.error(
-        'QuickBooks token exchange failed:',
-        tokenData
-      );
-
-      return res.status(500).send(
-        'QuickBooks connection failed during token exchange.'
-      );
-    }
-
-    req.session.quickbooks = {
-      realmId: realmId,
-
-      accessToken:
-        tokenData.access_token,
-
-      refreshToken:
-        tokenData.refresh_token,
-
-      accessTokenExpiresAt:
-        Date.now() +
-        (Number(tokenData.expires_in) * 1000),
-
-      refreshTokenExpiresAt:
-        Date.now() +
-        (Number(tokenData.x_refresh_token_expires_in) * 1000)
-    };
-
-    console.log(
-      'QuickBooks connected. Realm ID:',
-      realmId
-    );
-// ===== SAVE QUICKBOOKS CONNECTION TO SHOP =====
-if (!req.session.employee || !req.session.employee.shop_id) {
-    return res.status(401).send('Shop session not found.');
-}
-
-const shopId = req.session.employee.shop_id;
-
-db.prepare(`
-    UPDATE shops
-    SET quickbooks_realm_id = ?,
-        quickbooks_access_token = ?,
-        quickbooks_refresh_token = ?,
-        quickbooks_access_token_expires_at = ?,
-        quickbooks_refresh_token_expires_at = ?
-    WHERE id = ?
-`).run(
-    realmId,
-    tokenData.access_token,
-    tokenData.refresh_token,
-    Date.now() + (Number(tokenData.expires_in) * 1000),
-    Date.now() + (Number(tokenData.x_refresh_token_expires_in) * 1000),
-    shopId
-);
-
-console.log('QuickBooks connection saved for shop:', shopId);
-   return res.redirect('/dashboard.html?quickbooks=connected');
-  } catch (error) {
-
-    console.error(
-      'QuickBooks callback error:',
-      error
-    );
-
-    return res.status(500).send(
-      'An error occurred while connecting QuickBooks.'
-    );
-
-  }
-
-});
-// ===== END QUICKBOOKS CALLBACK =====
 
 
 // ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
@@ -988,17 +173,6 @@ app.get(protectedPages, requireLogin);
 // ===== S&K AUTO - OWNER ONLY PAGES =====
 app.get('/employees.html', requireLogin, requireOwner);
 app.get('/shop-settings.html', requireLogin, requireOwner);
-// ===== GARAVEX INVOICE CACHE GUARD =====
-app.use((req, res, next) => {
-  if (req.path === '/invoice.html' || req.path === '/invoice-stripe.html') {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-  }
-  next();
-});
-// ===== END GARAVEX INVOICE CACHE GUARD =====
-
 app.use(express.static(__dirname));
 app.get('/repair-order.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'repair-order.html'));
@@ -1078,25 +252,9 @@ CREATE TABLE IF NOT EXISTS shops (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 `);
-// ===== QUICKBOOKS SHOP COLUMNS =====
-const quickBooksShopColumns = [
-    ['quickbooks_realm_id', 'TEXT'],
-    ['quickbooks_access_token', 'TEXT'],
-    ['quickbooks_refresh_token', 'TEXT'],
-    ['quickbooks_access_token_expires_at', 'INTEGER'],
-    ['quickbooks_refresh_token_expires_at', 'INTEGER']
-];
-
 const existingShopColumns = new Set(
     db.prepare(`PRAGMA table_info(shops)`).all().map(column => column.name)
 );
-
-quickBooksShopColumns.forEach(([name, type]) => {
-    if (!existingShopColumns.has(name)) {
-        db.exec(`ALTER TABLE shops ADD COLUMN ${name} ${type}`);
-        console.log(`Added shops.${name}`);
-    }
-});
 
 // ===== SHOP PROFILE / WHITE-LABEL COLUMNS =====
 const shopProfileColumns = [
@@ -1231,31 +389,6 @@ if (!repairOrderColumns.includes('invoice_token')) {
   console.log('Added invoice_token column to repair_orders');
 }
 
-// ===== S&K AUTO - QUICKBOOKS INVOICE MIGRATION =====
-
-if (!repairOrderColumns.includes('quickbooks_invoice_id')) {
-  db.prepare(`
-    ALTER TABLE repair_orders
-    ADD COLUMN quickbooks_invoice_id TEXT
-  `).run();
-
-  console.log(
-    'Added quickbooks_invoice_id column to repair_orders'
-  );
-}
-
-if (!repairOrderColumns.includes('quickbooks_invoice_url')) {
-  db.prepare(`
-    ALTER TABLE repair_orders
-    ADD COLUMN quickbooks_invoice_url TEXT
-  `).run();
-
-  console.log(
-    'Added quickbooks_invoice_url column to repair_orders'
-  );
-}
-
-// ===== END QUICKBOOKS INVOICE MIGRATION =====
 
 // ===== S&K AUTO - PAYMENT HISTORY TABLE =====
 db.exec(`
@@ -2088,7 +1221,6 @@ const total =
     (subtotal + tax) * 100
   ) / 100;
         // repair_orders.amount_paid is authoritative because it can be
-        // updated by either local payments or a QuickBooks payment sync.
         const amountPaid = Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
         const balanceDue = Math.max(0, total - amountPaid);
 
@@ -2247,7 +1379,6 @@ app.get('/api/outstanding-balances', (req, res) => {
       const total =
         Math.round((subtotal + tax) * 100) / 100;
 
-      // Use the authoritative total, including QuickBooks-synced payments.
       const amountPaid =
         Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 
@@ -2393,7 +1524,6 @@ app.post('/api/repair-orders/:id/balance-reminder', async (req, res) => {
     const total =
       Math.round((subtotal + tax) * 100) / 100;
 
-    // Use authoritative amount paid so QuickBooks payments are respected.
     const amountPaid =
       Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 
@@ -2509,7 +1639,6 @@ async function runAutomaticBalanceReminders() {
         const total =
           Math.round((subtotal + tax) * 100) / 100;
 
-        // Use authoritative amount paid so QuickBooks-synced payments
         // cannot trigger a false overdue reminder.
         const amountPaid =
           Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
@@ -2763,20 +1892,6 @@ if (primaryShop) {
   `).run(primaryShop.id);
 }
 
-// ===== S&K AUTO - QUICKBOOKS CUSTOMER ID MIGRATION =====
-const customerQuickBooksColumns = db.prepare(`
-    PRAGMA table_info(customers)
-`).all().map(column => column.name);
-
-if (!customerQuickBooksColumns.includes("quickbooks_customer_id")) {
-    db.prepare(`
-        ALTER TABLE customers
-        ADD COLUMN quickbooks_customer_id TEXT
-    `).run();
-
-    console.log("Added customers.quickbooks_customer_id");
-}
-// ===== END QUICKBOOKS CUSTOMER ID MIGRATION =====
 
 // ===== S&K AUTO SaaS - VEHICLE SHOP MIGRATION =====
 const vehicleShopColumns = db.prepare(`
@@ -4876,8 +3991,7 @@ repairOrder.payments = db.prepare(`
     WHERE repair_order_id = ?
     ORDER BY id ASC
 `).all(repairOrder.id);
-// amount_paid on repair_orders is authoritative. It may come from
-// local S&K payments or from a QuickBooks payment-status sync.
+// amount_paid on repair_orders is authoritative.
 repairOrder.amount_paid = Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 repairOrder.local_amount_paid = Math.round(
   repairOrder.payments
@@ -4900,6 +4014,27 @@ repairOrder.balance_due = Math.max(
   }
 });
 
+
+
+// ===== GARAVEX - ENSURE SECURE INVOICE TOKEN =====
+app.post('/api/repair-orders/:id/invoice-token', (req, res) => {
+  try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const order = db.prepare(`SELECT id, invoice_token FROM repair_orders WHERE id = ? AND shop_id = ?`).get(req.params.id, shopId);
+    if (!order) return res.status(404).json({ error: 'Repair order not found.' });
+    let token = order.invoice_token;
+    if (!token) {
+      token = crypto.randomBytes(32).toString('hex');
+      db.prepare(`UPDATE repair_orders SET invoice_token = ? WHERE id = ? AND shop_id = ?`).run(token, order.id, shopId);
+    }
+    return res.json({ success: true, token });
+  } catch (err) {
+    console.error('Invoice token error:', err);
+    return res.status(500).json({ error: 'Unable to create secure invoice link.' });
+  }
+});
+// ===== END GARAVEX - ENSURE SECURE INVOICE TOKEN =====
 
 // ===== S&K AUTO - EMAIL / RESEND PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
@@ -5186,13 +4321,13 @@ app.patch("/api/repair-orders/:id/status", (req, res) => {
     }
 
     const repairOrder = db.prepare(`
-      SELECT id, status, quickbooks_invoice_id, amount_paid
+      SELECT id, status, amount_paid
       FROM repair_orders
       WHERE id = ? AND shop_id = ?
     `).get(repairOrderId, shopId);
 
     if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
-    if (repairOrder.status === "completed" || repairOrder.quickbooks_invoice_id || Number(repairOrder.amount_paid || 0) > 0) {
+    if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0) {
       return res.status(409).json({
         error: "Completed, invoiced, or paid repair orders are locked. Create a new repair order for additional work."
       });
@@ -5494,8 +4629,7 @@ app.post("/api/repair-orders/:id/payments/:paymentId/void", (req, res) => {
     const tax = Math.round(subtotal * 0.075 * 100) / 100;
     const total = Math.round((subtotal + tax) * 100) / 100;
 
-    // A void reverses this local payment from the authoritative total without
-    // erasing unrelated QuickBooks-synced money already reflected on the order.
+    // A void reverses this local payment from the authoritative total.
     const amountPaid = Math.max(
       0,
       Math.round((Number(repairOrder.amount_paid || 0) - Number(payment.amount || 0)) * 100) / 100
@@ -5525,6 +4659,129 @@ app.post("/api/repair-orders/:id/payments/:paymentId/void", (req, res) => {
   }
 });
 
+
+// ===== GARAVEX - STRIPE CHECKOUT =====
+function invoiceTotalsForOrder(repairOrderId) {
+  const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(repairOrderId);
+  const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
+  const tax = Math.round(subtotal * 0.075 * 100) / 100;
+  const total = Math.round((subtotal + tax) * 100) / 100;
+  return { subtotal, tax, total };
+}
+
+// Store Stripe Checkout session IDs so a successful checkout can only be recorded once.
+const stripePaymentColumns = new Set(db.prepare(`PRAGMA table_info(repair_order_payments)`).all().map(c => c.name));
+if (!stripePaymentColumns.has('stripe_session_id')) {
+  db.exec(`ALTER TABLE repair_order_payments ADD COLUMN stripe_session_id TEXT`);
+}
+if (!stripePaymentColumns.has('stripe_payment_intent_id')) {
+  db.exec(`ALTER TABLE repair_order_payments ADD COLUMN stripe_payment_intent_id TEXT`);
+}
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_repair_order_payments_stripe_session ON repair_order_payments(stripe_session_id) WHERE stripe_session_id IS NOT NULL`);
+
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    if (!token) return res.status(400).json({ success: false, error: 'Invoice token is required.' });
+    if (!STRIPE_SECRET_KEY) return res.status(503).json({ success: false, error: 'Stripe is not configured.' });
+
+    const order = db.prepare(`
+      SELECT r.id, r.shop_id, r.amount_paid, r.payment_status,
+             c.name AS customer_name, c.email AS customer_email,
+             s.name AS shop_name, s.stripe_account_id
+      FROM repair_orders r
+      LEFT JOIN customers c ON c.id = r.customer_id
+      LEFT JOIN shops s ON s.id = r.shop_id
+      WHERE r.invoice_token = ?
+      LIMIT 1
+    `).get(token);
+    if (!order) return res.status(404).json({ success: false, error: 'Invoice not found.' });
+    if (!order.stripe_account_id) return res.status(409).json({ success: false, error: 'This shop has not connected Stripe.' });
+
+    const { total } = invoiceTotalsForOrder(order.id);
+    const balance = Math.max(0, Math.round((total - Number(order.amount_paid || 0)) * 100) / 100);
+    if (balance < 0.01) return res.status(409).json({ success: false, error: 'This invoice is already paid.' });
+
+    const base = requestBaseUrl(req);
+    const form = new URLSearchParams();
+    form.set('mode', 'payment');
+    form.set('success_url', `${base}/invoice.html?token=${encodeURIComponent(token)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`);
+    form.set('cancel_url', `${base}/invoice.html?token=${encodeURIComponent(token)}&stripe=cancelled`);
+    form.set('line_items[0][price_data][currency]', 'usd');
+    form.set('line_items[0][price_data][unit_amount]', String(Math.round(balance * 100)));
+    form.set('line_items[0][price_data][product_data][name]', `${order.shop_name || 'Garavex Shop'} Invoice #${order.id}`);
+    form.set('line_items[0][quantity]', '1');
+    form.set('metadata[repair_order_id]', String(order.id));
+    form.set('metadata[invoice_token]', token);
+    form.set('payment_intent_data[metadata][repair_order_id]', String(order.id));
+    if (order.customer_email) form.set('customer_email', order.customer_email);
+
+    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Stripe-Account': order.stripe_account_id,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: form.toString()
+    });
+    const data = await stripeResponse.json().catch(() => ({}));
+    if (!stripeResponse.ok || !data.url) {
+      console.error('Stripe Checkout error:', data);
+      return res.status(stripeResponse.status || 500).json({ success: false, error: data?.error?.message || 'Unable to create Stripe Checkout.' });
+    }
+    return res.json({ success: true, url: data.url });
+  } catch (err) {
+    console.error('Stripe Checkout route error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Unable to start Stripe payment.' });
+  }
+});
+
+app.post('/api/stripe/confirm-checkout-session', async (req, res) => {
+  try {
+    const token = String(req.body?.token || '').trim();
+    const sessionId = String(req.body?.session_id || '').trim();
+    if (!token || !sessionId) return res.status(400).json({ success: false, error: 'Invoice token and Stripe session are required.' });
+
+    const order = db.prepare(`
+      SELECT r.id, r.shop_id, r.amount_paid, s.stripe_account_id
+      FROM repair_orders r JOIN shops s ON s.id = r.shop_id
+      WHERE r.invoice_token = ? LIMIT 1
+    `).get(token);
+    if (!order || !order.stripe_account_id) return res.status(404).json({ success: false, error: 'Invoice or Stripe account not found.' });
+
+    const existing = db.prepare(`SELECT id FROM repair_order_payments WHERE stripe_session_id = ?`).get(sessionId);
+    if (existing) return res.json({ success: true, alreadyRecorded: true });
+
+    const stripeResponse = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}`, 'Stripe-Account': order.stripe_account_id }
+    });
+    const session = await stripeResponse.json().catch(() => ({}));
+    if (!stripeResponse.ok) return res.status(502).json({ success: false, error: session?.error?.message || 'Unable to verify Stripe payment.' });
+    if (session.payment_status !== 'paid') return res.status(409).json({ success: false, error: 'Stripe has not marked this payment paid.' });
+    if (String(session.metadata?.repair_order_id || '') !== String(order.id)) return res.status(409).json({ success: false, error: 'Stripe payment does not match this invoice.' });
+
+    const amount = Number(session.amount_total || 0) / 100;
+    const { total } = invoiceTotalsForOrder(order.id);
+    const newAmountPaid = Math.min(total, Math.round((Number(order.amount_paid || 0) + amount) * 100) / 100);
+    const paymentStatus = newAmountPaid >= total - 0.009 ? 'paid' : 'partial';
+
+    const tx = db.transaction(() => {
+      db.prepare(`INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_session_id, stripe_payment_intent_id) VALUES (?, ?, 'Stripe', ?, ?)`)
+        .run(order.id, amount, sessionId, session.payment_intent || null);
+      db.prepare(`UPDATE repair_orders SET amount_paid = ?, payment_status = ?, payment_method = 'Stripe', paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END WHERE id = ? AND shop_id = ?`)
+        .run(newAmountPaid, paymentStatus, paymentStatus, order.id, order.shop_id);
+    });
+    tx();
+    return res.json({ success: true, amount_paid: newAmountPaid, payment_status: paymentStatus });
+  } catch (err) {
+    if (String(err?.message || '').includes('UNIQUE constraint failed')) return res.json({ success: true, alreadyRecorded: true });
+    console.error('Stripe confirmation error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Unable to record Stripe payment.' });
+  }
+});
+// ===== END GARAVEX - STRIPE CHECKOUT =====
+
 // ===== S&K AUTO - SECURE CUSTOMER INVOICE =====
 app.get("/api/customer-invoice/:token", (req, res) => {
   try {
@@ -5541,12 +4798,20 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         r.id,
         r.status,
         r.payment_status,
-        r.quickbooks_invoice_url,
         r.payment_method,
         r.amount_paid,
         r.created_at,
         r.completed_at,
+        r.shop_id,
         c.name AS customer_name,
+        s.name AS shop_name,
+        s.phone AS shop_phone,
+        s.email AS shop_email,
+        s.address AS shop_address,
+        s.city AS shop_city,
+        s.state AS shop_state,
+        s.zip AS shop_zip,
+        s.stripe_account_id,
         v.year AS vehicle_year,
         v.make AS vehicle_make,
         v.model AS vehicle_model,
@@ -5557,6 +4822,8 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         ON r.customer_id = c.id
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
+      LEFT JOIN shops s
+        ON r.shop_id = s.id
       WHERE r.invoice_token = ?
       LIMIT 1
     `).get(token);
@@ -5601,8 +4868,9 @@ app.get("/api/customer-invoice/:token", (req, res) => {
         payment_method: repairOrder.payment_method,
         created_at: repairOrder.created_at,
         completed_at: repairOrder.completed_at,
-        quickbooks_invoice_url: repairOrder.quickbooks_invoice_url,
         customer_name: repairOrder.customer_name,
+        stripe_payments_enabled: Boolean(repairOrder.stripe_account_id),
+        shop: { name: repairOrder.shop_name, phone: repairOrder.shop_phone, email: repairOrder.shop_email, address: repairOrder.shop_address, city: repairOrder.shop_city, state: repairOrder.shop_state, zip: repairOrder.shop_zip },
 
         vehicle: {
           year: repairOrder.vehicle_year,
@@ -5688,8 +4956,7 @@ if (!invoiceToken) {
     `).run(invoiceToken, repairOrder.id, shopId);
 }
 
-const invoiceUrl =
-    `https://skautohutch.com/invoice-stripe.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
+const invoiceUrl = `${requestBaseUrl(req)}/invoice.html?id=${encodeURIComponent(req.params.id)}&token=${encodeURIComponent(invoiceToken)}`;
     const items = db.prepare(`
       SELECT
         description,
@@ -6294,11 +5561,11 @@ app.post("/api/repair-orders/:id/items", (req, res) => {
     if (!description || !description.trim()) return res.status(400).json({ error: "Repair description is required." });
 
     const repairOrder = db.prepare(`
-      SELECT id, status, quickbooks_invoice_id, amount_paid
+      SELECT id, status, amount_paid
       FROM repair_orders WHERE id = ? AND shop_id = ?
     `).get(repairOrderId, shopId);
     if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
-    if (repairOrder.status === "completed" || repairOrder.quickbooks_invoice_id || Number(repairOrder.amount_paid || 0) > 0) {
+    if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0) {
       return res.status(409).json({ error: "This repair order is locked because it has been completed, invoiced, or paid." });
     }
 
@@ -6426,9 +5693,9 @@ app.delete("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
     if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrderId = Number(req.params.repairOrderId);
     const itemId = Number(req.params.itemId);
-    const order = db.prepare(`SELECT id, status, quickbooks_invoice_id, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(repairOrderId, shopId);
+    const order = db.prepare(`SELECT id, status, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(repairOrderId, shopId);
     if (!order) return res.status(404).json({ error: "Repair order not found." });
-    if (order.status === "completed" || order.quickbooks_invoice_id || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Completed, invoiced, or paid repair orders cannot be edited." });
+    if (order.status === "completed" || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Completed, invoiced, or paid repair orders cannot be edited." });
     const result = db.prepare(`DELETE FROM repair_order_items WHERE id = ? AND repair_order_id = ?`).run(itemId, repairOrderId);
     if (result.changes !== 1) return res.status(404).json({ error: "Repair item not found." });
     res.json({ success: true });
@@ -6447,9 +5714,9 @@ app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
     const itemId = Number(req.params.itemId);
     const { description, parts, labor } = req.body;
     if (!description || !description.trim()) return res.status(400).json({ error: "Repair description is required." });
-    const order = db.prepare(`SELECT id, status, quickbooks_invoice_id, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(repairOrderId, shopId);
+    const order = db.prepare(`SELECT id, status, amount_paid FROM repair_orders WHERE id = ? AND shop_id = ?`).get(repairOrderId, shopId);
     if (!order) return res.status(404).json({ error: "Repair order not found." });
-    if (order.status === "completed" || order.quickbooks_invoice_id || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Completed, invoiced, or paid repair orders cannot be edited." });
+    if (order.status === "completed" || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: "Completed, invoiced, or paid repair orders cannot be edited." });
     const partsAmount = Number(parts) || 0;
     const laborAmount = Number(labor) || 0;
     if (partsAmount < 0 || laborAmount < 0) return res.status(400).json({ error: "Parts and labor cannot be negative." });
@@ -7013,7 +6280,7 @@ app.patch("/api/repair-orders/:id/complete", async (req, res) => {
     }
 
     const repairOrder = db.prepare(`
-      SELECT id, status, quickbooks_invoice_id, amount_paid
+      SELECT id, status, amount_paid
       FROM repair_orders
       WHERE id = ?
         AND shop_id = ?
@@ -7040,26 +6307,13 @@ app.patch("/api/repair-orders/:id/complete", async (req, res) => {
         AND shop_id = ?
     `).run(req.params.id, shopId);
 
-// ===== S&K AUTO - CREATE QUICKBOOKS INVOICE =====
-try {
-  const quickbooksInvoice =
-    await syncRepairOrderToQuickBooks(
-      shopId,
-      req.params.id
-    );
+    // Every completed repair order gets a secure customer invoice token.
+    const completedInvoice = db.prepare(`SELECT invoice_token FROM repair_orders WHERE id = ? AND shop_id = ?`).get(req.params.id, shopId);
+    if (!completedInvoice?.invoice_token) {
+      db.prepare(`UPDATE repair_orders SET invoice_token = ? WHERE id = ? AND shop_id = ?`)
+        .run(crypto.randomBytes(32).toString('hex'), req.params.id, shopId);
+    }
 
-  console.log(
-    `QuickBooks invoice ready for repair order ${req.params.id}:`,
-    quickbooksInvoice.id
-  );
-
-} catch (quickbooksError) {
-  console.error(
-    `QuickBooks invoice sync failed for repair order ${req.params.id}:`,
-    quickbooksError
-  );
-}
-// ===== END CREATE QUICKBOOKS INVOICE =====
     
 // ===== S&K AUTO - AUTOMATIC VEHICLE READY SMS =====
 try {
@@ -7173,7 +6427,7 @@ app.delete("/api/repair-orders/:id", (req, res) => {
 
     // Make sure this repair order belongs to the logged-in shop
     const repairOrder = db.prepare(`
-      SELECT id, status, quickbooks_invoice_id, amount_paid
+      SELECT id, status, amount_paid
       FROM repair_orders
       WHERE id = ?
         AND shop_id = ?
@@ -7195,14 +6449,6 @@ app.delete("/api/repair-orders/:id", (req, res) => {
     if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
       return res.status(409).json({
         error: "Completed or paid repair orders cannot be permanently deleted. Keep this order as part of the service and accounting history."
-      });
-    }
-
-    // Don't silently leave a QuickBooks invoice behind
-    if (repairOrder.quickbooks_invoice_id) {
-      return res.status(409).json({
-        error:
-          "This repair order is linked to a QuickBooks invoice. Delete or void the QuickBooks invoice before deleting this repair order."
       });
     }
 
@@ -7894,7 +7140,7 @@ app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
     const total = Math.round((subtotal * 1.075) * 100) / 100;
     const amountPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
     const balance = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
-    const invoiceUrl = `https://skautohutch.com/invoice-stripe.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
+    const invoiceUrl = `https://skautohutch.com/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
     const firstName = String(order.customer_name || '').trim().split(/\s+/)[0];
 
     const body = balance <= 0.009
@@ -8129,73 +7375,6 @@ Questions? Call (620) 899-0425`;
 });
 
 
-// ===== GARAVEX - CUSTOMER STRIPE CHECKOUT =====
-app.post('/api/stripe/create-checkout-session', async (req, res) => {
-  try {
-    const token = String(req.body?.token || '').trim();
-    if (!token) return res.status(400).json({ success: false, error: 'Invoice token is required.' });
-    if (!STRIPE_SECRET_KEY) return res.status(503).json({ success: false, error: 'Stripe is not configured on the server.' });
-
-    const order = db.prepare(`
-      SELECT r.id, r.shop_id, r.amount_paid, r.payment_status,
-             c.name AS customer_name, c.email AS customer_email,
-             s.stripe_account_id
-      FROM repair_orders r
-      LEFT JOIN customers c ON c.id = r.customer_id
-      LEFT JOIN shops s ON s.id = r.shop_id
-      WHERE r.invoice_token = ?
-      LIMIT 1
-    `).get(token);
-
-    if (!order) return res.status(404).json({ success: false, error: 'Invoice not found or link is invalid.' });
-    if (!order.stripe_account_id) return res.status(409).json({ success: false, error: 'This shop has not connected Stripe yet.' });
-
-    const items = db.prepare(`SELECT parts, labor FROM repair_order_items WHERE repair_order_id = ?`).all(order.id);
-    const subtotal = items.reduce((sum, item) => sum + Number(item.parts || 0) + Number(item.labor || 0), 0);
-    const total = subtotal * 1.075;
-    const paid = Number(order.amount_paid || 0);
-    const balance = Math.max(0, total - paid);
-    if (balance < 0.005) return res.status(409).json({ success: false, error: 'This invoice is already paid.' });
-
-    const amountCents = Math.round(balance * 100);
-    const base = `${req.protocol}://${req.get('host')}`;
-    const form = new URLSearchParams();
-    form.set('mode', 'payment');
-    form.set('success_url', `${base}/invoice-stripe.html?token=${encodeURIComponent(token)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`);
-    form.set('cancel_url', `${base}/invoice-stripe.html?token=${encodeURIComponent(token)}&stripe=cancelled`);
-    form.set('line_items[0][price_data][currency]', 'usd');
-    form.set('line_items[0][price_data][unit_amount]', String(amountCents));
-    form.set('line_items[0][price_data][product_data][name]', `S&K Auto Invoice #${order.id}`);
-    form.set('line_items[0][quantity]', '1');
-    form.set('metadata[repair_order_id]', String(order.id));
-    form.set('metadata[invoice_token]', token);
-    form.set('payment_intent_data[metadata][repair_order_id]', String(order.id));
-    if (order.customer_email) form.set('customer_email', order.customer_email);
-
-    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-        'Stripe-Version': STRIPE_API_VERSION,
-        'Stripe-Account': order.stripe_account_id,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: form.toString()
-    });
-    const data = await stripeResponse.json();
-    if (!stripeResponse.ok || !data.url) {
-      console.error('Stripe Checkout error:', data);
-      return res.status(stripeResponse.status || 500).json({ success: false, error: data?.error?.message || 'Unable to create Stripe Checkout session.' });
-    }
-
-    return res.json({ success: true, url: data.url });
-  } catch (err) {
-    console.error('Stripe Checkout route error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Unable to start Stripe payment.' });
-  }
-});
-// ===== END GARAVEX - CUSTOMER STRIPE CHECKOUT =====
-
 // ===== GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
 function requireLoggedInOwner(req, res, next) {
   if (!req.session || !req.session.employee) {
@@ -8228,7 +7407,7 @@ app.get('/api/stripe-connect/status', requireLoggedInOwner, async (req, res) => 
     }
 
     const account = await stripeRequest(
-      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant&include[]=requirements`
+      `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include=${encodeURIComponent('configuration.merchant')}&include=${encodeURIComponent('requirements')}`
     );
     const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
     const connected = cardStatus === 'active';
@@ -8346,7 +7525,7 @@ app.get('/stripe-connect/return', requireLoggedInOwner, async (req, res) => {
     const shop = db.prepare(`SELECT stripe_account_id FROM shops WHERE id = ?`).get(shopId);
     if (shop?.stripe_account_id) {
       const account = await stripeRequest(
-        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include[]=configuration.merchant`
+        `/v2/core/accounts/${encodeURIComponent(shop.stripe_account_id)}?include=${encodeURIComponent('configuration.merchant')}`
       );
       const cardStatus = account?.configuration?.merchant?.capabilities?.card_payments?.status || null;
       if (cardStatus === 'active') {

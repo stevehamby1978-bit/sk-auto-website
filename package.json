@@ -1,8 +1,8 @@
 {
-  "name": "sk-auto-website",
+  "name": "garavex",
   "version": "1.0.0",
   "private": true,
-  "description": "S&K Auto website with live appointment scheduling",
+  "description": "Garavex multi-shop automotive management platform with Stripe Connect payments",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

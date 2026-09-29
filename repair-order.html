@@ -42,7 +42,7 @@
 
   <div class="section"><div class="completion-box"><div class="completion-copy"><h3 class="section-heading"><span class="section-number">7</span>Complete Repair</h3><p class="section-note" style="margin-bottom:0;">Finish the repair workflow when all work and documentation are complete.</p><div id="completedRepairStatus" style="margin-top:8px;font-weight:bold;color:#198754;"></div></div><button id="completeRepairBtn" type="button" class="btn btn-green" style="padding:12px 22px;font-size:16px;">✓ Mark Repair Complete</button></div></div>
 
-  <div id="paymentSection" class="section"><h3 class="section-heading"><span class="section-number">8</span>Invoice &amp; Payment</h3><p class="section-note">Review the balance, open the invoice, and record shop payments. QuickBooks-synced payments remain visible in payment history.</p><div class="actions" style="margin-top:0;"><button id="viewInvoiceBtn" type="button" class="btn btn-green" style="display:none;">View Invoice</button></div><div class="form-grid-2 spacer-top"><div class="field"><label for="paymentAmount">Payment Amount</label><input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="0.00"></div><div class="field"><label for="paymentMethod">Payment Method</label><select id="paymentMethod"><option value="">Select payment method</option><option value="Cash">Cash</option><option value="Credit Card">Credit Card</option><option value="Debit Card">Debit Card</option><option value="Check">Check</option><option value="Other">Other</option></select></div></div><button id="recordPaymentBtn" type="button" class="btn btn-primary spacer-top">Record Payment</button><div class="payment-summary"><div class="total-row"><span>Amount Paid:</span><strong id="amountPaid">$0.00</strong></div><div class="total-row"><span>Balance Due:</span><strong id="balanceDue">$0.00</strong></div></div><h4>Payment History</h4><div id="paymentHistory">No payments recorded.</div></div>
+  <div id="paymentSection" class="section"><h3 class="section-heading"><span class="section-number">8</span>Invoice &amp; Payment</h3><p class="section-note">Review the balance, open the invoice, and record shop payments. Online card payments are processed through Stripe.</p><div class="actions" style="margin-top:0;"><button id="viewInvoiceBtn" type="button" class="btn btn-green" style="display:none;">View Invoice</button></div><div class="form-grid-2 spacer-top"><div class="field"><label for="paymentAmount">Payment Amount</label><input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="0.00"></div><div class="field"><label for="paymentMethod">Payment Method</label><select id="paymentMethod"><option value="">Select payment method</option><option value="Cash">Cash</option><option value="Credit Card">Credit Card</option><option value="Debit Card">Debit Card</option><option value="Check">Check</option><option value="Other">Other</option></select></div></div><button id="recordPaymentBtn" type="button" class="btn btn-primary spacer-top">Record Payment</button><div class="payment-summary"><div class="total-row"><span>Amount Paid:</span><strong id="amountPaid">$0.00</strong></div><div class="total-row"><span>Balance Due:</span><strong id="balanceDue">$0.00</strong></div></div><h4>Payment History</h4><div id="paymentHistory">No payments recorded.</div></div>
 
   <div class="actions"><button class="btn btn-orange" onclick="window.print()">Print / Save PDF</button><button class="btn btn-dark" onclick="window.location.href='/repair-orders.html'">Back to Repair Orders</button></div>
   <div class="danger-zone"><h3>Danger Zone</h3><p class="section-note">Deleting a repair order is destructive. This action is intentionally separated from normal workflow controls.</p><button id="deleteRepairBtn" type="button" class="btn btn-danger">🗑 Delete Repair Order</button></div>
@@ -188,7 +188,6 @@ if (Array.isArray(order.payments) && order.payments.length > 0) {
     const localActivePaid = order.payments
       .filter(payment => Number(payment.voided || 0) !== 1)
       .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    const quickBooksOnlyPaid = Math.max(0, amountPaid - localActivePaid);
 
     paymentHistory.innerHTML = order.payments.map(payment => {
 
@@ -262,29 +261,10 @@ return `
         </div>
     </div>
 `;
-    }).join('') + (quickBooksOnlyPaid > 0.009 ? `
-        <div style="padding:10px 0;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;gap:20px;">
-          <div><strong>QuickBooks Payment</strong><div style="font-size:13px;color:#666;">Synced from QuickBooks</div></div>
-          <div style="text-align:right;"><strong>${money(quickBooksOnlyPaid)}</strong></div>
-        </div>
-    ` : '');
+    }).join('');
 
 } else if (amountPaid > 0) {
-    paymentHistory.innerHTML = `
-        <div style="
-            padding: 12px;
-            margin-top: 8px;
-            border: 1px solid #28a745;
-            border-radius: 6px;
-            background: #f4fff6;
-        ">
-            <strong>QuickBooks Payment</strong><br>
-            Amount: ${money(amountPaid)}<br>
-            <span style="color:#28a745;font-weight:bold;">
-                ✓ Paid through QuickBooks
-            </span>
-        </div>
-    `;
+    paymentHistory.innerHTML = `<div style="padding:12px;border:1px solid #28a745;border-radius:6px;background:#f4fff6;"><strong>Payment received</strong><br>Amount: ${money(amountPaid)}</div>`;
 } else {
     paymentHistory.innerHTML = 'No payments recorded.';
 }
@@ -330,9 +310,15 @@ if (order.status === 'completed' && order.completed_at) {
 
   viewInvoiceBtn.style.display = 'inline-block';
 
-  viewInvoiceBtn.onclick = () => {
-    window.location.href =
-      '/invoice-stripe.html?id=' + encodeURIComponent(order.id);
+  viewInvoiceBtn.onclick = async () => {
+    let token = order.invoice_token;
+    if (!token) {
+      const r = await fetch('/api/repair-orders/' + encodeURIComponent(order.id) + '/invoice-token', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok || !data.token) { alert(data.error || 'Unable to open invoice.'); return; }
+      token = data.token;
+    }
+    window.location.href = '/invoice.html?id=' + encodeURIComponent(order.id) + '&token=' + encodeURIComponent(token);
   };
 
 } else {
@@ -348,7 +334,6 @@ statusSelect.value =
 // Completed/invoiced/paid repair orders are accounting records and are locked.
 const workflowLocked =
   order.status === 'completed' ||
-  Boolean(order.quickbooks_invoice_id) ||
   Number(order.amount_paid || 0) > 0;
 
 if (workflowLocked) {
