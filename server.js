@@ -6448,7 +6448,7 @@ app.patch("/api/repair-orders/:id/complete", async (req, res) => {
     }
 
     
-// ===== S&K AUTO - AUTOMATIC VEHICLE READY SMS =====
+// ===== GARAVEX V1 - AUTOMATIC VEHICLE READY SMS =====
 try {
     const readyInfo = db.prepare(`
         SELECT
@@ -6457,12 +6457,18 @@ try {
             c.phone AS customer_phone,
             v.year AS vehicle_year,
             v.make AS vehicle_make,
-            v.model AS vehicle_model
+            v.model AS vehicle_model,
+            s.name AS shop_name,
+            s.phone AS shop_phone
         FROM repair_orders r
+        JOIN shops s
+            ON s.id = r.shop_id
         LEFT JOIN customers c
             ON r.customer_id = c.id
+           AND c.shop_id = r.shop_id
         LEFT JOIN vehicles v
             ON r.vehicle_id = v.id
+           AND v.shop_id = r.shop_id
         WHERE r.id = ?
           AND r.shop_id = ?
     `).get(req.params.id, shopId);
@@ -6488,12 +6494,12 @@ try {
 
             const message = await twilioClient.messages.create({
                 body:
-                    `S&K Auto: ` +
+                    `${readyInfo.shop_name || "Your repair shop"}: ` +
                     `${customerFirstName ? customerFirstName + ", " : ""}` +
                     `your ${vehicleDescription || "vehicle"} is ready! ` +
                     `Your repairs have been completed. ` +
-                    `Please contact S&K Auto if you have any questions. ` +
-                    `Thank you for choosing S&K Auto!`,
+                    `${readyInfo.shop_phone ? "Questions? Call " + readyInfo.shop_phone + ". " : ""}` +
+                    `Thank you for choosing ${readyInfo.shop_name || "us"}!`,
                 from: process.env.TWILIO_PHONE_NUMBER,
                 to: customerPhone
             });
