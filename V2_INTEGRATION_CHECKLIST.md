@@ -1,14 +1,14 @@
 # Garavex V2 Integration & Release Checklist
 
 ## Server integration
-The V2 feature modules must be installed in `server.js` only after the existing database and authentication helpers are initialized.
+V2 is installed through the centralized `v2-bootstrap.js` entry point after the existing database, schema migrations, session middleware, `requireLogin`, and `requireOwner` helpers are initialized.
 
-Required modules:
-- `v2-schema.js` → `installV2Schema(db)`
-- `v2-api.js` → `installV2Api(app, db, { requireLogin, requireOwner })`
-- `v2-admin-api.js` → `installV2AdminApi(app, db, { requireLogin, requireOwner })`
-- `v2-vin.js` → `installVinApi(app, { requireLogin })`
-- `v2-communications.js` → `installV2Communications(app, db, { requireLogin, twilioClient, resend })`
+Required integration:
+- `v2-bootstrap.js` → `installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend })`
+- `v2-bootstrap.js` installs `v2-schema.js` before all V2 route modules.
+- Do not restore or import the retired `v2-api.js`; its responsibilities were split into hardened dedicated modules.
+- Keep the Stripe webhook route before `express.json()` so signature verification receives the raw request body.
+- Install V2 before `app.listen(...)` and only after all V1 schema migrations needed by V2 have completed.
 
 ## Protected V2 pages
 Require employee login:
@@ -64,15 +64,25 @@ Public DVI and customer portal endpoints must expose only the customer data link
 15. DVI/status/portal SMS uses the current shop name, not hard-coded S&K Auto branding.
 16. Existing appointments, estimates, ROs, invoices and Stripe payment flow still pass regression testing.
 
+## Startup validation
+- Confirm `server.js` imports `installGaravexV2` exactly once.
+- Confirm `installGaravexV2(...)` executes exactly once before `app.listen(...)`.
+- Confirm every module imported by `v2-bootstrap.js` exists on the release branch.
+- Confirm no duplicate `/api/v2/...` route definitions remain outside their authoritative modules.
+- Confirm a fresh database and a copy of the production schema both complete `installV2Schema(db)` without errors.
+- Confirm startup succeeds when optional Twilio/Resend credentials are absent where those features are not exercised.
+
 ## Legacy branding cleanup before release
 The inherited V1 `server.js` still contains hard-coded S&K Auto receipt/invoice messaging and URLs. V2 release must replace customer-facing hard-coded shop identity with `shops` table values and Garavex/app URLs while leaving the S&K Auto public website behavior isolated to its own domain.
 
 ## Release gate
 Do not merge/deploy V2 to production until:
+- V2 bootstrap is wired into `server.js`
 - syntax checks pass
 - migration is tested on a copy of the production schema
 - multi-shop isolation tests pass
 - Stripe sandbox end-to-end payment test passes
 - customer token security tests pass
 - V1 regression tests pass
+- legacy customer-facing hard-coded S&K Auto branding is isolated or replaced for Garavex workflows
 - a complete source ZIP is produced and saved before production deployment
