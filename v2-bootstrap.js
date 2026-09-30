@@ -10,6 +10,7 @@ const { installV2AdminApi } = require('./v2-admin-api');
 const { installVinApi } = require('./v2-vin');
 const { installV2Communications } = require('./v2-communications');
 const { installV2Followups } = require('./v2-followups');
+const { installV2Checkin } = require('./v2-checkin');
 
 function installGaravexV2(app, db, deps) {
   if (!app || !db) throw new Error('Garavex V2 requires app and db.');
@@ -17,35 +18,14 @@ function installGaravexV2(app, db, deps) {
     throw new Error('Garavex V2 requires authentication middleware.');
   }
 
-  // Additive schema migrations run before V2 routes are registered.
   installV2Schema(db);
-
-  installV2Api(app, db, {
-    requireLogin: deps.requireLogin,
-    requireOwner: deps.requireOwner
-  });
-
-  installV2AdminApi(app, db, {
-    requireLogin: deps.requireLogin,
-    requireOwner: deps.requireOwner
-  });
-
-  installVinApi(app, {
-    requireLogin: deps.requireLogin
-  });
-
-  installV2Communications(app, db, {
-    requireLogin: deps.requireLogin,
-    twilioClient: deps.twilioClient,
-    resend: deps.resend
-  });
-
-  installV2Followups(app, db, {
-    requireLogin: deps.requireLogin,
-    twilioClient: deps.twilioClient
-  });
+  installV2Api(app, db, { requireLogin:deps.requireLogin, requireOwner:deps.requireOwner });
+  installV2AdminApi(app, db, { requireLogin:deps.requireLogin, requireOwner:deps.requireOwner });
+  installVinApi(app, { requireLogin:deps.requireLogin });
+  installV2Communications(app, db, { requireLogin:deps.requireLogin, twilioClient:deps.twilioClient, resend:deps.resend });
+  installV2Followups(app, db, { requireLogin:deps.requireLogin, twilioClient:deps.twilioClient });
+  installV2Checkin(app, db, { requireLogin:deps.requireLogin });
 
   console.log('Garavex V2 modules installed.');
 }
-
 module.exports = { installGaravexV2 };
