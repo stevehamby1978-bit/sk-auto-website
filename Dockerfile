@@ -10,4 +10,6 @@ COPY . .
 
 ENV NODE_ENV=production
 
-CMD ["node", "server.js"]
+# Use the same centralized V2 launcher as package.json so container/Railway
+# deployments cannot silently bypass the V2 bootstrap and start legacy-only V1.
+CMD ["node", "garavex-start.js"]
