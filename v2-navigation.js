@@ -1,0 +1,26 @@
+/* Shared Garavex V2 navigation. Include with <script src="v2-navigation.js"></script>. */
+(() => {
+  const links = [
+    ['v2-dashboard.html','Operations'],
+    ['v2-dvi.html','Inspections'],
+    ['v2-vin.html','VIN Intake'],
+    ['v2-inventory.html','Inventory'],
+    ['v2-parts.html','Purchasing'],
+    ['v2-reports.html','Reports'],
+    ['v2-settings.html','Setup']
+  ];
+  const current = location.pathname.split('/').pop();
+  const nav = document.createElement('nav');
+  nav.setAttribute('aria-label','Garavex V2');
+  nav.style.cssText='position:sticky;top:0;z-index:999;display:flex;gap:6px;align-items:center;overflow:auto;padding:10px 14px;background:#0b0f12;border-bottom:1px solid #29323a;font:13px Arial,sans-serif;white-space:nowrap';
+  const brand = document.createElement('a');
+  brand.href='v2-dashboard.html'; brand.textContent='G  GARAVEX V2';
+  brand.style.cssText='font-weight:800;color:#fff;text-decoration:none;margin-right:10px';
+  nav.appendChild(brand);
+  links.forEach(([href,label])=>{
+    const a=document.createElement('a'); a.href=href; a.textContent=label;
+    a.style.cssText=`color:${current===href?'#fff':'#9aa5ad'};text-decoration:none;padding:8px 10px;border-radius:6px;background:${current===href?'#252d34':'transparent'}`;
+    nav.appendChild(a);
+  });
+  document.body.insertBefore(nav,document.body.firstChild);
+})();
