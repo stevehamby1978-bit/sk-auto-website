@@ -1,7 +1,7 @@
 /* Garavex V1 one-time customer ownership repair.
  * Repairs the known Thomas Eubanks record only when there is exactly one
  * matching customer row and it is assigned outside the primary S&K Auto shop.
- * Related tenant-scoped records are moved with the customer.
+ * Related tenant-scoped records and matching appointments are moved with the customer.
  */
 const path=require('path');
 const fs=require('fs');
@@ -72,7 +72,19 @@ setImmediate(()=>{
     });
 
     tx();
-    console.log(`V1 customer data repair: moved Thomas Eubanks customer #${customer.id} to shop #${skShop.id} (${skShop.name}).`);
+
+    let appointmentMoves=0;
+    if(tableExists(db,'bookings')&&cols(db,'bookings').has('shop_id')&&cols(db,'bookings').has('name')){
+      const moved=db.prepare(`
+        UPDATE bookings
+        SET shop_id=?
+        WHERE LOWER(TRIM(name))='thomas eubanks'
+          AND (shop_id IS NULL OR shop_id<>?)
+      `).run(skShop.id,skShop.id);
+      appointmentMoves=Number(moved.changes||0);
+    }
+
+    console.log(`V1 customer data repair: moved Thomas Eubanks customer #${customer.id} to shop #${skShop.id} (${skShop.name}); appointment rows moved: ${appointmentMoves}.`);
   }catch(err){
     console.error('V1 customer data repair failed:',err);
   }finally{
