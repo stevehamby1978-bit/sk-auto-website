@@ -1,12 +1,35 @@
 /* Garavex V2 database foundation.
  * Additive migrations only: this module does not remove or rename V1 tables/columns.
  */
+function tableExists(db, table) {
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table));
+}
+
 function ensureColumn(db, table, name, definition) {
+  if (!tableExists(db, table)) {
+    throw new Error(`Garavex V2 schema requires existing base table: ${table}`);
+  }
   const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
   if (!columns.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
 }
 
+function assertBaseSchema(db) {
+  const required = ['repair_orders','repair_order_items','vehicles','employees','shops'];
+  const missing = required.filter(table => !tableExists(db, table));
+  if (missing.length) {
+    throw new Error(`Garavex V2 cannot install before the V1 base schema. Missing table(s): ${missing.join(', ')}`);
+  }
+}
+
 function installV2Schema(db) {
+  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
+    throw new Error('Garavex V2 schema requires an initialized SQLite database connection.');
+  }
+
+  // V2 extends these V1 tables. Fail early with a clear startup error instead of
+  // partially installing V2 and then failing on a later ALTER TABLE statement.
+  assertBaseSchema(db);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS dvi_inspections (
       id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, repair_order_id INTEGER, customer_id INTEGER, vehicle_id INTEGER, technician_id INTEGER,
