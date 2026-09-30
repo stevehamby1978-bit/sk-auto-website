@@ -21,7 +21,7 @@ function installV2Health(app, db, { requireLogin, requireOwner }) {
         'dvi_inspections','dvi_items','dvi_attachments','technician_time_entries','deferred_services',
         'inventory_items','vendors','purchase_orders','purchase_order_items','audit_log','customer_portal_tokens','canned_jobs',
         'v2_comebacks','v2_tasks','v2_ro_blockers','v2_ro_promises','v2_parts_requests','v2_vehicle_keys','v2_road_tests',
-        'v2_deliveries','v2_customer_requests','v2_shop_handoffs','v2_loaner_assignments'
+        'v2_deliveries','v2_customer_requests','v2_shop_handoffs','v2_loaners','v2_loaner_assignments'
       ];
       const tables = required.map(name => ({ name, ok: table(name), shop_scoped: table(name) && hasColumn(name,'shop_id') }));
       const requiredColumns = [
@@ -42,16 +42,24 @@ function installV2Health(app, db, { requireLogin, requireOwner }) {
 
       let dbRead = false;
       let dbWrite = false;
+      let dbWriteDetail = '';
       try { db.prepare(`SELECT 1 AS ok`).get(); dbRead = true; } catch {}
       try {
+        // Exercise a real write without leaving a permanent probe table or row behind.
+        // CREATE TABLE is intentionally inside the savepoint so rollback restores the schema too.
         db.exec('SAVEPOINT v2_health_write');
-        db.prepare(`CREATE TABLE IF NOT EXISTS v2_health_probe(id INTEGER PRIMARY KEY,checked_at DATETIME)`).run();
-        db.prepare(`INSERT INTO v2_health_probe(id,checked_at) VALUES(1,CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET checked_at=CURRENT_TIMESTAMP`).run();
+        db.prepare(`CREATE TABLE v2_health_probe(id INTEGER PRIMARY KEY,checked_at DATETIME)`).run();
+        db.prepare(`INSERT INTO v2_health_probe(id,checked_at) VALUES(1,CURRENT_TIMESTAMP)`).run();
         db.exec('ROLLBACK TO v2_health_write');
         db.exec('RELEASE v2_health_write');
-        dbWrite = true;
-      } catch {
-        try { db.exec('ROLLBACK TO v2_health_write'); db.exec('RELEASE v2_health_write'); } catch {}
+        dbWrite = !table('v2_health_probe');
+        if (!dbWrite) dbWriteDetail = 'Health probe rollback left a probe table behind.';
+      } catch (err) {
+        dbWriteDetail = err?.message || 'Database write probe failed.';
+        try { db.exec('ROLLBACK TO v2_health_write'); } catch {}
+        try { db.exec('RELEASE v2_health_write'); } catch {}
+        // Clean up a stale probe from older health-check implementations when possible.
+        try { db.exec('DROP TABLE IF EXISTS v2_health_probe'); } catch {}
       }
 
       let foreignKeys = false;
@@ -63,7 +71,7 @@ function installV2Health(app, db, { requireLogin, requireOwner }) {
 
       const checks = [
         { key:'database_read',label:'Database readable',ok:dbRead,required:true },
-        { key:'database_write',label:'Database writable',ok:dbWrite,required:true },
+        { key:'database_write',label:'Database writable without persistent health artifacts',ok:dbWrite,required:true,detail:dbWriteDetail },
         { key:'foreign_keys',label:'SQLite foreign-key enforcement enabled',ok:foreignKeys,required:true },
         { key:'foreign_key_integrity',label:'No broken foreign-key references',ok:foreignKeyProblems===0,required:true,detail:foreignKeyProblems===null?'check failed':`${foreignKeyProblems} problem(s)` },
         { key:'shop_scope',label:'Logged-in shop context',ok:validId(shopId),required:true },
