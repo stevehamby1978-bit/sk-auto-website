@@ -15,7 +15,8 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
         'customers','vehicles','repair_orders','appointments','employees','dvi_inspections','dvi_items','dvi_attachments',
         'technician_time_entries','deferred_services','inventory_items','vendors','purchase_orders','purchase_order_items',
         'canned_jobs','audit_log','customer_portal_tokens','v2_comebacks','v2_tasks','v2_ro_blockers','v2_ro_promises',
-        'v2_parts_requests','v2_vehicle_keys','v2_road_tests','v2_deliveries','v2_customer_requests','v2_shop_handoffs'
+        'v2_parts_requests','v2_vehicle_keys','v2_road_tests','v2_deliveries','v2_customer_requests','v2_shop_handoffs',
+        'v2_loaner_assignments'
       ];
 
       const isolation = scoped.map(table => {
@@ -64,11 +65,14 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
       [
         ['v2_tasks','repair_order_id'],['v2_ro_blockers','repair_order_id'],['v2_ro_promises','repair_order_id'],
         ['v2_parts_requests','repair_order_id'],['v2_vehicle_keys','repair_order_id'],['v2_road_tests','repair_order_id'],
-        ['v2_deliveries','repair_order_id'],['v2_customer_requests','repair_order_id'],['v2_shop_handoffs','repair_order_id']
+        ['v2_deliveries','repair_order_id'],['v2_customer_requests','repair_order_id'],['v2_shop_handoffs','repair_order_id'],
+        ['v2_loaner_assignments','repair_order_id']
       ].forEach(([table, key]) => link(`${table} linked across shops`, table, key, 'repair_orders'));
 
-      if (exists('dvi_items')) run('DVI items with invalid condition', `SELECT COUNT(*) n FROM dvi_items WHERE condition NOT IN ('green','yellow','red')`);
-      if (exists('dvi_items')) run('DVI items with invalid customer decision', `SELECT COUNT(*) n FROM dvi_items WHERE customer_decision NOT IN ('pending','approved','declined')`);
+      if (exists('dvi_items')) {
+        run('DVI items with invalid condition', `SELECT COUNT(*) n FROM dvi_items WHERE condition NOT IN ('green','yellow','red')`);
+        run('DVI items with invalid customer decision', `SELECT COUNT(*) n FROM dvi_items WHERE customer_decision NOT IN ('pending','approved','declined')`);
+      }
       if (exists('technician_time_entries')) {
         run('Technician time with negative minutes', `SELECT COUNT(*) n FROM technician_time_entries WHERE minutes IS NOT NULL AND minutes<0`);
         run('Multiple open clocks for one technician', `SELECT COUNT(*) n FROM (SELECT shop_id,employee_id FROM technician_time_entries WHERE clock_out IS NULL GROUP BY shop_id,employee_id HAVING COUNT(*)>1)`);
@@ -86,14 +90,30 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
         run('Duplicate active comebacks for original RO', `SELECT COUNT(*) n FROM (SELECT shop_id,original_repair_order_id FROM v2_comebacks WHERE status IN ('open','in_progress') GROUP BY shop_id,original_repair_order_id HAVING COUNT(*)>1)`);
         run('Comebacks with negative costs', `SELECT COUNT(*) n FROM v2_comebacks WHERE labor_cost<0 OR parts_cost<0`);
       }
+      if (exists('v2_tasks')) {
+        run('Tasks with invalid status', `SELECT COUNT(*) n FROM v2_tasks WHERE status NOT IN ('open','completed','cancelled')`);
+        run('Completed tasks without completion timestamp', `SELECT COUNT(*) n FROM v2_tasks WHERE status='completed' AND completed_at IS NULL`);
+      }
+      if (exists('v2_customer_requests')) {
+        run('Customer requests with invalid status', `SELECT COUNT(*) n FROM v2_customer_requests WHERE status NOT IN ('open','resolved','cancelled')`);
+        run('Resolved customer requests without resolution', `SELECT COUNT(*) n FROM v2_customer_requests WHERE status='resolved' AND (resolution IS NULL OR TRIM(resolution)='')`);
+      }
+      if (exists('v2_road_tests')) {
+        run('Road tests with invalid status', `SELECT COUNT(*) n FROM v2_road_tests WHERE status NOT IN ('in_progress','completed')`);
+        run('Completed road tests without result', `SELECT COUNT(*) n FROM v2_road_tests WHERE status='completed' AND result NOT IN ('passed','failed','inconclusive')`);
+        run('Road tests with decreasing mileage', `SELECT COUNT(*) n FROM v2_road_tests WHERE start_mileage IS NOT NULL AND end_mileage IS NOT NULL AND end_mileage<start_mileage`);
+        run('Multiple active road tests on one RO', `SELECT COUNT(*) n FROM (SELECT shop_id,repair_order_id FROM v2_road_tests WHERE status='in_progress' GROUP BY shop_id,repair_order_id HAVING COUNT(*)>1)`);
+      }
+      if (exists('v2_vehicle_keys')) run('Vehicle keys with invalid status', `SELECT COUNT(*) n FROM v2_vehicle_keys WHERE status NOT IN ('checked_in','technician','board','returned','missing')`);
       if (exists('v2_deliveries')) run('Delivered records without delivered workflow state', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NOT NULL AND COALESCE(r.workflow_status,'')!='delivered'`);
-      if (exists('v2_vehicle_keys')) run('Delivered ROs with missing keys', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_vehicle_keys k ON k.repair_order_id=r.id AND k.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND k.status='missing'`);
+      if (exists('v2_vehicle_keys')) run('Delivered ROs with unreturned or missing keys', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_vehicle_keys k ON k.repair_order_id=r.id AND k.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND k.status!='returned'`);
       if (exists('v2_ro_blockers')) run('Delivered ROs with open blockers', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_ro_blockers b ON b.repair_order_id=r.id AND b.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND b.status='open'`);
-      if (exists('v2_parts_requests')) run('Delivered ROs with parts still requested or ordered', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_parts_requests p ON p.repair_order_id=r.id AND p.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND p.status IN ('requested','ordered')`);
+      if (exists('v2_parts_requests')) run('Delivered ROs with outstanding parts', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_parts_requests p ON p.repair_order_id=r.id AND p.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND p.status IN ('requested','ordered','received')`);
       if (exists('v2_road_tests')) run('Delivered ROs with active road tests', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_road_tests t ON t.repair_order_id=r.id AND t.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND t.status='in_progress'`);
-      if (exists('v2_customer_requests')) run('Delivered ROs with open approvals', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_customer_requests q ON q.repair_order_id=r.id AND q.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND q.status='open' AND q.request_type='approval'`);
+      if (exists('v2_customer_requests')) run('Delivered ROs with open customer requests', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_customer_requests q ON q.repair_order_id=r.id AND q.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND q.status='open'`);
+      if (exists('v2_tasks')) run('Delivered ROs with open tasks', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_tasks t ON t.repair_order_id=r.id AND t.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND t.status='open'`);
       if (exists('v2_loaner_assignments')) run('Delivered ROs with active loaners', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_loaner_assignments l ON l.repair_order_id=r.id AND l.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND l.returned_at IS NULL`);
-      if (exists('v2_road_tests')) run('Ready ROs with failed latest road test', `SELECT COUNT(*) n FROM repair_orders r WHERE r.workflow_status='ready' AND EXISTS (SELECT 1 FROM v2_road_tests t WHERE t.shop_id=r.shop_id AND t.repair_order_id=r.id AND t.completed_at IS NOT NULL AND LOWER(COALESCE(t.result,''))='failed' AND t.id=(SELECT t2.id FROM v2_road_tests t2 WHERE t2.shop_id=r.shop_id AND t2.repair_order_id=r.id AND t2.completed_at IS NOT NULL ORDER BY datetime(t2.completed_at) DESC,t2.id DESC LIMIT 1))`);
+      if (exists('v2_road_tests')) run('Ready ROs whose latest road test did not pass', `SELECT COUNT(*) n FROM repair_orders r WHERE r.workflow_status='ready' AND EXISTS (SELECT 1 FROM v2_road_tests t WHERE t.shop_id=r.shop_id AND t.repair_order_id=r.id AND t.completed_at IS NOT NULL AND LOWER(COALESCE(t.result,''))!='passed' AND t.id=(SELECT t2.id FROM v2_road_tests t2 WHERE t2.shop_id=r.shop_id AND t2.repair_order_id=r.id AND t2.completed_at IS NOT NULL ORDER BY datetime(t2.completed_at) DESC,t2.id DESC LIMIT 1))`);
       if (exists('technician_time_entries')) run('Delivered ROs with technician clock still running', `SELECT COUNT(*) n FROM repair_orders r JOIN technician_time_entries t ON t.repair_order_id=r.id AND t.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND t.clock_out IS NULL`);
 
       const currentShop = {
