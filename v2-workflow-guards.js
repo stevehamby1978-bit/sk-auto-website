@@ -11,12 +11,13 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
   app.get('/api/v2/repair-orders/:id/completion-check', requireLogin, requireRepairOrders, (req, res) => {
     try {
       const shop = Number(req.session?.employee?.shop_id || 0);
+      const employee = Number(req.session?.employee?.id || 0);
       const id = Number(req.params.id);
-      if (!validId(shop)) return res.status(401).json({ error: 'A valid shop session is required.' });
+      if (!validId(shop) || !validId(employee)) return res.status(401).json({ error: 'A valid employee shop session is required.' });
       if (!validId(id)) return res.status(400).json({ error: 'Valid repair order ID is required.' });
 
       const ro = db.prepare(`
-        SELECT id,status,workflow_status
+        SELECT id,status,workflow_status,payment_status
         FROM repair_orders
         WHERE id=? AND shop_id=?
       `).get(id, shop);
@@ -37,6 +38,8 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
       addCountCheck('road_test_open', 'v2_road_tests', "status='in_progress'", () => 'Road test still in progress', 'No road test in progress');
       addCountCheck('customer_approval', 'v2_customer_requests', "status='open' AND request_type='approval'", n => `${n} customer approval request(s) open`, 'Customer approvals clear');
       addCountCheck('loaner', 'v2_loaner_assignments', 'returned_at IS NULL', () => 'Loaner vehicle still checked out', 'No active loaner vehicle');
+      addCountCheck('technician_clock', 'technician_time_entries', 'clock_out IS NULL', () => 'Technician clock still running', 'No active technician clock');
+      addCountCheck('tasks', 'v2_tasks', "status='open'", n => `${n} repair-order task(s) still open`, 'Repair-order tasks complete');
 
       if (tableExists('v2_road_tests')) {
         const latest = db.prepare(`
@@ -60,24 +63,38 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
           WHERE shop_id=? AND repair_order_id=?
           ORDER BY id DESC LIMIT 1
         `).get(shop, id);
-        const missing = String(key?.status || '').toLowerCase() === 'missing';
-        checks.push({ key: 'key', ok: !missing, label: missing ? 'Vehicle key marked missing' : 'Vehicle key accounted for' });
+        const status = String(key?.status || '').toLowerCase();
+        const accountedFor = !key || ['checked_in','technician','board'].includes(status);
+        checks.push({
+          key: 'key',
+          ok: accountedFor,
+          label: accountedFor ? 'Vehicle key accounted for' : `Vehicle key custody must be resolved${status ? ` (${status})` : ''}`
+        });
       }
 
       const workflow = String(ro.workflow_status || '').toLowerCase();
       const delivered = workflow === 'delivered';
-      const blocking = checks.filter(check => !check.ok);
-      const ready = !delivered && blocking.length === 0;
+      const operationalBlocking = checks.filter(check => !check.ok);
+      const ready = !delivered && operationalBlocking.length === 0;
+      const paid = String(ro.payment_status || '').toLowerCase() === 'paid';
+      const deliveryChecks = checks.concat([{ key: 'payment', ok: paid, label: paid ? 'Payment complete' : 'Payment must be collected before delivery' }]);
+      const deliveryBlocking = deliveryChecks.filter(check => !check.ok);
+      const deliverable = workflow === 'ready' && deliveryBlocking.length === 0;
 
       return res.json({
         repair_order_id: id,
         status: ro.status,
         workflow_status: ro.workflow_status,
+        payment_status: ro.payment_status,
         delivered,
         ready,
+        deliverable,
         checks,
-        blocking,
-        blocking_count: blocking.length
+        blocking: operationalBlocking,
+        blocking_count: operationalBlocking.length,
+        delivery_checks: deliveryChecks,
+        delivery_blocking: deliveryBlocking,
+        delivery_blocking_count: deliveryBlocking.length
       });
     } catch (err) {
       console.error('Garavex V2 completion check error:', err);
