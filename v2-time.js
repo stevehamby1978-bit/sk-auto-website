@@ -1,7 +1,7 @@
 const {permissionMiddleware,loadCurrentEmployee}=require('./v2-permissions');
 function installV2Time(app,db,{requireLogin,requireOwner}){
  if(!app||!db)throw new Error('V2 time tracking requires app and db.');if(!requireLogin||!requireOwner)throw new Error('V2 time tracking requires authentication middleware.');
- const requireTime=permissionMiddleware('time_tracking',db),validId=x=>Number.isInteger(x)&&x>0;
+ const requireTime=permissionMiddleware('time_clock',db),validId=x=>Number.isInteger(x)&&x>0;
  const auth=(req,res)=>{const employee=req.v2Employee||loadCurrentEmployee(db,req.session?.employee),s=Number(employee?.shop_id||0),e=Number(employee?.id||0);if(!employee||!validId(s)||!validId(e)){res.status(401).json({error:'Employee session is no longer valid for this shop.'});return null;}const current=loadCurrentEmployee(db,req.session?.employee);if(!current||Number(current.id)!==e||Number(current.shop_id)!==s){res.status(401).json({error:'Employee session is no longer valid for this shop.'});return null;}req.v2Employee=current;req.v2ShopId=s;return{s,e};};
  const live=(req,a)=>{const employee=loadCurrentEmployee(db,req.session?.employee);return employee&&Number(employee.id)===a.e&&Number(employee.shop_id)===a.s;};
  const noStore=res=>{res.set('Cache-Control','no-store, private, max-age=0');res.set('Pragma','no-cache');res.set('Expires','0');res.set('X-Content-Type-Options','nosniff');};
