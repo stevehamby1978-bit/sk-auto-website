@@ -45,8 +45,9 @@ function installV2Health(app, db, { requireLogin, requireOwner }) {
       let dbWriteDetail = '';
       try { db.prepare(`SELECT 1 AS ok`).get(); dbRead = true; } catch {}
       try {
-        // Exercise a real write without leaving a permanent probe table or row behind.
-        // CREATE TABLE is intentionally inside the savepoint so rollback restores the schema too.
+        // Older builds could leave this diagnostic table behind. Remove only our reserved probe table
+        // before testing so one stale artifact cannot create a false release blocker forever.
+        db.exec('DROP TABLE IF EXISTS v2_health_probe');
         db.exec('SAVEPOINT v2_health_write');
         db.prepare(`CREATE TABLE v2_health_probe(id INTEGER PRIMARY KEY,checked_at DATETIME)`).run();
         db.prepare(`INSERT INTO v2_health_probe(id,checked_at) VALUES(1,CURRENT_TIMESTAMP)`).run();
@@ -58,7 +59,6 @@ function installV2Health(app, db, { requireLogin, requireOwner }) {
         dbWriteDetail = err?.message || 'Database write probe failed.';
         try { db.exec('ROLLBACK TO v2_health_write'); } catch {}
         try { db.exec('RELEASE v2_health_write'); } catch {}
-        // Clean up a stale probe from older health-check implementations when possible.
         try { db.exec('DROP TABLE IF EXISTS v2_health_probe'); } catch {}
       }
 
