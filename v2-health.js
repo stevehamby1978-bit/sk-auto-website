@@ -1,103 +1,26 @@
 function installV2Health(app, db, { requireLogin, requireOwner }) {
   if (!app || !db) throw new Error('V2 health requires app and db.');
   if (!requireLogin || !requireOwner) throw new Error('V2 health requires authentication middleware.');
-
-  const table = name => {
-    try { return Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(name)); }
-    catch { return false; }
-  };
-  const columns = name => {
-    try { return table(name) ? db.prepare(`PRAGMA table_info(${name})`).all().map(c => c.name) : []; }
-    catch { return []; }
-  };
-  const hasColumn = (name, column) => columns(name).includes(column);
-  const validId = value => Number.isInteger(value) && value > 0;
-
-  app.get('/api/v2/health', requireLogin, requireOwner, (req, res) => {
-    try {
-      const shopId = Number(req.session?.employee?.shop_id || 0);
-      const employeeId = Number(req.session?.employee?.id || 0);
-      const required = [
-        'dvi_inspections','dvi_items','dvi_attachments','technician_time_entries','deferred_services',
-        'inventory_items','vendors','purchase_orders','purchase_order_items','audit_log','customer_portal_tokens','canned_jobs',
-        'v2_comebacks','v2_tasks','v2_ro_blockers','v2_ro_promises','v2_parts_requests','v2_vehicle_keys','v2_road_tests',
-        'v2_deliveries','v2_customer_requests','v2_shop_handoffs','v2_loaners','v2_loaner_assignments'
-      ];
-      const tables = required.map(name => ({ name, ok: table(name), shop_scoped: table(name) && hasColumn(name,'shop_id') }));
-      const requiredColumns = [
-        ['repair_orders','assigned_technician_id'],['repair_orders','workflow_status'],['repair_orders','parts_status'],['repair_orders','promised_at'],['repair_orders','internal_notes'],
-        ['repair_order_items','part_number'],['repair_order_items','parts_cost'],['repair_order_items','labor_hours'],['repair_order_items','labor_cost'],['repair_order_items','vendor_id'],
-        ['vehicles','engine'],['vehicles','trim'],['vehicles','license_plate'],['vehicles','plate_state'],['employees','hourly_cost'],['employees','permissions_json'],
-        ['shops','default_labor_rate'],['shops','parts_markup_percent'],['shops','dvi_enabled'],['shops','customer_portal_enabled']
-      ].map(([tableName,column])=>({table:tableName,column,ok:table(tableName)&&hasColumn(tableName,column)}));
-      const env = [
-        ['stripe_secret','Stripe server key configured','STRIPE_SECRET_KEY',true],
-        ['stripe_webhook','Stripe webhook secret configured','STRIPE_WEBHOOK_SECRET',true],
-        ['session_secret','Session secret configured','SESSION_SECRET',true],
-        ['sms_number','Twilio SMS sender configured','TWILIO_PHONE_NUMBER',false],
-        ['twilio_sid','Twilio account configured','TWILIO_ACCOUNT_SID',false],
-        ['twilio_token','Twilio auth configured','TWILIO_AUTH_TOKEN',false],
-        ['resend','Resend email key configured','RESEND_API_KEY',false]
-      ].map(([key,label,name,required]) => ({ key,label,ok:Boolean(String(process.env[name]||'').trim()),required }));
-
-      let dbRead = false;
-      let dbWrite = false;
-      let dbWriteDetail = '';
-      try { db.prepare(`SELECT 1 AS ok`).get(); dbRead = true; } catch {}
-      try {
-        // Probe writes inside a uniquely named savepoint and TEMP table. TEMP schema keeps
-        // the probe connection-local and avoids collisions if two owners run health checks together.
-        const suffix = `${process.pid}_${Date.now()}_${Math.random().toString(16).slice(2)}`.replace(/[^a-zA-Z0-9_]/g,'');
-        const savepoint = `v2_health_${suffix}`;
-        const probe = `v2_health_probe_${suffix}`;
-        db.exec(`SAVEPOINT ${savepoint}`);
-        db.exec(`CREATE TEMP TABLE ${probe}(id INTEGER PRIMARY KEY,checked_at TEXT)`);
-        db.prepare(`INSERT INTO ${probe}(id,checked_at) VALUES(1,CURRENT_TIMESTAMP)`).run();
-        const wrote = Number(db.prepare(`SELECT COUNT(*) n FROM temp.${probe}`).get()?.n || 0) === 1;
-        db.exec(`ROLLBACK TO ${savepoint}`);
-        db.exec(`RELEASE ${savepoint}`);
-        const tempExists = Boolean(db.prepare(`SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name=?`).get(probe));
-        dbWrite = wrote && !tempExists;
-        if (!dbWrite) dbWriteDetail = 'Health write probe did not roll back cleanly.';
-      } catch (err) {
-        dbWriteDetail = err?.message || 'Database write probe failed.';
-        // A failed TEMP probe is connection-local and its savepoint name is unique; do not
-        // issue a broad DROP that could interfere with another health request.
-      }
-
-      let foreignKeys = false;
-      let foreignKeyProblems = null;
-      try {
-        foreignKeys = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys || 0) === 1;
-        foreignKeyProblems = db.prepare('PRAGMA foreign_key_check').all().length;
-      } catch {}
-
-      const checks = [
-        { key:'database_read',label:'Database readable',ok:dbRead,required:true },
-        { key:'database_write',label:'Database writable without persistent health artifacts',ok:dbWrite,required:true,detail:dbWriteDetail },
-        { key:'foreign_keys',label:'SQLite foreign-key enforcement enabled',ok:foreignKeys,required:true },
-        { key:'foreign_key_integrity',label:'No broken foreign-key references',ok:foreignKeyProblems===0,required:true,detail:foreignKeyProblems===null?'check failed':`${foreignKeyProblems} problem(s)` },
-        { key:'shop_scope',label:'Logged-in shop context',ok:validId(shopId),required:true },
-        { key:'employee',label:'Authenticated employee context',ok:validId(employeeId),required:true },
-        { key:'schema',label:'All required V2 tables available',ok:tables.every(x => x.ok),required:true },
-        { key:'table_scope',label:'All required V2 tables are shop-scoped',ok:tables.every(x => x.shop_scoped),required:true },
-        { key:'columns',label:'All required V2 columns available',ok:requiredColumns.every(x=>x.ok),required:true },
-        ...env
-      ];
-      const blockers = checks.filter(x => x.required && !x.ok);
-      const warnings = checks.filter(x => !x.required && !x.ok);
-      return res.json({
-        ok: blockers.length === 0,
-        release_ready: blockers.length === 0,
-        blockers,warnings,checks,tables,columns:requiredColumns,
-        version:'2.0-development',payment_provider:'stripe',quickbooks_required:false,
-        timestamp:new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Garavex V2 health error:', err);
-      return res.status(500).json({ok:false,release_ready:false,error:'V2 release-readiness checks could not be completed.'});
-    }
+  const table=name=>{try{return Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(name));}catch{return false;}};
+  const columns=name=>{try{return table(name)?db.prepare(`PRAGMA table_info(${name})`).all().map(c=>c.name):[];}catch{return[];}};
+  const hasColumn=(name,column)=>columns(name).includes(column),validId=value=>Number.isInteger(value)&&value>0;
+  app.get('/api/v2/health',requireLogin,requireOwner,(req,res)=>{
+    try{
+      res.set('Cache-Control','no-store, private, max-age=0');res.set('Pragma','no-cache');
+      const shopId=Number(req.session?.employee?.shop_id||0),employeeId=Number(req.session?.employee?.id||0);
+      const required=['dvi_inspections','dvi_items','dvi_attachments','technician_time_entries','deferred_services','inventory_items','vendors','purchase_orders','purchase_order_items','audit_log','customer_portal_tokens','canned_jobs','v2_comebacks','v2_tasks','v2_ro_blockers','v2_ro_promises','v2_parts_requests','v2_vehicle_keys','v2_road_tests','v2_deliveries','v2_customer_requests','v2_shop_handoffs','v2_loaners','v2_loaner_assignments','v2_warranties'];
+      const tables=required.map(name=>({name,ok:table(name),shop_scoped:table(name)&&hasColumn(name,'shop_id')}));
+      const requiredColumns=[['repair_orders','assigned_technician_id'],['repair_orders','workflow_status'],['repair_orders','parts_status'],['repair_orders','promised_at'],['repair_orders','internal_notes'],['repair_order_items','part_number'],['repair_order_items','parts_cost'],['repair_order_items','labor_hours'],['repair_order_items','labor_cost'],['repair_order_items','vendor_id'],['vehicles','engine'],['vehicles','trim'],['vehicles','license_plate'],['vehicles','plate_state'],['employees','hourly_cost'],['employees','permissions_json'],['shops','default_labor_rate'],['shops','parts_markup_percent'],['shops','dvi_enabled'],['shops','customer_portal_enabled'],['customer_portal_tokens','token_hash'],['v2_comebacks','resolved_by'],['v2_comebacks','updated_at'],['deferred_services','resolved_by'],['deferred_services','updated_at']].map(([tableName,column])=>({table:tableName,column,ok:table(tableName)&&hasColumn(tableName,column)}));
+      const env=[['stripe_secret','Stripe server key configured','STRIPE_SECRET_KEY',true],['stripe_webhook','Stripe webhook secret configured','STRIPE_WEBHOOK_SECRET',true],['session_secret','Session secret configured','SESSION_SECRET',true],['sms_number','Twilio SMS sender configured','TWILIO_PHONE_NUMBER',false],['twilio_sid','Twilio account configured','TWILIO_ACCOUNT_SID',false],['twilio_token','Twilio auth configured','TWILIO_AUTH_TOKEN',false],['resend','Resend email key configured','RESEND_API_KEY',false]].map(([key,label,name,required])=>({key,label,ok:Boolean(String(process.env[name]||'').trim()),required}));
+      let dbRead=false,dbWrite=false,dbWriteDetail='';try{db.prepare(`SELECT 1 AS ok`).get();dbRead=true;}catch{}
+      let savepoint=null;try{const suffix=`${process.pid}_${Date.now()}_${Math.random().toString(16).slice(2)}`.replace(/[^a-zA-Z0-9_]/g,''),probe=`v2_health_probe_${suffix}`;savepoint=`v2_health_${suffix}`;db.exec(`SAVEPOINT ${savepoint}`);db.exec(`CREATE TEMP TABLE ${probe}(id INTEGER PRIMARY KEY,checked_at TEXT)`);db.prepare(`INSERT INTO ${probe}(id,checked_at) VALUES(1,CURRENT_TIMESTAMP)`).run();const wrote=Number(db.prepare(`SELECT COUNT(*) n FROM temp.${probe}`).get()?.n||0)===1;db.exec(`ROLLBACK TO ${savepoint}`);db.exec(`RELEASE ${savepoint}`);savepoint=null;const tempExists=Boolean(db.prepare(`SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name=?`).get(probe));dbWrite=wrote&&!tempExists;if(!dbWrite)dbWriteDetail='Health write probe did not roll back cleanly.';}catch(err){dbWriteDetail=err?.message||'Database write probe failed.';if(savepoint){try{db.exec(`ROLLBACK TO ${savepoint}`);}catch{}try{db.exec(`RELEASE ${savepoint}`);}catch{}}}
+      let foreignKeys=false,foreignKeyProblems=null,integrityOk=false,integrityDetail='check failed';try{foreignKeys=Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys||0)===1;foreignKeyProblems=db.prepare('PRAGMA foreign_key_check').all().length;}catch{}try{const result=String(db.prepare('PRAGMA quick_check').pluck().get()||'');integrityOk=result.toLowerCase()==='ok';integrityDetail=result||'check failed';}catch{}
+      let employeeValid=false,shopValid=false;try{shopValid=validId(shopId)&&Boolean(db.prepare(`SELECT id FROM shops WHERE id=?`).get(shopId));employeeValid=shopValid&&validId(employeeId)&&Boolean(db.prepare(`SELECT id FROM employees WHERE id=? AND shop_id=?`).get(employeeId,shopId));}catch{}
+      const indexes=['idx_dvi_one_active_ro','idx_inventory_active_part','idx_vendor_active_name','idx_portal_token_hash','idx_v2_comebacks_open_original','idx_v2_tasks_open_identity','idx_deferred_active_identity','idx_v2_customer_requests_exact_open','idx_v2_warranties_shop_ro'];const indexChecks=indexes.map(name=>({name,ok:Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type='index' AND name=?`).get(name))}));
+      const checks=[{key:'database_read',label:'Database readable',ok:dbRead,required:true},{key:'database_write',label:'Database writable without persistent health artifacts',ok:dbWrite,required:true,detail:dbWriteDetail},{key:'database_integrity',label:'SQLite quick integrity check passes',ok:integrityOk,required:true,detail:integrityDetail},{key:'foreign_keys',label:'SQLite foreign-key enforcement enabled',ok:foreignKeys,required:true},{key:'foreign_key_integrity',label:'No broken foreign-key references',ok:foreignKeyProblems===0,required:true,detail:foreignKeyProblems===null?'check failed':`${foreignKeyProblems} problem(s)`},{key:'shop_scope',label:'Logged-in shop exists',ok:shopValid,required:true},{key:'employee',label:'Authenticated employee belongs to logged-in shop',ok:employeeValid,required:true},{key:'schema',label:'All required V2 tables available',ok:tables.every(x=>x.ok),required:true},{key:'table_scope',label:'All required V2 tables are shop-scoped',ok:tables.every(x=>x.shop_scoped),required:true},{key:'columns',label:'All required V2 columns available',ok:requiredColumns.every(x=>x.ok),required:true},{key:'indexes',label:'Critical V2 uniqueness indexes available',ok:indexChecks.every(x=>x.ok),required:true},...env];
+      const blockers=checks.filter(x=>x.required&&!x.ok),warnings=checks.filter(x=>!x.required&&!x.ok);
+      return res.json({ok:blockers.length===0,release_ready:blockers.length===0,blockers,warnings,checks,tables,columns:requiredColumns,indexes:indexChecks,version:'2.0-development',payment_provider:'stripe',quickbooks_required:false,timestamp:new Date().toISOString()});
+    }catch(err){console.error('Garavex V2 health error:',err);return res.status(500).json({ok:false,release_ready:false,error:'V2 release-readiness checks could not be completed.'});}
   });
 }
-
-module.exports = { installV2Health };
+module.exports={installV2Health};
