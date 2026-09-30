@@ -5,7 +5,6 @@
 'use strict';
 const fs=require('fs');
 const path=require('path');
-const Module=require('module');
 const root=__dirname;
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 const exists=name=>fs.existsSync(path.join(root,name));
@@ -32,6 +31,7 @@ for(const file of imports)check(exists(file),`Bootstrap dependency exists: ${fil
 check(!/require\(['"]\.\/v2-api['"]\)/.test(bootstrap),'Retired v2-api.js is not imported');
 check(/installV2Schema\(db\)/.test(bootstrap),'V2 schema installs from centralized bootstrap');
 check(/installedApps\s*=\s*new WeakSet\(\)/.test(bootstrap)&&/installedApps\.has\(app\)/.test(bootstrap),'Bootstrap has duplicate-install guard');
+check(/installingApps\s*=\s*new WeakSet\(\)/.test(bootstrap)&&/installingApps\.has\(app\)/.test(bootstrap)&&/installingApps\.delete\(app\)/.test(bootstrap),'Bootstrap has in-progress installation guard');
 
 const jsFiles=fs.readdirSync(root).filter(f=>/^v2-.*\.js$/.test(f));
 for(const file of jsFiles)syntaxCheck(file);
@@ -50,6 +50,15 @@ for(const file of jsFiles.filter(f=>f!==path.basename(__filename))){
 for(const [route,files] of routes){
  const unique=[...new Set(files)];
  if(unique.length>1)fail.push(`Duplicate V2 route ${route}: ${unique.join(', ')}`);
+}
+
+if(check(exists('v2-schema.js'),'v2-schema.js exists')){
+ const schema=read('v2-schema.js');
+ check(/assertBaseSchema\(db\)[\s\S]*BEGIN IMMEDIATE/.test(schema),'V2 validates base schema before opening migration transaction');
+ check(/db\.exec\(['"]BEGIN IMMEDIATE['"]\)/.test(schema),'V2 schema migration starts an immediate transaction');
+ check(/db\.exec\(['"]COMMIT['"]\)/.test(schema),'V2 schema migration commits explicitly');
+ check(/db\.exec\(['"]ROLLBACK['"]\)/.test(schema),'V2 schema migration rolls back on failure');
+ check(/applyV2Schema\(db\)/.test(schema),'V2 schema changes are grouped behind the transactional migration wrapper');
 }
 
 const serverName='server.js';
