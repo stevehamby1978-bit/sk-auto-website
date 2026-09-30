@@ -7,6 +7,7 @@ function installV2Promises(app,db,{requireLogin}){
   const validId=v=>Number.isInteger(v)&&v>0;
   const sid=req=>Number(req.session?.employee?.shop_id||0);
   const eid=req=>Number(req.session?.employee?.id||0);
+  const tableExists=name=>Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(name));
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS v2_ro_promises(
@@ -24,10 +25,12 @@ function installV2Promises(app,db,{requireLogin}){
   `);
 
   const auth=(req,res)=>{const s=sid(req),e=eid(req);if(!validId(s)||!validId(e)){res.status(401).json({error:'A valid employee shop session is required.'});return null;}return{s,e};};
+  const normalizeDate=value=>{const raw=String(value||'').trim();if(!raw)return null;const ms=Date.parse(raw);if(Number.isNaN(ms))return null;return{ms,iso:new Date(ms).toISOString()};};
 
   app.get('/api/v2/promises',requireLogin,requireRepairOrders,(req,res)=>{
     try{
       const a=auth(req,res);if(!a)return;
+      const assignmentJoin=tableExists('v2_ro_assignments')?`LEFT JOIN v2_ro_assignments a ON a.id=(SELECT a2.id FROM v2_ro_assignments a2 WHERE a2.repair_order_id=r.id AND a2.shop_id=r.shop_id ORDER BY a2.id DESC LIMIT 1) LEFT JOIN employees e ON e.id=a.employee_id AND e.shop_id=r.shop_id`:`LEFT JOIN employees e ON 1=0`;
       const rows=db.prepare(`
         SELECT p.*,c.name customer_name,v.year,v.make,v.model,r.workflow_status,e.name technician_name,
                CASE WHEN datetime(p.promised_at)<datetime('now') THEN 1 ELSE 0 END overdue
@@ -35,8 +38,7 @@ function installV2Promises(app,db,{requireLogin}){
         JOIN repair_orders r ON r.id=p.repair_order_id AND r.shop_id=p.shop_id
         JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
         LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id
-        LEFT JOIN v2_ro_assignments a ON a.repair_order_id=r.id AND a.shop_id=r.shop_id
-        LEFT JOIN employees e ON e.id=a.employee_id AND e.shop_id=r.shop_id
+        ${assignmentJoin}
         WHERE p.shop_id=? AND COALESCE(r.workflow_status,'')!='delivered'
         ORDER BY overdue DESC,p.promised_at,p.id
         LIMIT 500
@@ -49,17 +51,18 @@ function installV2Promises(app,db,{requireLogin}){
     try{
       const a=auth(req,res);if(!a)return;
       const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Valid repair order ID is required.'});
-      const promised=String(req.body?.promised_at||'').trim(),note=String(req.body?.note||'').trim().slice(0,1000);
-      const promisedMs=Date.parse(promised);
-      if(!promised||Number.isNaN(promisedMs))return res.status(400).json({error:'Valid promised completion time is required.'});
-      if(promisedMs>Date.now()+1000*60*60*24*365*5)return res.status(400).json({error:'Promised completion time is too far in the future.'});
-      if(promisedMs<Date.now()-1000*60*60*24*30)return res.status(400).json({error:'Promised completion time is too far in the past.'});
+      const parsed=normalizeDate(req.body?.promised_at),note=String(req.body?.note||'').trim().slice(0,1000);
+      if(!parsed)return res.status(400).json({error:'Valid promised completion time is required.'});
+      if(parsed.ms>Date.now()+1000*60*60*24*365*5)return res.status(400).json({error:'Promised completion time is too far in the future.'});
+      if(parsed.ms<Date.now()-1000*60*60*24*30)return res.status(400).json({error:'Promised completion time is too far in the past.'});
+      const promised=parsed.iso;
 
       const ro=db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(id,a.s);
       if(!ro)return res.status(404).json({error:'Repair order not found.'});
       if(ro.status==='completed'||String(ro.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot change a completion promise after repair-order completion or vehicle delivery.'});
       const previous=db.prepare(`SELECT promised_at,note,updated_at FROM v2_ro_promises WHERE shop_id=? AND repair_order_id=?`).get(a.s,id);
-      if(previous?.promised_at===promised&&String(previous?.note||'')===note)return res.json({ok:true,promised_at:promised,unchanged:true});
+      const previousParsed=previous?.promised_at?normalizeDate(previous.promised_at):null;
+      if(previousParsed?.iso===promised&&String(previous?.note||'')===note)return res.json({ok:true,promised_at:promised,unchanged:true});
 
       const tx=db.transaction(()=>{
         if(previous){
