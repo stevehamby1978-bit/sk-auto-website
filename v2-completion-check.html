@@ -1,1 +1,52 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Garavex V2 | Completion Check</title><style>*{box-sizing:border-box}body{margin:0;background:#080b0e;color:#f4f6f7;font:14px Arial}.wrap{max-width:800px;margin:auto;padding:24px}.card{background:#10151a;border:1px solid #29323a;border-radius:11px;padding:20px;margin:14px 0}.form{display:flex;gap:8px}input{flex:1;background:#0b0f12;color:#fff;border:1px solid #303942;border-radius:7px;padding:11px}.btn{background:#df3329;color:#fff;border:0;border-radius:7px;padding:10px 18px;font-weight:bold;cursor:pointer}.check{display:flex;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid #29323a}.ok{color:#58c87b;font-weight:bold}.bad{color:#f06b62;font-weight:bold}.banner{font-size:20px;font-weight:bold;padding:16px;border-radius:8px}.ready{background:#12301d;color:#72dd91}.blocked{background:#351616;color:#ff8279}.muted{color:#89959e}</style></head><body><script src="v2-navigation.js"></script><main class="wrap"><h1>Repair Completion Check</h1><p class="muted">One last operational check before a repair order is treated as ready to close.</p><section class="card"><div class="form"><input id="ro" type="number" placeholder="Repair order #"><button class="btn" onclick="check()">Run Check</button></div></section><section id="result" class="card" style="display:none"></section></main><script>const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));async function check(){const r=await fetch('/api/v2/repair-orders/'+ro.value+'/completion-check'),d=await r.json();result.style.display='block';if(!r.ok){result.innerHTML='<div class="bad">'+esc(d.error||'Unable to run check')+'</div>';return}result.innerHTML=`<div class="banner ${d.ready?'ready':'blocked'}">${d.ready?'✓ Operational checks passed':'⚠ Repair order has unresolved items'}</div>${d.checks.map(x=>`<div class="check"><span>${esc(x.label)}</span><span class="${x.ok?'ok':'bad'}">${x.ok?'PASS':'BLOCK'}</span></div>`).join('')}${d.ready?'<p class="muted">This does not replace payment or authorization checks; it confirms the V2 operational workflow is clear.</p>':'<p class="muted">Resolve the blocked items before completing the workflow.</p>'}`}</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Garavex V2 | Completion Check</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080b0e;color:#f4f6f7;font:14px Arial}.wrap{max-width:900px;margin:auto;padding:24px}.card{background:#10151a;border:1px solid #29323a;border-radius:11px;padding:20px;margin:14px 0}.form{display:flex;gap:8px}input{flex:1;background:#0b0f12;color:#fff;border:1px solid #303942;border-radius:7px;padding:11px}.btn{background:#df3329;color:#fff;border:0;border-radius:7px;padding:10px 18px;font-weight:bold;cursor:pointer}.btn:disabled{opacity:.55;cursor:not-allowed}.check{display:flex;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid #29323a}.ok{color:#58c87b;font-weight:bold}.bad{color:#f06b62;font-weight:bold}.banner{font-size:20px;font-weight:bold;padding:16px;border-radius:8px;margin-bottom:12px}.ready{background:#12301d;color:#72dd91}.blocked{background:#351616;color:#ff8279}.muted{color:#89959e}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.stat{background:#0b0f12;border:1px solid #29323a;border-radius:8px;padding:12px}.stat strong{display:block;font-size:16px;margin-top:4px}.section-title{font-size:16px;font-weight:bold;margin-top:20px}.deliver{border-color:#31543a}.warn{border-color:#60312d}@media(max-width:650px){.form{flex-direction:column}.summary{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<script src="v2-navigation.js"></script>
+<main class="wrap">
+<h1>Repair Completion & Delivery Check</h1>
+<p class="muted">Verify the repair-order workflow before marking the vehicle ready or releasing it to the customer.</p>
+<section class="card"><div class="form"><input id="ro" type="number" min="1" placeholder="Repair order #"><button id="runBtn" class="btn" onclick="check()">Run Check</button></div></section>
+<section id="result" class="card" style="display:none"></section>
+</main>
+<script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const row=x=>`<div class="check"><span>${esc(x.label)}</span><span class="${x.ok?'ok':'bad'}">${x.ok?'PASS':'BLOCK'}</span></div>`;
+async function check(){
+ const id=Number(ro.value),btn=document.getElementById('runBtn');
+ result.style.display='block';
+ if(!Number.isInteger(id)||id<1){result.innerHTML='<div class="bad">Enter a valid repair order number.</div>';return}
+ btn.disabled=true;btn.textContent='Checking…';
+ try{
+  const r=await fetch('/api/v2/repair-orders/'+id+'/completion-check');
+  const d=await r.json();
+  if(!r.ok){result.innerHTML='<div class="bad">'+esc(d.error||'Unable to run check')+'</div>';return}
+  const operational=d.ready;
+  const delivery=d.deliverable;
+  const banner=delivery
+   ? '<div class="banner ready">✓ Repair order is clear for customer delivery</div>'
+   : operational
+    ? '<div class="banner ready">✓ Operational checks passed — delivery requirements remain</div>'
+    : '<div class="banner blocked">⚠ Repair order has unresolved workflow items</div>';
+  const workflow=esc(d.workflow_status||'not set');
+  const payment=esc(d.payment_status||'not set');
+  result.className='card '+(delivery?'deliver':d.delivery_blocking_count?'warn':'');
+  result.innerHTML=banner+
+   `<div class="summary"><div class="stat">Workflow<strong>${workflow}</strong></div><div class="stat">Payment<strong>${payment}</strong></div><div class="stat">Delivery blockers<strong>${Number(d.delivery_blocking_count||0)}</strong></div></div>`+
+   '<div class="section-title">Operational workflow</div>'+d.checks.map(row).join('')+
+   '<div class="section-title">Final delivery gate</div>'+d.delivery_checks.map(row).join('')+
+   (delivery?'<p class="muted">All workflow, ready-status, and payment checks have passed.</p>':'<p class="muted">Every BLOCK above must be resolved before customer delivery.</p>');
+ }catch(e){result.innerHTML='<div class="bad">Unable to contact the completion-check service.</div>'}
+ finally{btn.disabled=false;btn.textContent='Run Check'}
+}
+ro.addEventListener('keydown',e=>{if(e.key==='Enter')check()});
+</script>
+</body>
+</html>
