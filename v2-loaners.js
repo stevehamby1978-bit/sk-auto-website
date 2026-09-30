@@ -52,9 +52,6 @@ function installV2Loaners(app,db,{requireLogin}){
       const a=auth(req,res);if(!a)return;
       const loaner=Number(req.params.id),ro=Number(req.body?.repair_order_id);
       if(!validId(loaner)||!validId(ro))return res.status(400).json({error:'Valid loaner and repair order IDs are required.'});
-      const r=db.prepare(`SELECT r.id,r.customer_id,r.status,r.workflow_status,c.id verified_customer_id FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=?`).get(ro,a.s);
-      if(!r)return res.status(404).json({error:'Repair order or customer not found.'});
-      if(r.status==='completed'||String(r.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot assign a loaner to a completed or delivered repair order.'});
       const rawMileage=req.body?.out_mileage,mileage=rawMileage===undefined||rawMileage===null||rawMileage===''?null:Number(rawMileage);
       if(mileage!==null&&(!Number.isInteger(mileage)||mileage<0||mileage>10000000))return res.status(400).json({error:'Loaner mileage is invalid.'});
       const dueRaw=req.body?.due_back_at,due=normalizeDue(dueRaw);if(dueRaw!==undefined&&dueRaw!==null&&dueRaw!==''&&!due)return res.status(400).json({error:'Loaner due-back date is invalid.'});
@@ -63,12 +60,15 @@ function installV2Loaners(app,db,{requireLogin}){
       const fuel=String(req.body?.out_fuel||'').trim().toLowerCase();if(fuel&&!fuelValues.includes(fuel))return res.status(400).json({error:`Loaner fuel level must be one of: ${fuelValues.join(', ')}.`});
       const note=String(req.body?.note||'').trim();if(note.length>1000)return res.status(400).json({error:'Loaner checkout note cannot exceed 1000 characters.'});
       const tx=db.transaction(()=>{
+        const r=db.prepare(`SELECT r.id,r.customer_id,r.status,r.workflow_status,c.id verified_customer_id FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=?`).get(ro,a.s);
+        if(!r)throw new Error('RO_NOT_AVAILABLE');
+        if(r.status==='completed'||String(r.workflow_status||'').toLowerCase()==='delivered')throw new Error('RO_CLOSED');
         const l=db.prepare(`SELECT id FROM v2_loaners WHERE id=? AND shop_id=? AND active=1 AND status='available'`).get(loaner,a.s);if(!l)throw new Error('NOT_AVAILABLE');
         const changed=db.prepare(`UPDATE v2_loaners SET status='out' WHERE id=? AND shop_id=? AND active=1 AND status='available'`).run(loaner,a.s);if(changed.changes!==1)throw new Error('NOT_AVAILABLE');
         const info=db.prepare(`INSERT INTO v2_loaner_assignments(shop_id,loaner_id,repair_order_id,customer_id,due_back_at,out_mileage,out_fuel,note,employee_id) VALUES(?,?,?,?,?,?,?,?,?)`).run(a.s,loaner,ro,r.customer_id,due,mileage,fuel,note,a.e);
         db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'loaner.checked_out','repair_order',ro,JSON.stringify({assignment_id:info.lastInsertRowid,loaner_id:loaner,due_back_at:due,out_mileage:mileage,out_fuel:fuel||null}));
       });
-      try{tx();}catch(err){if(String(err.message).includes('NOT_AVAILABLE')||String(err.message).includes('UNIQUE'))return res.status(409).json({error:'Loaner is no longer available or this repair order already has an active loaner.'});throw err;}
+      try{tx();}catch(err){const code=String(err.message);if(code.includes('RO_NOT_AVAILABLE'))return res.status(404).json({error:'Repair order or customer not found.'});if(code.includes('RO_CLOSED'))return res.status(409).json({error:'Cannot assign a loaner to a completed or delivered repair order.'});if(code.includes('NOT_AVAILABLE')||code.includes('UNIQUE'))return res.status(409).json({error:'Loaner is no longer available or this repair order already has an active loaner.'});throw err;}
       return res.json({ok:true});
     }catch(err){console.error('Garavex V2 loaner checkout error:',err);return res.status(500).json({error:'Unable to check out the loaner vehicle.'});}
   });
