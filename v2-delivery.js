@@ -68,7 +68,7 @@ function installV2Delivery(app, db, { requireLogin }) {
 
       const order = db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro, auth.s);
       if (!order) return res.status(404).json({ error: 'Repair order not found.' });
-      if (order.status === 'completed' || String(order.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'Delivery is already complete and cannot be edited.' });
+      if (String(order.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'Delivery is already complete and cannot be edited.' });
 
       const existing = db.prepare(`SELECT delivered_at FROM v2_deliveries WHERE shop_id=? AND repair_order_id=?`).get(auth.s, ro);
       if (existing?.delivered_at) return res.status(409).json({ error: 'Delivery is already complete and cannot be edited.' });
@@ -87,6 +87,7 @@ function installV2Delivery(app, db, { requireLogin }) {
           next_service_explained=excluded.next_service_explained,
           notes=excluded.notes,
           updated_at=CURRENT_TIMESTAMP
+        WHERE v2_deliveries.delivered_at IS NULL
       `).run(
         auth.s, ro, auth.e,
         flag(req.body?.customer_notified), flag(req.body?.keys_returned),
@@ -119,11 +120,15 @@ function installV2Delivery(app, db, { requireLogin }) {
       if (!delivery.keys_returned) missing.push('Return customer keys');
       if (!delivery.documents_given) missing.push('Provide invoice/documents');
       if (String(order.workflow_status || '').toLowerCase() !== 'ready') missing.push('Repair order must be in ready status');
+      if (String(order.payment_status || '').toLowerCase() !== 'paid') missing.push('Collect payment or mark the repair order paid');
       if (has('v2_ro_blockers') && db.prepare(`SELECT 1 FROM v2_ro_blockers WHERE shop_id=? AND repair_order_id=? AND status='open' LIMIT 1`).get(auth.s, ro)) missing.push('Resolve open workflow blockers');
       if (has('v2_parts_requests') && db.prepare(`SELECT 1 FROM v2_parts_requests WHERE shop_id=? AND repair_order_id=? AND status IN ('requested','ordered') LIMIT 1`).get(auth.s, ro)) missing.push('Resolve requested or ordered parts');
       if (has('v2_road_tests') && db.prepare(`SELECT 1 FROM v2_road_tests WHERE shop_id=? AND repair_order_id=? AND status='in_progress' LIMIT 1`).get(auth.s, ro)) missing.push('Complete road test');
       if (has('v2_road_tests') && db.prepare(`SELECT 1 FROM v2_road_tests t WHERE t.shop_id=? AND t.repair_order_id=? AND t.completed_at IS NOT NULL AND LOWER(COALESCE(t.result,''))='failed' AND t.id=(SELECT t2.id FROM v2_road_tests t2 WHERE t2.shop_id=t.shop_id AND t2.repair_order_id=t.repair_order_id AND t2.completed_at IS NOT NULL ORDER BY datetime(t2.completed_at) DESC,t2.id DESC LIMIT 1) LIMIT 1`).get(auth.s, ro)) missing.push('Resolve failed latest road test');
-      if (has('v2_vehicle_keys') && db.prepare(`SELECT 1 FROM v2_vehicle_keys WHERE shop_id=? AND repair_order_id=? AND status='missing' LIMIT 1`).get(auth.s, ro)) missing.push('Locate missing vehicle key');
+      if (has('v2_vehicle_keys')) {
+        const key = db.prepare(`SELECT status FROM v2_vehicle_keys WHERE shop_id=? AND repair_order_id=? LIMIT 1`).get(auth.s, ro);
+        if (key && !['checked_in','technician','board'].includes(String(key.status || '').toLowerCase())) missing.push('Resolve vehicle key custody before delivery');
+      }
       if (has('v2_customer_requests') && db.prepare(`SELECT 1 FROM v2_customer_requests WHERE shop_id=? AND repair_order_id=? AND status='open' AND request_type='approval' LIMIT 1`).get(auth.s, ro)) missing.push('Resolve customer approval request');
       if (has('v2_loaner_assignments') && db.prepare(`SELECT 1 FROM v2_loaner_assignments WHERE shop_id=? AND repair_order_id=? AND returned_at IS NULL LIMIT 1`).get(auth.s, ro)) missing.push('Return active loaner vehicle');
       if (has('technician_time_entries') && db.prepare(`SELECT 1 FROM technician_time_entries WHERE shop_id=? AND repair_order_id=? AND clock_out IS NULL LIMIT 1`).get(auth.s, ro)) missing.push('Stop active technician clock');
@@ -140,15 +145,15 @@ function installV2Delivery(app, db, { requireLogin }) {
 
         const moved = db.prepare(`
           UPDATE repair_orders SET workflow_status='delivered'
-          WHERE id=? AND shop_id=? AND COALESCE(workflow_status,'')='ready'
+          WHERE id=? AND shop_id=? AND COALESCE(workflow_status,'')='ready' AND LOWER(COALESCE(payment_status,''))='paid'
         `).run(ro, auth.s);
-        if (moved.changes !== 1) throw new Error('Repair order workflow changed before delivery could be completed.');
+        if (moved.changes !== 1) throw new Error('Repair order workflow or payment status changed before delivery could be completed.');
 
         if (has('v2_vehicle_keys')) {
           db.prepare(`
             UPDATE v2_vehicle_keys
             SET status='customer',location='Returned to customer',updated_by=?,updated_at=CURRENT_TIMESTAMP
-            WHERE shop_id=? AND repair_order_id=?
+            WHERE shop_id=? AND repair_order_id=? AND status IN ('checked_in','technician','board')
           `).run(auth.e, auth.s, ro);
         }
 
