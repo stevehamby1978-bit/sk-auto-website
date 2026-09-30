@@ -74,8 +74,10 @@ function installV2CustomerRequests(app, db, { requireLogin }) {
 
       const requestedType = String(req.body?.request_type || 'call').trim().toLowerCase();
       const requestedPriority = String(req.body?.priority || 'normal').trim().toLowerCase();
-      const type = types.includes(requestedType) ? requestedType : 'call';
-      const priority = priorities.includes(requestedPriority) ? requestedPriority : 'normal';
+      if (!types.includes(requestedType)) return res.status(400).json({ error:`Request type must be one of: ${types.join(', ')}.` });
+      if (!priorities.includes(requestedPriority)) return res.status(400).json({ error:`Priority must be one of: ${priorities.join(', ')}.` });
+      const type = requestedType;
+      const priority = requestedPriority;
       const duplicate = db.prepare(`SELECT id FROM v2_customer_requests WHERE shop_id=? AND repair_order_id=? AND request_type=? AND status='open' AND reason=? LIMIT 1`).get(a.s,ro,type,reason);
       if (duplicate) return res.status(409).json({ error:'An identical customer request is already open.',id:duplicate.id });
 
