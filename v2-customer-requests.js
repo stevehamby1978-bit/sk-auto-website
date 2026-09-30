@@ -29,6 +29,8 @@ function installV2CustomerRequests(app, db, { requireLogin }) {
     );
     CREATE INDEX IF NOT EXISTS idx_v2_customer_requests_open ON v2_customer_requests(shop_id,status,priority,created_at);
     CREATE INDEX IF NOT EXISTS idx_v2_customer_requests_ro ON v2_customer_requests(shop_id,repair_order_id,status,request_type);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_customer_requests_exact_open
+      ON v2_customer_requests(shop_id,repair_order_id,request_type,reason) WHERE status='open';
   `);
 
   const auth = (req, res) => {
@@ -65,11 +67,18 @@ function installV2CustomerRequests(app, db, { requireLogin }) {
       const a = auth(req,res); if (!a) return;
       const ro = Number(req.body?.repair_order_id);
       if (!validId(ro)) return res.status(400).json({ error:'Valid repair order ID is required.' });
-      const reason = String(req.body?.reason || '').trim().slice(0,1000);
+      const reason = String(req.body?.reason || '').trim();
       if (!reason) return res.status(400).json({ error:'Reason is required.' });
+      if (reason.length > 1000) return res.status(400).json({ error:'Reason cannot exceed 1000 characters.' });
 
-      const order = db.prepare(`SELECT id,customer_id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,a.s);
-      if (!order) return res.status(404).json({ error:'Repair order not found.' });
+      const order = db.prepare(`
+        SELECT r.id,r.customer_id,r.status,r.workflow_status,c.id verified_customer_id
+        FROM repair_orders r
+        JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
+        WHERE r.id=? AND r.shop_id=?
+      `).get(ro,a.s);
+      if (!order) return res.status(404).json({ error:'Repair order or customer not found.' });
+      if (!validId(Number(order.customer_id))) return res.status(409).json({ error:'Repair order does not have a valid customer.' });
       if (order.status === 'completed' || String(order.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error:'Completed or delivered repair orders cannot receive new customer workflow requests.' });
 
       const requestedType = String(req.body?.request_type || 'call').trim().toLowerCase();
@@ -86,7 +95,11 @@ function installV2CustomerRequests(app, db, { requireLogin }) {
         db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'customer_request.created','repair_order',ro,JSON.stringify({ request_id:info.lastInsertRowid,request_type:type,priority,reason }));
         return info.lastInsertRowid;
       });
-      return res.json({ ok:true,id:tx() });
+      try { return res.json({ ok:true,id:tx() }); }
+      catch (err) {
+        if (String(err?.message || '').includes('UNIQUE')) return res.status(409).json({ error:'An identical customer request is already open.' });
+        throw err;
+      }
     } catch (err) {
       console.error('Garavex V2 customer request creation error:',err);
       return res.status(500).json({ error:'Unable to create the customer request.' });
@@ -98,13 +111,15 @@ function installV2CustomerRequests(app, db, { requireLogin }) {
       const a = auth(req,res); if (!a) return;
       const id = Number(req.params.id);
       if (!validId(id)) return res.status(400).json({ error:'Valid customer request ID is required.' });
-      const resolution = String(req.body?.resolution || '').trim().slice(0,1000);
+      const resolution = String(req.body?.resolution || '').trim();
       if (!resolution) return res.status(400).json({ error:'Resolution is required.' });
+      if (resolution.length > 1000) return res.status(400).json({ error:'Resolution cannot exceed 1000 characters.' });
 
       const row = db.prepare(`
         SELECT q.*,r.status repair_order_status,r.workflow_status
         FROM v2_customer_requests q
         JOIN repair_orders r ON r.id=q.repair_order_id AND r.shop_id=q.shop_id AND r.customer_id=q.customer_id
+        JOIN customers c ON c.id=q.customer_id AND c.shop_id=q.shop_id
         WHERE q.id=? AND q.shop_id=? AND q.status='open'
       `).get(id,a.s);
       if (!row) return res.status(404).json({ error:'Open request not found.' });
@@ -112,7 +127,7 @@ function installV2CustomerRequests(app, db, { requireLogin }) {
 
       const tx = db.transaction(() => {
         const changed = db.prepare(`UPDATE v2_customer_requests SET status='resolved',resolved_by=?,resolution=?,resolved_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status='open'`).run(a.e,resolution,id,a.s);
-        if (changed.changes !== 1) throw new Error('Customer request changed before resolution.');
+        if (changed.changes !== 1) throw new Error('CUSTOMER_REQUEST_CHANGED');
         db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'customer_request.resolved','repair_order',row.repair_order_id,JSON.stringify({ request_id:id,request_type:row.request_type,resolution }));
       });
       try { tx(); } catch (err) { return res.status(409).json({ error:'Customer request changed before resolution could be saved.' }); }
