@@ -36,6 +36,11 @@ const routeRe=/app\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]/g;
 for(const file of jsFiles.filter(f=>f!==path.basename(__filename))){const src=read(file);let r;while((r=routeRe.exec(src))){const key=`${r[1].toUpperCase()} ${r[2]}`;if(!routes.has(key))routes.set(key,[]);routes.get(key).push(file);}}
 for(const [route,files] of routes){const unique=[...new Set(files)];if(unique.length>1)fail.push(`Duplicate V2 route ${route}: ${unique.join(', ')}`);}
 
+const permissionMutation='PUT /api/v2/employees/:id/permissions';
+const permissionOwners=[...new Set(routes.get(permissionMutation)||[])];
+check(permissionOwners.length===1&&permissionOwners[0]==='v2-permissions-admin.js',`Employee permission mutation has one authoritative owner: v2-permissions-admin.js (found ${permissionOwners.join(', ')||'none'})`);
+if(exists('v2-admin-api.js'))check(!/app\.(put|patch)\(\s*['"]\/api\/v2\/employees\/:id\/permissions['"]/.test(read('v2-admin-api.js')),'V2 admin API does not redefine employee permission mutation');
+
 if(check(exists('v2-schema.js'),'v2-schema.js exists')){
  const schema=read('v2-schema.js');
  check(/assertBaseSchema\(db\)[\s\S]*BEGIN IMMEDIATE/.test(schema),'V2 validates base schema before opening migration transaction');
@@ -50,6 +55,12 @@ if(check(exists('v2-permissions.js'),'v2-permissions.js exists')){
  check(/WHERE\s+id\s*=\s*\?\s+AND\s+shop_id\s*=\s*\?\s+AND\s+active\s*=\s*1/i.test(permissions),'V2 live employee authorization rejects inactive employees');
  check(/loadCurrentEmployee\(db,\s*sessionEmployee\)/.test(permissions),'V2 permission middleware authorizes from the live employee row');
  check(/req\.v2ShopId\s*=\s*Number\(employee\.shop_id\)/.test(permissions),'V2 permission middleware derives request shop identity from the live employee row');
+}
+if(check(exists('v2-permissions-admin.js'),'v2-permissions-admin.js exists')){
+ const admin=read('v2-permissions-admin.js');
+ check(/loadCurrentEmployee\(db,sessionEmployee\)/.test(admin),'V2 permissions admin reloads the live employee');
+ check(/WHERE id=\? AND shop_id=\? AND active=1/.test(admin),'V2 permissions admin targets active employees in the current shop');
+ check(/UPDATE employees SET permissions_json=\? WHERE id=\? AND shop_id=\? AND active=1/.test(admin),'V2 permission writes remain active-employee and shop scoped');
 }
 
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
