@@ -408,10 +408,7 @@ shopProfileColumns.forEach(([name, type]) => {
 // ===== GARAVEX - STRIPE CONNECT SHOP COLUMNS =====
 const stripeShopColumns = [
   ['stripe_account_id', 'TEXT'],
-  ['stripe_connected_at', 'TEXT'],
-  ['trial_started_at', 'TEXT'],
-  ['trial_ends_at', 'TEXT'],
-  ['subscription_status', "TEXT DEFAULT 'grandfathered'"]
+  ['stripe_connected_at', 'TEXT']
 ];
 
 const stripeExistingShopColumns = new Set(
@@ -2185,12 +2182,9 @@ app.post("/api/register-shop", async (req, res) => {
           address,
           city,
           state,
-          zip,
-          trial_started_at,
-          trial_ends_at,
-          subscription_status
+          zip
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+30 days'), 'trialing')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         shopName.trim(),
         slug,
@@ -2272,16 +2266,12 @@ app.post("/api/login", async (req, res) => {
         name,
         email,
         password_hash,
-       e.role,
-e.must_change_password,
-e.shop_id,
-e.active,
-s.trial_started_at,
-s.trial_ends_at,
-s.subscription_status
-      FROM employees e
-      LEFT JOIN shops s ON s.id = e.shop_id
-      WHERE LOWER(e.email) = ?
+       role,
+must_change_password,
+shop_id,
+active
+      FROM employees
+      WHERE LOWER(email) = ?
       LIMIT 1
     `).get(cleanEmail);
 
@@ -2309,30 +2299,13 @@ s.subscription_status
       });
     }
 
-    const subscriptionStatus = String(employee.subscription_status || 'grandfathered');
-    const trialEndsAt = employee.trial_ends_at ? new Date(employee.trial_ends_at + 'Z') : null;
-    const trialExpired =
-      subscriptionStatus === 'trialing' &&
-      trialEndsAt &&
-      !Number.isNaN(trialEndsAt.getTime()) &&
-      trialEndsAt.getTime() <= Date.now();
-
-    if (trialExpired) {
-      return res.status(403).json({
-        error: "Your 30-day Garavex free trial has ended. Please activate a subscription to continue.",
-        trialExpired: true
-      });
-    }
-
    req.session.employee = {
   id: employee.id,
   name: employee.name,
   email: employee.email,
  role: employee.role,
 shop_id: employee.shop_id,
-must_change_password: employee.must_change_password,
-subscription_status: subscriptionStatus,
-trial_ends_at: employee.trial_ends_at || null
+must_change_password: employee.must_change_password
 };
     req.session.save(err => {
       if (err) {
@@ -2351,9 +2324,7 @@ trial_ends_at: employee.trial_ends_at || null
   email: employee.email,
  role: employee.role,
 shop_id: employee.shop_id,
-must_change_password: employee.must_change_password,
-subscription_status: subscriptionStatus,
-trial_ends_at: employee.trial_ends_at || null
+must_change_password: employee.must_change_password
 }
       });
     });
