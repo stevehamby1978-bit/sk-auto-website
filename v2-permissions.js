@@ -22,9 +22,9 @@ function loadCurrentEmployee(db, employee) {
   if (!db || typeof db.prepare !== 'function' || !validSessionEmployee(employee)) return null;
   try {
     return db.prepare(`
-      SELECT id, shop_id, name, email, role, permissions_json
+      SELECT id, shop_id, name, email, role, permissions_json, active
       FROM employees
-      WHERE id = ? AND shop_id = ?
+      WHERE id = ? AND shop_id = ? AND active = 1
       LIMIT 1
     `).get(Number(employee.id), Number(employee.shop_id)) || null;
   } catch (_) {
@@ -49,10 +49,11 @@ function permissionMiddleware(permission, db) {
       return deny(req, res, 401, 'A valid employee shop session is required.');
     }
 
-    // When a database handle is supplied, authorization is based on the live
-    // employee row rather than a potentially stale role/permissions snapshot
-    // stored in the session. This makes permission changes and account removal
-    // effective immediately without allowing a shop id to change mid-session.
+    // When a database handle is supplied, authorization is based on the live,
+    // active employee row rather than a potentially stale role/permissions
+    // snapshot stored in the session. Permission changes, deactivation and
+    // account removal therefore take effect immediately without allowing a
+    // shop id to change mid-session.
     const employee = db ? loadCurrentEmployee(db, sessionEmployee) : sessionEmployee;
     if (!employee) return deny(req, res, 401, 'Employee session is no longer valid for this shop.');
 
