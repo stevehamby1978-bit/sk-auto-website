@@ -82,6 +82,62 @@ setImmediate(()=>{
     }
 
 
+
+    let repairedVehicles=0;
+    let repairedEstimates=0;
+    let repairedRepairOrders=0;
+
+    if(tableExists(db,'vehicles')&&tableExists(db,'customers')){
+      const vCols=cols(db,'vehicles'),cCols=cols(db,'customers');
+      if(vCols.has('customer_id')&&vCols.has('shop_id')&&cCols.has('shop_id')){
+        repairedVehicles=Number(db.prepare(`
+          UPDATE vehicles
+          SET shop_id=(SELECT c.shop_id FROM customers c WHERE c.id=vehicles.customer_id)
+          WHERE customer_id IS NOT NULL
+            AND EXISTS(
+              SELECT 1 FROM customers c
+              WHERE c.id=vehicles.customer_id
+                AND c.shop_id IS NOT NULL
+                AND (vehicles.shop_id IS NULL OR vehicles.shop_id<>c.shop_id)
+            )
+        `).run().changes||0);
+      }
+    }
+
+    if(tableExists(db,'estimates')&&tableExists(db,'customers')){
+      const eCols=cols(db,'estimates'),cCols=cols(db,'customers');
+      if(eCols.has('customer_id')&&eCols.has('shop_id')&&cCols.has('shop_id')){
+        repairedEstimates=Number(db.prepare(`
+          UPDATE estimates
+          SET shop_id=(SELECT c.shop_id FROM customers c WHERE c.id=estimates.customer_id)
+          WHERE customer_id IS NOT NULL
+            AND EXISTS(
+              SELECT 1 FROM customers c
+              WHERE c.id=estimates.customer_id
+                AND c.shop_id IS NOT NULL
+                AND (estimates.shop_id IS NULL OR estimates.shop_id<>c.shop_id)
+            )
+        `).run().changes||0);
+      }
+    }
+
+    if(tableExists(db,'repair_orders')&&tableExists(db,'customers')){
+      const roCols=cols(db,'repair_orders'),cCols=cols(db,'customers');
+      if(roCols.has('customer_id')&&roCols.has('shop_id')&&cCols.has('shop_id')){
+        repairedRepairOrders=Number(db.prepare(`
+          UPDATE repair_orders
+          SET shop_id=(SELECT c.shop_id FROM customers c WHERE c.id=repair_orders.customer_id)
+          WHERE customer_id IS NOT NULL
+            AND EXISTS(
+              SELECT 1 FROM customers c
+              WHERE c.id=repair_orders.customer_id
+                AND c.shop_id IS NOT NULL
+                AND (repair_orders.shop_id IS NULL OR repair_orders.shop_id<>c.shop_id)
+            )
+        `).run().changes||0);
+      }
+    }
+
     let repairedEstimateOrders=0;
     if(tableExists(db,'repair_orders')&&tableExists(db,'estimates')){
       const roCols=cols(db,'repair_orders'),estCols=cols(db,'estimates');
@@ -106,7 +162,7 @@ setImmediate(()=>{
       }
     }
 
-    console.log(`V1 Thomas Eubanks ownership repair: customer_id=${customerId||'none'}, customer rows moved=${customerMove}, appointment rows moved=${appointmentMoves}, estimate repair-order ownership rows repaired=${repairedEstimateOrders}, target shop #${skShop.id} (${skShop.name}).`);
+    console.log(`V1 Thomas Eubanks ownership repair: customer_id=${customerId||'none'}, customer rows moved=${customerMove}, appointment rows moved=${appointmentMoves}, vehicles repaired=${repairedVehicles}, estimates repaired=${repairedEstimates}, repair orders repaired=${repairedRepairOrders}, estimate-linked repair orders repaired=${repairedEstimateOrders}, target shop #${skShop.id} (${skShop.name}).`);
   }catch(err){
     console.error('V1 customer data repair failed:',err);
   }finally{
