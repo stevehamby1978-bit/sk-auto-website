@@ -40,7 +40,7 @@ function installV2Schema(db) {
     CREATE TABLE IF NOT EXISTS deferred_services (
       id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, customer_id INTEGER NOT NULL, vehicle_id INTEGER, repair_order_id INTEGER, dvi_item_id INTEGER,
       description TEXT NOT NULL, estimated_total REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'deferred', follow_up_date TEXT, last_reminder_at TEXT,
-      reminder_count INTEGER NOT NULL DEFAULT 0, resolved_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      reminder_count INTEGER NOT NULL DEFAULT 0, resolved_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_deferred_shop_status ON deferred_services(shop_id, status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_deferred_dvi_item_unique ON deferred_services(dvi_item_id) WHERE dvi_item_id IS NOT NULL;
@@ -88,6 +88,9 @@ function installV2Schema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_portal_customer ON customer_portal_tokens(shop_id,customer_id,created_at);
   `);
+
+  // Existing installations may already have these V2 tables, so keep migrations additive.
+  ensureColumn(db, 'deferred_services', 'updated_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
 
   // Existing V1 tables gain V2 fields without destructive migration.
   ensureColumn(db, 'repair_orders', 'assigned_technician_id', 'INTEGER');
