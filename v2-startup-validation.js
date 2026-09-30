@@ -12,17 +12,11 @@ const fail=[];
 const warn=[];
 const ok=[];
 function check(condition,message){(condition?ok:fail).push(message);return condition;}
-function syntaxCheck(file){
- try{new Function(read(file));ok.push(`JavaScript syntax valid: ${file}`);return true;}
- catch(err){fail.push(`JavaScript syntax invalid: ${file}: ${err.message}`);return false;}
-}
+function syntaxCheck(file){try{new Function(read(file));ok.push(`JavaScript syntax valid: ${file}`);return true;}catch(err){fail.push(`JavaScript syntax invalid: ${file}: ${err.message}`);return false;}}
 
 const bootstrapName='v2-bootstrap.js';
 check(exists(bootstrapName),`${bootstrapName} exists`);
-if(!exists(bootstrapName)){
- console.error('Garavex V2 validation failed: v2-bootstrap.js is missing.');
- process.exit(1);
-}
+if(!exists(bootstrapName)){console.error('Garavex V2 validation failed: v2-bootstrap.js is missing.');process.exit(1);}
 const bootstrap=read(bootstrapName);
 const importRe=/require\(['"]\.\/(v2-[^'"]+)['"]\)/g;
 const imports=[];let m;
@@ -39,18 +33,8 @@ for(const file of ['garavex-start.js'])if(exists(file))syntaxCheck(file);
 
 const routes=new Map();
 const routeRe=/app\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]/g;
-for(const file of jsFiles.filter(f=>f!==path.basename(__filename))){
- const src=read(file);let r;
- while((r=routeRe.exec(src))){
-  const key=`${r[1].toUpperCase()} ${r[2]}`;
-  if(!routes.has(key))routes.set(key,[]);
-  routes.get(key).push(file);
- }
-}
-for(const [route,files] of routes){
- const unique=[...new Set(files)];
- if(unique.length>1)fail.push(`Duplicate V2 route ${route}: ${unique.join(', ')}`);
-}
+for(const file of jsFiles.filter(f=>f!==path.basename(__filename))){const src=read(file);let r;while((r=routeRe.exec(src))){const key=`${r[1].toUpperCase()} ${r[2]}`;if(!routes.has(key))routes.set(key,[]);routes.get(key).push(file);}}
+for(const [route,files] of routes){const unique=[...new Set(files)];if(unique.length>1)fail.push(`Duplicate V2 route ${route}: ${unique.join(', ')}`);}
 
 if(check(exists('v2-schema.js'),'v2-schema.js exists')){
  const schema=read('v2-schema.js');
@@ -61,12 +45,26 @@ if(check(exists('v2-schema.js'),'v2-schema.js exists')){
  check(/applyV2Schema\(db\)/.test(schema),'V2 schema changes are grouped behind the transactional migration wrapper');
 }
 
-const serverName='server.js';
-const launcherName='garavex-start.js';
+for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
+ if(check(exists(file),`${file} exists`)){
+  const src=read(file);
+  check(/requireOwner/.test(src),`${file} requires owner authorization`);
+  check(/no-store/.test(src),`${file} disables response caching`);
+  check(/loadCurrentEmployee/.test(src),`${file} reloads the authenticated employee from the database`);
+  check(/shop_id/.test(src),`${file} validates shop-scoped identity/data`);
+ }
+}
+if(exists('v2-preflight.js')){
+ const preflight=read('v2-preflight.js');
+ check(/STRIPE_SECRET_KEY/.test(preflight)&&/STRIPE_WEBHOOK_SECRET/.test(preflight),'V2 preflight requires Stripe server and webhook configuration');
+ check(/stripeAccountConfigured/.test(preflight)&&/stripeConnected/.test(preflight),'V2 preflight requires connected-shop Stripe readiness');
+ check(/blockers/.test(preflight)&&/ready/.test(preflight),'V2 preflight exposes explicit readiness blockers');
+}
+
+const serverName='server.js',launcherName='garavex-start.js';
 if(check(exists(serverName),'server.js exists')&&check(exists(launcherName),'garavex-start.js exists')){
  const server=read(serverName),launcher=read(launcherName);
- const directImports=(server.match(/require\(['"]\.\/v2-bootstrap['"]\)/g)||[]).length;
- const directCalls=(server.match(/installGaravexV2\s*\(/g)||[]).length;
+ const directImports=(server.match(/require\(['"]\.\/v2-bootstrap['"]\)/g)||[]).length,directCalls=(server.match(/installGaravexV2\s*\(/g)||[]).length;
  check(directImports===0,`Legacy server.js remains V2-bootstrap free (found ${directImports} direct import(s))`);
  check(directCalls===0,`Legacy server.js remains V2-install free (found ${directCalls} direct call(s))`);
  check(/require\(['"]\.\/v2-bootstrap['"]\)/.test(launcher),'Launcher injects the centralized V2 bootstrap import');
@@ -74,26 +72,13 @@ if(check(exists(serverName),'server.js exists')&&check(exists(launcherName),'gar
  check(/listenerNeedle\s*=\s*['"]\\napp\.listen\(PORT/.test(launcher),'Launcher targets the HTTP listener insertion point');
  check(/source\.replace\(listenerNeedle/.test(launcher),'Launcher injects V2 immediately before app.listen');
  check(/source\.includes\(bootstrapMarker\)/.test(launcher),'Launcher rejects accidental direct bootstrap wiring');
- const webhook=server.indexOf("app.post('/api/stripe/webhook'");
- const json=server.indexOf('app.use(express.json())');
+ const webhook=server.indexOf("app.post('/api/stripe/webhook'"),json=server.indexOf('app.use(express.json())');
  check(webhook>=0&&json>=0&&webhook<json,'Stripe webhook remains before express.json');
  if(/quickbooks/i.test(bootstrap))fail.push('QuickBooks reference found in V2 bootstrap; V2 must remain Stripe-only.');
 }
 
-if(exists('package.json')){
- try{
-  const pkg=JSON.parse(read('package.json'));
-  check(pkg?.scripts?.start==='node garavex-start.js','Production start command uses the V2 launcher');
-  check(pkg?.scripts?.['validate:v2']==='node v2-startup-validation.js','V2 validation command is registered');
-  if(pkg?.scripts?.['start:legacy']!=='node server.js')warn.push('Legacy start command is not explicitly preserved as node server.js.');
- }catch(err){fail.push(`package.json could not be parsed: ${err.message}`);}
-}
-
-if(check(exists('Dockerfile'),'Dockerfile exists')){
- const docker=read('Dockerfile');
- check(/CMD\s*\[\s*["']node["']\s*,\s*["']garavex-start\.js["']\s*\]/.test(docker),'Docker starts through garavex-start.js');
- if(/CMD\s*\[\s*["']node["']\s*,\s*["']server\.js["']\s*\]/.test(docker))fail.push('Dockerfile still contains a legacy-only server.js CMD.');
-}
+if(exists('package.json')){try{const pkg=JSON.parse(read('package.json'));check(pkg?.scripts?.start==='node garavex-start.js','Production start command uses the V2 launcher');check(pkg?.scripts?.['validate:v2']==='node v2-startup-validation.js','V2 validation command is registered');if(pkg?.scripts?.['start:legacy']!=='node server.js')warn.push('Legacy start command is not explicitly preserved as node server.js.');}catch(err){fail.push(`package.json could not be parsed: ${err.message}`);}}
+if(check(exists('Dockerfile'),'Dockerfile exists')){const docker=read('Dockerfile');check(/CMD\s*\[\s*["']node["']\s*,\s*["']garavex-start\.js["']\s*\]/.test(docker),'Docker starts through garavex-start.js');if(/CMD\s*\[\s*["']node["']\s*,\s*["']server\.js["']\s*\]/.test(docker))fail.push('Dockerfile still contains a legacy-only server.js CMD.');}
 
 const summary={ok:fail.length===0,passed:ok.length,failed:fail.length,warnings:warn.length,failures:fail,warningDetails:warn};
 console.log(JSON.stringify(summary,null,2));
