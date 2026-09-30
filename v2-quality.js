@@ -1,30 +1,9 @@
 function installV2Quality(app, db, { requireLogin }) {
   const sid=req=>Number(req.session.employee.shop_id), eid=req=>Number(req.session.employee.id);
+  const tableExists=name=>!!db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(name);
   const audit=(req,action,id,details)=>db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(sid(req),eid(req),action,'repair_order',id,JSON.stringify(details||{}));
-
-  app.get('/api/v2/repair-orders/:id/quality',requireLogin,(req,res)=>{
-    const shop=sid(req),id=Number(req.params.id);
-    const ro=db.prepare(`SELECT r.id,r.status,r.workflow_status,r.customer_concern,r.technician_diagnosis,r.customer_id,r.vehicle_id,c.name customer_name,v.year,v.make,v.model,v.mileage FROM repair_orders r JOIN customers c ON c.id=r.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id WHERE r.id=? AND r.shop_id=?`).get(id,shop);
-    if(!ro)return res.status(404).json({error:'Repair order not found.'});
-    const itemCount=db.prepare(`SELECT COUNT(*) n FROM repair_order_items WHERE repair_order_id=?`).get(id)?.n||0;
-    const openTime=db.prepare(`SELECT COUNT(*) n FROM technician_time_entries WHERE shop_id=? AND repair_order_id=? AND clock_out IS NULL`).get(shop,id)?.n||0;
-    const dvi=db.prepare(`SELECT id,status FROM dvi_inspections WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`).get(shop,id);
-    const checks=[
-      {key:'customer_concern',label:'Customer concern documented',ok:Boolean(String(ro.customer_concern||'').trim())},
-      {key:'mileage',label:'Vehicle mileage recorded',ok:Boolean(String(ro.mileage||'').trim())},
-      {key:'line_items',label:'Repair order has line items',ok:itemCount>0},
-      {key:'diagnosis',label:'Technician diagnosis documented',ok:Boolean(String(ro.technician_diagnosis||'').trim())},
-      {key:'technician_time',label:'No technician clock still running',ok:openTime===0},
-      {key:'inspection',label:'Digital inspection completed or intentionally skipped',ok:!dvi||['completed','sent','approved'].includes(String(dvi.status||''))}
-    ];
-    res.json({...ro,checks,ready:checks.every(x=>x.ok)});
-  });
-
-  app.post('/api/v2/repair-orders/:id/quality/approve',requireLogin,(req,res)=>{
-    const shop=sid(req),id=Number(req.params.id),ro=db.prepare(`SELECT id FROM repair_orders WHERE id=? AND shop_id=?`).get(id,shop);if(!ro)return res.status(404).json({error:'Repair order not found.'});
-    const note=String(req.body.note||'').trim();audit(req,'quality.approved',id,{note});
-    db.prepare(`UPDATE repair_orders SET workflow_status='ready' WHERE id=? AND shop_id=?`).run(id,shop);
-    res.json({ok:true,workflow_status:'ready'});
-  });
+  const checksFor=(shop,id)=>{const ro=db.prepare(`SELECT r.id,r.status,r.workflow_status,r.customer_concern,r.technician_diagnosis,r.customer_id,r.vehicle_id,c.name customer_name,v.year,v.make,v.model,v.mileage FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=?`).get(id,shop);if(!ro)return null;const itemCount=db.prepare(`SELECT COUNT(*) n FROM repair_order_items WHERE repair_order_id=?`).get(id)?.n||0;const openTime=db.prepare(`SELECT COUNT(*) n FROM technician_time_entries WHERE shop_id=? AND repair_order_id=? AND clock_out IS NULL`).get(shop,id)?.n||0;const dvi=db.prepare(`SELECT id,status FROM dvi_inspections WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`).get(shop,id);const checks=[{key:'customer_concern',label:'Customer concern documented',ok:Boolean(String(ro.customer_concern||'').trim())},{key:'mileage',label:'Vehicle mileage recorded',ok:Boolean(String(ro.mileage||'').trim())},{key:'line_items',label:'Repair order has line items',ok:itemCount>0},{key:'diagnosis',label:'Technician diagnosis documented',ok:Boolean(String(ro.technician_diagnosis||'').trim())},{key:'technician_time',label:'No technician clock still running',ok:openTime===0},{key:'inspection',label:'Digital inspection completed or intentionally skipped',ok:!dvi||['completed','sent','approved'].includes(String(dvi.status||''))}];if(tableExists('v2_ro_blockers')){const n=db.prepare(`SELECT COUNT(*) n FROM v2_ro_blockers WHERE shop_id=? AND repair_order_id=? AND status='open'`).get(shop,id).n;checks.push({key:'blockers',label:'No open workflow blockers',ok:n===0});}if(tableExists('v2_parts_requests')){const n=db.prepare(`SELECT COUNT(*) n FROM v2_parts_requests WHERE shop_id=? AND repair_order_id=? AND status IN ('requested','ordered','received')`).get(shop,id).n;checks.push({key:'parts',label:'All requested parts installed or closed',ok:n===0});}if(tableExists('v2_road_tests')){const n=db.prepare(`SELECT COUNT(*) n FROM v2_road_tests WHERE shop_id=? AND repair_order_id=? AND status='in_progress'`).get(shop,id).n;checks.push({key:'road_test',label:'No road test still in progress',ok:n===0});}return {ro,checks};};
+  app.get('/api/v2/repair-orders/:id/quality',requireLogin,(req,res)=>{const x=checksFor(sid(req),Number(req.params.id));if(!x)return res.status(404).json({error:'Repair order not found.'});res.json({...x.ro,checks:x.checks,ready:x.checks.every(c=>c.ok)});});
+  app.post('/api/v2/repair-orders/:id/quality/approve',requireLogin,(req,res)=>{const shop=sid(req),id=Number(req.params.id),x=checksFor(shop,id);if(!x)return res.status(404).json({error:'Repair order not found.'});const blocking=x.checks.filter(c=>!c.ok);if(blocking.length)return res.status(409).json({error:'Final quality cannot be approved until all required checks pass.',checks:x.checks,blocking});const note=String(req.body.note||'').trim();audit(req,'quality.approved',id,{note,checks:x.checks.map(c=>c.key)});db.prepare(`UPDATE repair_orders SET workflow_status='ready' WHERE id=? AND shop_id=?`).run(id,shop);res.json({ok:true,workflow_status:'ready',checks:x.checks});});
 }
 module.exports={installV2Quality};
