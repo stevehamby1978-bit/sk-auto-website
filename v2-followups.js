@@ -1,30 +1,37 @@
-function installV2Followups(app, db, { requireLogin, twilioClient }) {
-  const sid = req => Number(req.session.employee.shop_id);
-  const normalizePhone = value => { const d=String(value||'').replace(/\D/g,''); return d.length===10?`+1${d}`:d.length===11&&d.startsWith('1')?`+${d}`:null; };
-  const sendSms = async (to, body) => {
-    if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER) throw new Error('SMS is not configured.');
-    return twilioClient.messages.create({ to, from:process.env.TWILIO_PHONE_NUMBER, body });
-  };
+const { permissionMiddleware } = require('./v2-permissions');
 
-  app.get('/api/v2/followups/due', requireLogin, (req,res)=>{
-    const rows=db.prepare(`SELECT d.id,d.description,d.estimated_total,d.follow_up_date,c.name customer_name,c.phone customer_phone,v.year,v.make,v.model FROM deferred_services d JOIN customers c ON c.id=d.customer_id LEFT JOIN vehicles v ON v.id=d.vehicle_id WHERE d.shop_id=? AND d.status='deferred' AND d.follow_up_date IS NOT NULL AND date(d.follow_up_date)<=date('now') ORDER BY date(d.follow_up_date),d.id`).all(sid(req));
-    res.json(rows);
+function installV2Followups(app,db,{requireLogin,twilioClient}){
+  if(!app||!db)throw new Error('V2 follow-ups require app and db.');
+  if(!requireLogin)throw new Error('V2 follow-ups require login middleware.');
+  const requireCustomerContact=permissionMiddleware('customer_contact');
+  const validId=v=>Number.isInteger(v)&&v>0;
+  const sid=req=>Number(req.session?.employee?.shop_id||0);
+  const eid=req=>Number(req.session?.employee?.id||0);
+  const auth=(req,res)=>{const s=sid(req),e=eid(req);if(!validId(s)||!validId(e)){res.status(401).json({error:'A valid employee shop session is required.'});return null;}return{s,e};};
+  const normalizePhone=value=>{const d=String(value||'').replace(/\D/g,'');return d.length===10?`+1${d}`:d.length===11&&d.startsWith('1')?`+${d}`:null;};
+  const sendSms=async(to,body)=>{if(!twilioClient||!process.env.TWILIO_PHONE_NUMBER)throw new Error('SMS_NOT_CONFIGURED');return twilioClient.messages.create({to,from:process.env.TWILIO_PHONE_NUMBER,body});};
+
+  try{db.exec(`CREATE INDEX IF NOT EXISTS idx_deferred_followups_due ON deferred_services(shop_id,status,follow_up_date);`);}catch(err){console.error('Garavex V2 follow-up index error:',err);}
+
+  app.get('/api/v2/followups/due',requireLogin,requireCustomerContact,(req,res)=>{
+    try{const a=auth(req,res);if(!a)return;const rows=db.prepare(`SELECT d.id,d.description,d.estimated_total,d.follow_up_date,c.name customer_name,c.phone customer_phone,v.year,v.make,v.model FROM deferred_services d JOIN customers c ON c.id=d.customer_id AND c.shop_id=d.shop_id LEFT JOIN vehicles v ON v.id=d.vehicle_id AND v.shop_id=d.shop_id WHERE d.shop_id=? AND d.status='deferred' AND d.follow_up_date IS NOT NULL AND date(d.follow_up_date)<=date('now') ORDER BY date(d.follow_up_date),d.id LIMIT 300`).all(a.s);return res.json(rows);}catch(err){console.error('Garavex V2 follow-up list error:',err);return res.status(500).json({error:'Unable to load due follow-ups.'});}
   });
 
-  app.post('/api/v2/deferred/:id/follow-up-text', requireLogin, async(req,res)=>{
-    try {
-      const shopId=sid(req),id=Number(req.params.id);
-      const row=db.prepare(`SELECT d.*,c.name customer_name,c.phone customer_phone,v.year,v.make,v.model,s.name shop_name FROM deferred_services d JOIN customers c ON c.id=d.customer_id LEFT JOIN vehicles v ON v.id=d.vehicle_id JOIN shops s ON s.id=d.shop_id WHERE d.id=? AND d.shop_id=?`).get(id,shopId);
-      if(!row)return res.status(404).json({error:'Deferred service not found.'});
-      const phone=normalizePhone(row.customer_phone); if(!phone)return res.status(400).json({error:'Customer phone number is invalid.'});
-      const vehicle=[row.year,row.make,row.model].filter(Boolean).join(' ');
-      const amount=Number(row.estimated_total||0).toFixed(2);
-      const body=String(req.body.message||'').trim() || `${row.shop_name}: Hi ${row.customer_name||'there'}, just a reminder about the recommended ${row.description} for your ${vehicle||'vehicle'} (estimated $${amount}). Reply or call us when you’re ready to schedule.`;
-      await sendSms(phone,body);
-      db.prepare(`UPDATE deferred_services SET follow_up_date=date('now','+30 days') WHERE id=? AND shop_id=?`).run(id,shopId);
-      db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(shopId,Number(req.session.employee.id),'deferred.followup_text','deferred_service',id,JSON.stringify({phone,last_sent_at:new Date().toISOString()}));
-      res.json({ok:true,next_follow_up_in_days:30});
-    } catch(err) { console.error('V2 deferred follow-up SMS error:',err); res.status(500).json({error:'Unable to send follow-up text.'}); }
+  app.post('/api/v2/deferred/:id/follow-up-text',requireLogin,requireCustomerContact,async(req,res)=>{
+    try{
+      const a=auth(req,res);if(!a)return;const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Valid deferred service ID is required.'});
+      const row=db.prepare(`SELECT d.*,c.name customer_name,c.phone customer_phone,v.year,v.make,v.model,s.name shop_name FROM deferred_services d JOIN customers c ON c.id=d.customer_id AND c.shop_id=d.shop_id LEFT JOIN vehicles v ON v.id=d.vehicle_id AND v.shop_id=d.shop_id JOIN shops s ON s.id=d.shop_id WHERE d.id=? AND d.shop_id=?`).get(id,a.s);
+      if(!row)return res.status(404).json({error:'Deferred service not found.'});if(row.status!=='deferred')return res.status(409).json({error:'Follow-up texts can only be sent for active deferred services.'});
+      const phone=normalizePhone(row.customer_phone);if(!phone)return res.status(400).json({error:'Customer phone number is invalid.'});
+      const vehicle=[row.year,row.make,row.model].filter(Boolean).join(' '),amount=Number(row.estimated_total||0).toFixed(2);
+      const custom=String(req.body?.message||'').trim();if(custom.length>1500)return res.status(400).json({error:'Follow-up message is too long.'});
+      const body=custom||`${row.shop_name}: Hi ${row.customer_name||'there'}, just a reminder about the recommended ${row.description} for your ${vehicle||'vehicle'} (estimated $${amount}). Reply or call us when you’re ready to schedule.`;
+      if(body.length>1500)return res.status(400).json({error:'Generated follow-up message is too long.'});
+      const sent=await sendSms(phone,body);
+      const tx=db.transaction(()=>{const changed=db.prepare(`UPDATE deferred_services SET follow_up_date=date('now','+30 days'),updated_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status='deferred'`).run(id,a.s);if(changed.changes!==1)throw new Error('DEFERRED_CHANGED');db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'deferred.followup_text','deferred_service',id,JSON.stringify({provider:'twilio',message_sid:sent?.sid||null,next_follow_up_in_days:30}));});
+      try{tx();}catch(err){return res.status(409).json({error:'The deferred service changed after the text was sent. Review its follow-up date before sending another message.',sent:true});}
+      return res.json({ok:true,next_follow_up_in_days:30});
+    }catch(err){console.error('Garavex V2 deferred follow-up SMS error:',err);if(String(err.message).includes('SMS_NOT_CONFIGURED'))return res.status(503).json({error:'SMS follow-up messaging is not configured.'});return res.status(502).json({error:'Unable to send follow-up text.'});}
   });
 }
 module.exports={installV2Followups};
