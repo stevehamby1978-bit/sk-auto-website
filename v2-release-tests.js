@@ -81,7 +81,13 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
         run('Multiple open clocks for one technician', `SELECT COUNT(*) n FROM (SELECT shop_id,employee_id FROM technician_time_entries WHERE clock_out IS NULL GROUP BY shop_id,employee_id HAVING COUNT(*)>1)`);
         run('Closed technician time missing minutes', `SELECT COUNT(*) n FROM technician_time_entries WHERE clock_out IS NOT NULL AND minutes IS NULL`);
       }
-      if (exists('customer_portal_tokens')) run('Duplicate active portal tokens', `SELECT COUNT(*) n FROM (SELECT token FROM customer_portal_tokens WHERE revoked_at IS NULL GROUP BY token HAVING COUNT(*)>1)`);
+      if (exists('customer_portal_tokens')) {
+        run('Duplicate active portal tokens', `SELECT COUNT(*) n FROM (SELECT token FROM customer_portal_tokens WHERE revoked_at IS NULL GROUP BY token HAVING COUNT(*)>1)`);
+        run('Portal tokens with invalid format', `SELECT COUNT(*) n FROM customer_portal_tokens WHERE LENGTH(token)!=64 OR LOWER(token) GLOB '*[^0-9a-f]*'`);
+        run('Active portal tokens without expiration', `SELECT COUNT(*) n FROM customer_portal_tokens WHERE revoked_at IS NULL AND expires_at IS NULL`);
+        run('Customers with multiple active portal tokens', `SELECT COUNT(*) n FROM (SELECT shop_id,customer_id FROM customer_portal_tokens WHERE revoked_at IS NULL GROUP BY shop_id,customer_id HAVING COUNT(*)>1)`);
+        if (exists('shops') && hasCol('shops','customer_portal_enabled')) run('Active portal tokens for disabled shops', `SELECT COUNT(*) n FROM customer_portal_tokens t JOIN shops s ON s.id=t.shop_id WHERE t.revoked_at IS NULL AND COALESCE(s.customer_portal_enabled,0)!=1`);
+      }
       if (exists('dvi_inspections')) run('Duplicate DVI public tokens', `SELECT COUNT(*) n FROM (SELECT public_token FROM dvi_inspections WHERE public_token IS NOT NULL GROUP BY public_token HAVING COUNT(*)>1)`);
       if (exists('inventory_items')) {
         run('Inventory with negative quantity or pricing', `SELECT COUNT(*) n FROM inventory_items WHERE quantity<0 OR reorder_level<0 OR cost<0 OR sell_price<0`);
