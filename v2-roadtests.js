@@ -9,6 +9,7 @@ function installV2RoadTests(app, db, { requireLogin }) {
   const sid = req => Number(req.session?.employee?.shop_id || 0);
   const eid = req => Number(req.session?.employee?.id || 0);
   const has = name => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
+  const phases = ['pre_repair','post_repair','diagnostic'];
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS v2_road_tests(
@@ -65,15 +66,17 @@ function installV2RoadTests(app, db, { requireLogin }) {
       const a = auth(req, res); if (!a) return;
       const ro = Number(req.params.id);
       if (!validId(ro)) return res.status(400).json({ error: 'Valid repair order ID is required.' });
-      const order = db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro, a.s);
+      const order = db.prepare(`SELECT id,status,workflow_status,vehicle_id FROM repair_orders WHERE id=? AND shop_id=?`).get(ro, a.s);
       if (!order) return res.status(404).json({ error: 'Repair order not found.' });
       if (order.status === 'completed' || String(order.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'A completed or delivered repair order cannot start a new road test.' });
+      if (!validId(Number(order.vehicle_id))) return res.status(409).json({ error: 'A road test requires a vehicle on the repair order.' });
 
       const rawMileage = req.body?.start_mileage;
       const start = rawMileage === undefined || rawMileage === null || rawMileage === '' ? null : Number(rawMileage);
       if (start !== null && (!Number.isInteger(start) || start < 0 || start > 10000000)) return res.status(400).json({ error: 'Starting mileage is invalid.' });
-      const requestedPhase = String(req.body?.phase || 'post_repair');
-      const phase = ['pre_repair','post_repair','diagnostic'].includes(requestedPhase) ? requestedPhase : 'post_repair';
+      const requestedPhase = String(req.body?.phase || 'post_repair').trim().toLowerCase();
+      if (!phases.includes(requestedPhase)) return res.status(400).json({ error: `Road test phase must be one of: ${phases.join(', ')}.` });
+      const phase = requestedPhase;
       const notes = String(req.body?.notes || '').trim().slice(0, 3000);
 
       const tx = db.transaction(() => {
@@ -81,12 +84,8 @@ function installV2RoadTests(app, db, { requireLogin }) {
         db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s, a.e, 'repair_order.road_test_started', 'repair_order', ro, JSON.stringify({ road_test_id: info.lastInsertRowid, phase, start_mileage: start }));
         return info.lastInsertRowid;
       });
-      try {
-        return res.json({ ok: true, id: tx() });
-      } catch (err) {
-        if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'This repair order already has a road test in progress.' });
-        throw err;
-      }
+      try { return res.json({ ok: true, id: tx() }); }
+      catch (err) { if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'This repair order already has a road test in progress.' }); throw err; }
     } catch (err) {
       console.error('Garavex V2 road test start error:', err);
       return res.status(500).json({ error: 'Unable to start the road test.' });
@@ -101,12 +100,7 @@ function installV2RoadTests(app, db, { requireLogin }) {
       if (!validId(id)) return res.status(400).json({ error: 'Valid road test ID is required.' });
       if (!['passed','failed','inconclusive'].includes(result)) return res.status(400).json({ error: 'Road test result is required.' });
 
-      const test = db.prepare(`
-        SELECT t.*,r.status repair_order_status,r.workflow_status
-        FROM v2_road_tests t
-        JOIN repair_orders r ON r.id=t.repair_order_id AND r.shop_id=t.shop_id
-        WHERE t.id=? AND t.shop_id=? AND t.status='in_progress'
-      `).get(id, a.s);
+      const test = db.prepare(`SELECT t.*,r.status repair_order_status,r.workflow_status FROM v2_road_tests t JOIN repair_orders r ON r.id=t.repair_order_id AND r.shop_id=t.shop_id WHERE t.id=? AND t.shop_id=? AND t.status='in_progress'`).get(id, a.s);
       if (!test) return res.status(404).json({ error: 'Active road test not found.' });
       if (test.repair_order_status === 'completed' || String(test.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'Cannot complete a road test after repair-order completion or delivery.' });
 
@@ -115,11 +109,11 @@ function installV2RoadTests(app, db, { requireLogin }) {
       if (end !== null && (!Number.isInteger(end) || end < 0 || end > 10000000)) return res.status(400).json({ error: 'Ending mileage is invalid.' });
       if (test.start_mileage !== null && end !== null && end < test.start_mileage) return res.status(400).json({ error: 'Ending mileage cannot be lower than starting mileage.' });
       const notes = String(req.body?.notes ?? test.notes ?? '').trim().slice(0, 3000);
+      if (result !== 'passed' && !notes) return res.status(400).json({ error: 'Notes are required for a failed or inconclusive road test.' });
 
       const tx = db.transaction(() => {
         const changed = db.prepare(`UPDATE v2_road_tests SET status='completed',end_mileage=?,result=?,notes=?,completed_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status='in_progress'`).run(end, result, notes, id, a.s);
-        if (changed.changes !== 1) throw new Error('Road test changed before completion.');
-
+        if (changed.changes !== 1) throw new Error('ROAD_TEST_CHANGED');
         if (has('v2_ro_blockers')) {
           const cols = blockerCols();
           const descriptionColumn = cols.includes('description') ? 'description' : cols.includes('reason') ? 'reason' : null;
@@ -127,16 +121,13 @@ function installV2RoadTests(app, db, { requireLogin }) {
             const existing = db.prepare(`SELECT id FROM v2_ro_blockers WHERE shop_id=? AND repair_order_id=? AND status='open' AND ${descriptionColumn} LIKE 'Road test:%' ORDER BY id DESC LIMIT 1`).get(a.s, test.repair_order_id);
             if (result === 'passed') {
               if (existing) {
-                const sets = [`status='resolved'`];
-                const values = [];
+                const sets = [`status='resolved'`], values = [];
                 if (cols.includes('resolved_at')) sets.push(`resolved_at=CURRENT_TIMESTAMP`);
                 if (cols.includes('resolved_by')) { sets.push(`resolved_by=?`); values.push(a.e); }
                 db.prepare(`UPDATE v2_ro_blockers SET ${sets.join(',')} WHERE id=? AND shop_id=? AND status='open'`).run(...values, existing.id, a.s);
               }
             } else if (!existing) {
-              const msg = `Road test: ${result}${notes ? ' — ' + notes : ''}`.slice(0, 1000);
-              const fields = ['shop_id','repair_order_id'];
-              const values = [a.s,test.repair_order_id];
+              const msg = `Road test: ${result} — ${notes}`.slice(0, 1000), fields = ['shop_id','repair_order_id'], values = [a.s,test.repair_order_id];
               if (cols.includes('type')) { fields.push('type'); values.push('road_test'); }
               if (cols.includes('description')) { fields.push('description'); values.push(msg); }
               if (cols.includes('reason')) { fields.push('reason'); values.push(msg); }
@@ -145,15 +136,9 @@ function installV2RoadTests(app, db, { requireLogin }) {
             }
           }
         }
-
         db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s, a.e, 'repair_order.road_test_completed', 'repair_order', test.repair_order_id, JSON.stringify({ road_test_id: id, result, start_mileage: test.start_mileage, end_mileage: end }));
       });
-
-      try {
-        tx();
-      } catch (err) {
-        return res.status(409).json({ error: 'Road test changed before completion could be saved.' });
-      }
+      try { tx(); } catch (err) { return res.status(409).json({ error: 'Road test changed before completion could be saved.' }); }
       return res.json({ ok: true, result, workflow_blocked: result !== 'passed' });
     } catch (err) {
       console.error('Garavex V2 road test completion error:', err);
