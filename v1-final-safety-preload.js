@@ -160,6 +160,67 @@ async function emailReceipt(req,res){
   }catch(e){console.error('V1 receipt resend failed:',e);return res.status(500).json({error:'Unable to email payment receipt.'});}
 }
 
+
+function respondEstimate(req,res){
+  try{
+    const token=String(req.params?.token||'').trim();
+    const status=String(req.body?.status||'').toLowerCase();
+    if(!token)return res.status(400).json({error:'Estimate token is required.'});
+    if(!['approved','declined'].includes(status))return res.status(400).json({error:'Status must be approved or declined.'});
+
+    const estimate=db.prepare(`
+      SELECT e.id,e.customer_id,e.vehicle_id,e.status,e.shop_id,
+             c.name AS customer_name,
+             v.year AS vehicle_year,v.make AS vehicle_make,v.model AS vehicle_model
+      FROM estimates e
+      LEFT JOIN customers c ON c.id=e.customer_id AND c.shop_id=e.shop_id
+      LEFT JOIN vehicles v ON v.id=e.vehicle_id AND v.shop_id=e.shop_id
+      WHERE e.token=?
+      LIMIT 1
+    `).get(token);
+
+    if(!estimate)return res.status(404).json({error:'Estimate not found.'});
+    if(!estimate.shop_id)return res.status(409).json({error:'This estimate is missing shop ownership.'});
+    if(String(estimate.status||'pending').toLowerCase()!=='pending')return res.status(409).json({error:'This estimate has already been responded to.'});
+
+    let repairOrderId=null;
+    db.transaction(()=>{
+      const updated=db.prepare(`
+        UPDATE estimates
+        SET status=?,responded_at=CURRENT_TIMESTAMP
+        WHERE id=? AND shop_id=? AND status='pending'
+      `).run(status,estimate.id,estimate.shop_id);
+      if(updated.changes!==1)throw new Error('Estimate status changed before response was saved.');
+
+      if(status==='approved'){
+        const existing=db.prepare('SELECT id FROM repair_orders WHERE estimate_id=? AND shop_id=? LIMIT 1').get(estimate.id,estimate.shop_id);
+        if(existing){
+          repairOrderId=Number(existing.id);
+        }else{
+          const ro=db.prepare(`
+            INSERT INTO repair_orders(estimate_id,customer_id,vehicle_id,status,shop_id)
+            VALUES(?,?,?,'waiting',?)
+          `).run(estimate.id,estimate.customer_id,estimate.vehicle_id,estimate.shop_id);
+          repairOrderId=Number(ro.lastInsertRowid);
+
+          const items=db.prepare('SELECT description,parts,labor FROM estimate_items WHERE estimate_id=? ORDER BY id').all(estimate.id);
+          const add=db.prepare('INSERT INTO repair_order_items(repair_order_id,description,parts,labor) VALUES(?,?,?,?)');
+          for(const item of items)add.run(repairOrderId,item.description,Number(item.parts)||0,Number(item.labor)||0);
+        }
+      }
+    })();
+
+    return res.json({success:true,status,repair_order_id:repairOrderId});
+  }catch(e){
+    console.error('V1 estimate response failed:',e);
+    return res.status(500).json({error:'Unable to update estimate.'});
+  }
+}
+
+function disabledLegacyTextAuthorization(req,res){
+  return res.status(410).json({error:'This legacy authorization-text endpoint has been retired. Use the repair-order authorization text route.'});
+}
+
 function disabledLegacyTextInvoice(req,res){
   return res.status(410).json({error:'This legacy invoice-text endpoint has been retired. Use the repair-order invoice text route.'});
 }
@@ -172,7 +233,9 @@ express.application.get=function(route,...handlers){
 express.application.post=function(route,...handlers){
   if(route==='/api/repair-orders/:id/recommendations')return post.call(this,route,addRecommendation);
   if(route==='/api/repair-orders/:id/email-receipt')return post.call(this,route,emailReceipt);
+  if(route==='/api/estimates/:token/respond')return post.call(this,route,respondEstimate);
   if(route==='/api/text-invoice')return post.call(this,route,disabledLegacyTextInvoice);
+  if(route==='/api/text-authorization')return post.call(this,route,disabledLegacyTextAuthorization);
   return post.call(this,route,...handlers);
 };
 express.application.patch=function(route,...handlers){
