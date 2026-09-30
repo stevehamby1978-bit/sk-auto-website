@@ -1,20 +1,19 @@
 function installV2ReleaseTests(app,db,{requireLogin,requireOwner}){
- const exists=(table)=>Boolean(db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table));
- const cols=(table)=>exists(table)?db.prepare(`PRAGMA table_info(${table})`).all():[];
+ const exists=table=>Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(table));
+ const cols=table=>exists(table)?db.prepare(`PRAGMA table_info(${table})`).all():[];
  app.get('/api/v2/release-tests',requireLogin,requireOwner,(req,res)=>{
   const shopId=Number(req.session.employee.shop_id);
-  const scoped=['customers','vehicles','repair_orders','appointments','employees','deferred_services','inventory_parts','vendors','purchase_orders','audit_log','v2_comebacks'];
+  const scoped=['customers','vehicles','repair_orders','appointments','employees','deferred_services','inventory_parts','vendors','purchase_orders','audit_log','v2_comebacks','v2_tasks','v2_ro_blockers','v2_ro_promises','v2_parts_requests','v2_vehicle_keys','v2_road_tests','v2_deliveries','v2_customer_requests','v2_shop_handoffs'];
   const isolation=scoped.map(table=>{if(!exists(table))return {table,ok:false,detail:'table missing'};const has=cols(table).some(c=>c.name==='shop_id');return {table,ok:has,detail:has?'shop_id present':'shop_id missing'};});
-  const orphanChecks=[];
-  const run=(name,sql)=>{try{const n=Number(db.prepare(sql).get()?.n||0);orphanChecks.push({name,ok:n===0,count:n});}catch(e){orphanChecks.push({name,ok:false,count:null,error:e.message});}};
-  run('Vehicles linked across shops',`SELECT COUNT(*) n FROM vehicles v JOIN customers c ON c.id=v.customer_id WHERE v.shop_id!=c.shop_id`);
-  run('Repair orders linked across shops',`SELECT COUNT(*) n FROM repair_orders r JOIN customers c ON c.id=r.customer_id WHERE r.shop_id!=c.shop_id`);
-  run('Repair-order vehicles linked across shops',`SELECT COUNT(*) n FROM repair_orders r JOIN vehicles v ON v.id=r.vehicle_id WHERE r.shop_id!=v.shop_id`);
-  if(exists('deferred_services'))run('Deferred services linked across shops',`SELECT COUNT(*) n FROM deferred_services d JOIN customers c ON c.id=d.customer_id WHERE d.shop_id!=c.shop_id`);
-  if(exists('v2_comebacks'))run('Comebacks linked across shops',`SELECT COUNT(*) n FROM v2_comebacks cb JOIN customers c ON c.id=cb.customer_id WHERE cb.shop_id!=c.shop_id`);
+  const dataChecks=[];const run=(name,sql)=>{try{const n=Number(db.prepare(sql).get()?.n||0);dataChecks.push({name,ok:n===0,count:n});}catch(e){dataChecks.push({name,ok:false,count:null,error:e.message});}};
+  run('Vehicles linked across shops',`SELECT COUNT(*) n FROM vehicles v JOIN customers c ON c.id=v.customer_id WHERE v.shop_id!=c.shop_id`);run('Repair orders linked across shops',`SELECT COUNT(*) n FROM repair_orders r JOIN customers c ON c.id=r.customer_id WHERE r.shop_id!=c.shop_id`);run('Repair-order vehicles linked across shops',`SELECT COUNT(*) n FROM repair_orders r JOIN vehicles v ON v.id=r.vehicle_id WHERE r.shop_id!=v.shop_id`);
+  const child=[['v2_tasks','repair_order_id'],['v2_ro_blockers','repair_order_id'],['v2_ro_promises','repair_order_id'],['v2_parts_requests','repair_order_id'],['v2_vehicle_keys','repair_order_id'],['v2_road_tests','repair_order_id'],['v2_deliveries','repair_order_id'],['v2_customer_requests','repair_order_id']];child.forEach(([t,c])=>{if(exists(t))run(`${t} linked across shops`,`SELECT COUNT(*) n FROM ${t} x JOIN repair_orders r ON r.id=x.${c} WHERE x.${c} IS NOT NULL AND x.shop_id!=r.shop_id`);});
+  if(exists('v2_deliveries'))run('Delivered records without delivered workflow state',`SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NOT NULL AND COALESCE(r.workflow_status,'')!='delivered'`);
+  if(exists('v2_vehicle_keys'))run('Delivered ROs with missing keys',`SELECT COUNT(*) n FROM repair_orders r JOIN v2_vehicle_keys k ON k.repair_order_id=r.id AND k.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND k.status='missing'`);
+  if(exists('v2_ro_blockers'))run('Delivered ROs with open blockers',`SELECT COUNT(*) n FROM repair_orders r JOIN v2_ro_blockers b ON b.repair_order_id=r.id AND b.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND b.status='open'`);
+  if(exists('v2_parts_requests'))run('Delivered ROs with unfinished parts',`SELECT COUNT(*) n FROM repair_orders r JOIN v2_parts_requests p ON p.repair_order_id=r.id AND p.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND p.status IN ('requested','ordered','received')`);
   const currentShop={id:shopId,customers:db.prepare(`SELECT COUNT(*) n FROM customers WHERE shop_id=?`).get(shopId)?.n||0,repair_orders:db.prepare(`SELECT COUNT(*) n FROM repair_orders WHERE shop_id=?`).get(shopId)?.n||0};
-  const checks=[{label:'All critical tables are shop-scoped',ok:isolation.every(x=>x.ok)},{label:'No detected cross-shop relationships',ok:orphanChecks.every(x=>x.ok)},{label:'Current session has shop scope',ok:Boolean(shopId)}];
-  res.json({ok:checks.every(x=>x.ok),checks,isolation,orphan_checks:orphanChecks,current_shop:currentShop,timestamp:new Date().toISOString()});
+  const checks=[{label:'All critical V2 tables are shop-scoped',ok:isolation.every(x=>x.ok)},{label:'No detected cross-shop or workflow integrity problems',ok:dataChecks.every(x=>x.ok)},{label:'Current session has shop scope',ok:Boolean(shopId)}];res.json({ok:checks.every(x=>x.ok),checks,isolation,data_checks:dataChecks,current_shop:currentShop,timestamp:new Date().toISOString()});
  });
 }
 module.exports={installV2ReleaseTests};
