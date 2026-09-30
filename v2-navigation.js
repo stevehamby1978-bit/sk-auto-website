@@ -5,6 +5,7 @@
     ['v2-technician.html','Technician'],
     ['v2-dvi.html','Inspections'],
     ['v2-deferred.html','Deferred'],
+    ['v2-followups.html','Follow-ups'],
     ['v2-vin.html','VIN Intake'],
     ['v2-inventory.html','Inventory'],
     ['v2-parts.html','Purchasing'],
