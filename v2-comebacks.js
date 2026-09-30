@@ -46,11 +46,11 @@ function installV2Comebacks(app,db,{requireLogin,requireOwner}){
       const a=auth(req,res);if(!a)return;const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Valid comeback ID is required.'});
       const row=db.prepare(`SELECT * FROM v2_comebacks WHERE id=? AND shop_id=?`).get(id,a.s);if(!row)return res.status(404).json({error:'Comeback not found.'});if(['resolved','dismissed'].includes(row.status))return res.status(409).json({error:'Closed comeback records cannot be changed.'});
       const status=String(req.body?.status||row.status).trim().toLowerCase();if(!['open','in_progress','resolved','dismissed'].includes(status))return res.status(400).json({error:'Invalid status.'});
-      if(row.status==='in_progress'&&status==='open')return res.status(409).json({error:'Comeback status cannot move backward to open.'});
+      const transitions={open:['open','in_progress','resolved','dismissed'],in_progress:['in_progress','resolved','dismissed']};if(!(transitions[row.status]||[]).includes(status))return res.status(409).json({error:`Cannot change comeback status from ${row.status} to ${status}.`});
       const resolution=String(req.body?.resolution??row.resolution??'').trim().slice(0,3000);if(status==='resolved'&&!resolution)return res.status(400).json({error:'Resolution is required when resolving a comeback.'});
       const labor=Number(req.body?.labor_cost??row.labor_cost??0),parts=Number(req.body?.parts_cost??row.parts_cost??0);if(!Number.isFinite(labor)||labor<0||labor>1000000||!Number.isFinite(parts)||parts<0||parts>1000000)return res.status(400).json({error:'Comeback costs are invalid.'});
       const comebackRoRaw=req.body?.comeback_repair_order_id??row.comeback_repair_order_id;const comebackRo=comebackRoRaw===null||comebackRoRaw===''?null:Number(comebackRoRaw);
-      if(comebackRo!==null){if(!validId(comebackRo)||comebackRo===row.original_repair_order_id)return res.status(400).json({error:'Valid comeback repair order is required.'});const linked=db.prepare(`SELECT id,customer_id,vehicle_id FROM repair_orders WHERE id=? AND shop_id=?`).get(comebackRo,a.s);if(!linked||linked.customer_id!==row.customer_id||(row.vehicle_id&&linked.vehicle_id!==row.vehicle_id))return res.status(409).json({error:'Comeback repair order must belong to the same customer and vehicle.'});}
+      if(comebackRo!==null){if(!validId(comebackRo)||comebackRo===row.original_repair_order_id)return res.status(400).json({error:'Valid comeback repair order is required.'});const linked=db.prepare(`SELECT id,customer_id,vehicle_id FROM repair_orders WHERE id=? AND shop_id=?`).get(comebackRo,a.s);if(!linked||linked.customer_id!==row.customer_id||(row.vehicle_id!==null&&Number(linked.vehicle_id)!==Number(row.vehicle_id)))return res.status(409).json({error:'Comeback repair order must belong to the same customer and vehicle.'});}
       const closing=['resolved','dismissed'].includes(status);
       const tx=db.transaction(()=>{const changed=db.prepare(`UPDATE v2_comebacks SET status=?,resolution=?,labor_cost=?,parts_cost=?,comeback_repair_order_id=?,resolved_by=CASE WHEN ? THEN ? ELSE resolved_by END,resolved_at=CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE resolved_at END,updated_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status=?`).run(status,resolution,labor,parts,comebackRo,closing?1:0,a.e,closing?1:0,id,a.s,row.status);if(changed.changes!==1)throw new Error('COMEBACK_CHANGED');db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'comeback.updated','comeback',id,JSON.stringify({previous_status:row.status,status,labor_cost:labor,parts_cost:parts,comeback_repair_order_id:comebackRo,resolution}));});
       try{tx();}catch(err){return res.status(409).json({error:'Comeback changed before this update could be saved.'});}return res.json({ok:true,status});
@@ -58,7 +58,14 @@ function installV2Comebacks(app,db,{requireLogin,requireOwner}){
   });
 
   app.get('/api/v2/comebacks/metrics',requireLogin,requireOwner,(req,res)=>{
-    try{const a=auth(req,res);if(!a)return;const m=db.prepare(`SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN status IN('open','in_progress') THEN 1 ELSE 0 END),0) open_count,COALESCE(SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END),0) resolved_count,COALESCE(SUM(labor_cost+parts_cost),0) total_cost FROM v2_comebacks WHERE shop_id=?`).get(a.s);const completed=Number(db.prepare(`SELECT COUNT(*) n FROM repair_orders WHERE shop_id=? AND status='completed'`).get(a.s)?.n||0);m.completed_repair_orders=completed;m.comeback_rate=completed?Number((m.total/completed*100).toFixed(2)):0;return res.json(m);}catch(err){console.error('Garavex V2 comeback metrics error:',err);return res.status(500).json({error:'Unable to load comeback metrics.'});}
+    try{
+      const a=auth(req,res);if(!a)return;
+      const m=db.prepare(`SELECT COUNT(*) total,COALESCE(SUM(CASE WHEN status IN('open','in_progress') THEN 1 ELSE 0 END),0) open_count,COALESCE(SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END),0) resolved_count,COALESCE(SUM(labor_cost+parts_cost),0) total_cost FROM v2_comebacks WHERE shop_id=?`).get(a.s);
+      const completed=Number(db.prepare(`SELECT COUNT(*) n FROM repair_orders WHERE shop_id=? AND (status='completed' OR LOWER(COALESCE(workflow_status,''))='delivered')`).get(a.s)?.n||0);
+      const uniqueComebackOrders=Number(db.prepare(`SELECT COUNT(DISTINCT original_repair_order_id) n FROM v2_comebacks WHERE shop_id=?`).get(a.s)?.n||0);
+      m.completed_repair_orders=completed;m.unique_comeback_repair_orders=uniqueComebackOrders;m.comeback_rate=completed?Number((uniqueComebackOrders/completed*100).toFixed(2)):0;
+      return res.json(m);
+    }catch(err){console.error('Garavex V2 comeback metrics error:',err);return res.status(500).json({error:'Unable to load comeback metrics.'});}
   });
 }
 module.exports={installV2Comebacks};
