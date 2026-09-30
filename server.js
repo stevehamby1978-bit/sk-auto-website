@@ -1302,9 +1302,8 @@ if (
   }
 }
 
-sendAppointmentReminders();
-
-setInterval(sendAppointmentReminders, 15 * 60 * 1000);
+// Garavex V1: legacy appointment reminder scheduler disabled.
+// v1-reminder-runtime.js owns tenant-aware appointment reminders.
 
 // ===== S&K AUTO - AUTOMATIC BALANCE REMINDERS =====
 async function sendBalanceReminders() {
@@ -7725,18 +7724,8 @@ app.get('/stripe-connect/return', requireLoggedInOwner, async (req, res) => {
 // ===== END GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
 
 app.listen(PORT, () => {
-  console.log(`S&K Auto website running on http://localhost:${PORT}`);
-
-  // ===== AUTOMATIC BALANCE REMINDER SCHEDULER =====
-  // Wait 5 minutes after startup before the first check.
-  setTimeout(() => {
-    runAutomaticBalanceReminders();
-
-    // Check once every hour after that.
-    setInterval(() => {
-      runAutomaticBalanceReminders();
-    }, 60 * 60 * 1000);
-
-  }, 5 * 60 * 1000);
+  console.log(`Garavex V1 running on http://localhost:${PORT}`);
+  // Legacy automatic balance reminder scheduler disabled.
+  // v1-balance-reminder-runtime.js owns tenant-aware balance reminders.
 });
 
