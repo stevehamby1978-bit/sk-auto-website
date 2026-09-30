@@ -41,13 +41,68 @@ const {installV2CustomerRequests}=require('./v2-customer-requests');
 const {installV2ShopHandoff}=require('./v2-shop-handoff');
 const {installV2WorkflowSummary}=require('./v2-workflow-summary');
 const {installV2Preflight}=require('./v2-preflight');
+
 const installedApps=new WeakSet();
+const installingApps=new WeakSet();
+
 function installGaravexV2(app,db,deps){
  if(!app||!db)throw new Error('Garavex V2 requires app and db.');
  if(!deps?.requireLogin||!deps?.requireOwner)throw new Error('Garavex V2 requires authentication middleware.');
  if(installedApps.has(app)){console.warn('Garavex V2 bootstrap already installed for this app; duplicate installation skipped.');return false;}
- installV2Schema(db);
- installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2Deferred(app,db,{requireLogin:deps.requireLogin});installV2Dvi(app,db,{requireLogin:deps.requireLogin});installV2Inventory(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2CustomerPortal(app,db,{requireLogin:deps.requireLogin});installV2AdminApi(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2PermissionsAdmin(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installVinApi(app,db,{requireLogin:deps.requireLogin});installV2Communications(app,db,{requireLogin:deps.requireLogin,twilioClient:deps.twilioClient,resend:deps.resend});installV2Followups(app,db,{requireLogin:deps.requireLogin,twilioClient:deps.twilioClient});installV2Checkin(app,db,{requireLogin:deps.requireLogin});installV2Quality(app,db,{requireLogin:deps.requireLogin});installV2Comebacks(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2DashboardKpis(app,db,{requireLogin:deps.requireLogin});installV2Activity(app,db,{requireLogin:deps.requireLogin});installV2Health(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2ReleaseTests(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2Notes(app,db,{requireLogin:deps.requireLogin});installV2Dispatch(app,db,{requireLogin:deps.requireLogin});installV2StatusBoard(app,db,{requireLogin:deps.requireLogin});installV2Promises(app,db,{requireLogin:deps.requireLogin});installV2Blockers(app,db,{requireLogin:deps.requireLogin});installV2PartsRequests(app,db,{requireLogin:deps.requireLogin});installV2Keys(app,db,{requireLogin:deps.requireLogin});installV2Loaners(app,db,{requireLogin:deps.requireLogin});installV2RoadTests(app,db,{requireLogin:deps.requireLogin});installV2WorkflowGuards(app,db,{requireLogin:deps.requireLogin});installV2ReadyBoard(app,db,{requireLogin:deps.requireLogin});installV2Delivery(app,db,{requireLogin:deps.requireLogin});installV2Warranty(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2CustomerHistory(app,db,{requireLogin:deps.requireLogin});installV2WorkflowEvents(app,db,{requireLogin:deps.requireLogin});installV2Search(app,db,{requireLogin:deps.requireLogin});installV2Tasks(app,db,{requireLogin:deps.requireLogin});installV2DailyPlan(app,db,{requireLogin:deps.requireLogin});installV2Alerts(app,db,{requireLogin:deps.requireLogin});installV2CustomerRequests(app,db,{requireLogin:deps.requireLogin});installV2ShopHandoff(app,db,{requireLogin:deps.requireLogin});installV2WorkflowSummary(app,db,{requireLogin:deps.requireLogin});installV2Preflight(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
- installedApps.add(app);console.log('Garavex V2 modules installed.');return true;
+ if(installingApps.has(app))throw new Error('Garavex V2 bootstrap installation is already in progress for this app.');
+
+ installingApps.add(app);
+ try{
+  installV2Schema(db);
+  installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2Deferred(app,db,{requireLogin:deps.requireLogin});
+  installV2Dvi(app,db,{requireLogin:deps.requireLogin});
+  installV2Inventory(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2CustomerPortal(app,db,{requireLogin:deps.requireLogin});
+  installV2AdminApi(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2PermissionsAdmin(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installVinApi(app,db,{requireLogin:deps.requireLogin});
+  installV2Communications(app,db,{requireLogin:deps.requireLogin,twilioClient:deps.twilioClient,resend:deps.resend});
+  installV2Followups(app,db,{requireLogin:deps.requireLogin,twilioClient:deps.twilioClient});
+  installV2Checkin(app,db,{requireLogin:deps.requireLogin});
+  installV2Quality(app,db,{requireLogin:deps.requireLogin});
+  installV2Comebacks(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2DashboardKpis(app,db,{requireLogin:deps.requireLogin});
+  installV2Activity(app,db,{requireLogin:deps.requireLogin});
+  installV2Health(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2ReleaseTests(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2Notes(app,db,{requireLogin:deps.requireLogin});
+  installV2Dispatch(app,db,{requireLogin:deps.requireLogin});
+  installV2StatusBoard(app,db,{requireLogin:deps.requireLogin});
+  installV2Promises(app,db,{requireLogin:deps.requireLogin});
+  installV2Blockers(app,db,{requireLogin:deps.requireLogin});
+  installV2PartsRequests(app,db,{requireLogin:deps.requireLogin});
+  installV2Keys(app,db,{requireLogin:deps.requireLogin});
+  installV2Loaners(app,db,{requireLogin:deps.requireLogin});
+  installV2RoadTests(app,db,{requireLogin:deps.requireLogin});
+  installV2WorkflowGuards(app,db,{requireLogin:deps.requireLogin});
+  installV2ReadyBoard(app,db,{requireLogin:deps.requireLogin});
+  installV2Delivery(app,db,{requireLogin:deps.requireLogin});
+  installV2Warranty(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2CustomerHistory(app,db,{requireLogin:deps.requireLogin});
+  installV2WorkflowEvents(app,db,{requireLogin:deps.requireLogin});
+  installV2Search(app,db,{requireLogin:deps.requireLogin});
+  installV2Tasks(app,db,{requireLogin:deps.requireLogin});
+  installV2DailyPlan(app,db,{requireLogin:deps.requireLogin});
+  installV2Alerts(app,db,{requireLogin:deps.requireLogin});
+  installV2CustomerRequests(app,db,{requireLogin:deps.requireLogin});
+  installV2ShopHandoff(app,db,{requireLogin:deps.requireLogin});
+  installV2WorkflowSummary(app,db,{requireLogin:deps.requireLogin});
+  installV2Preflight(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installedApps.add(app);
+  console.log('Garavex V2 modules installed.');
+  return true;
+ }catch(err){
+  console.error('Garavex V2 bootstrap failed:',err?.stack||err);
+  throw err;
+ }finally{
+  installingApps.delete(app);
+ }
 }
 module.exports={installGaravexV2};
