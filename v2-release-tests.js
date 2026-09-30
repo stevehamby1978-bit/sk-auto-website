@@ -134,7 +134,12 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
         run('Parts requests with invalid quantity', `SELECT COUNT(*) n FROM v2_parts_requests WHERE quantity<=0`);
         run('Ordered parts missing vendor or ETA', `SELECT COUNT(*) n FROM v2_parts_requests WHERE status='ordered' AND (vendor IS NULL OR TRIM(vendor)='' OR eta IS NULL OR TRIM(eta)='')`);
       }
-      if (exists('v2_deliveries')) run('Delivered records without delivered workflow state', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NOT NULL AND COALESCE(r.workflow_status,'')!='delivered'`);
+      if (exists('v2_deliveries')) {
+        run('Delivered records without delivered workflow state', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NOT NULL AND COALESCE(r.workflow_status,'')!='delivered'`);
+        run('Delivered ROs missing required handoff confirmations', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE r.workflow_status='delivered' AND (d.delivered_at IS NULL OR d.customer_notified!=1 OR d.keys_returned!=1 OR d.documents_given!=1)`);
+        run('Delivery records completed while payment is not paid', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NOT NULL AND LOWER(COALESCE(r.payment_status,''))!='paid'`);
+        run('Pending delivery records attached to delivered ROs', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NULL AND r.workflow_status='delivered'`);
+      }
       if (exists('v2_ro_blockers')) run('Delivered ROs with open blockers', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_ro_blockers b ON b.repair_order_id=r.id AND b.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND b.status='open'`);
       if (exists('v2_parts_requests')) run('Delivered ROs with outstanding parts', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_parts_requests p ON p.repair_order_id=r.id AND p.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND p.status IN ('requested','ordered','received')`);
       if (exists('v2_road_tests')) run('Delivered ROs with active road tests', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_road_tests t ON t.repair_order_id=r.id AND t.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND t.status='in_progress'`);
