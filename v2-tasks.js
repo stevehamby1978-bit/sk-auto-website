@@ -17,6 +17,7 @@ function installV2Tasks(app,db,{requireLogin}){
     CREATE INDEX IF NOT EXISTS idx_v2_tasks_shop_status ON v2_tasks(shop_id,status,due_at);
     CREATE INDEX IF NOT EXISTS idx_v2_tasks_ro ON v2_tasks(shop_id,repair_order_id,status);
     CREATE INDEX IF NOT EXISTS idx_v2_tasks_assignee ON v2_tasks(shop_id,assigned_to,status,due_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_tasks_open_identity ON v2_tasks(shop_id,COALESCE(repair_order_id,0),COALESCE(assigned_to,0),title) WHERE status='open';
   `);
 
   const auth=(req,res)=>{const s=sid(req),e=eid(req);if(!validId(s)||!validId(e)){res.status(401).json({error:'A valid employee shop session is required.'});return null;}return{s,e};};
@@ -57,26 +58,24 @@ function installV2Tasks(app,db,{requireLogin}){
       const priority=requestedPriority;
       const assignedRaw=req.body?.assigned_to,assigned=assignedRaw===undefined||assignedRaw===null||assignedRaw===''?null:Number(assignedRaw);
       if(assigned!==null&&!validId(assigned))return res.status(400).json({error:'Assigned employee is invalid.'});
-      if(assigned&&!db.prepare(`SELECT id FROM employees WHERE id=? AND shop_id=?`).get(assigned,a.s))return res.status(400).json({error:'Assigned employee is not in this shop.'});
       const roRaw=req.body?.repair_order_id,ro=roRaw===undefined||roRaw===null||roRaw===''?null:Number(roRaw);
       if(ro!==null&&!validId(ro))return res.status(400).json({error:'Repair order ID is invalid.'});
-      if(ro){const order=db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,a.s);if(!order)return res.status(400).json({error:'Repair order not found.'});if(order.status==='completed'||String(order.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot create a task for a completed or delivered repair order.'});}
       const due=req.body?.due_at===undefined||req.body?.due_at===null||req.body?.due_at===''?null:String(req.body.due_at).trim();if(due&&Number.isNaN(Date.parse(due)))return res.status(400).json({error:'Task due date is invalid.'});
-      const duplicate=db.prepare(`SELECT id FROM v2_tasks WHERE shop_id=? AND status='open' AND COALESCE(repair_order_id,0)=COALESCE(?,0) AND COALESCE(assigned_to,0)=COALESCE(?,0) AND title=? LIMIT 1`).get(a.s,ro,assigned,title);
-      if(duplicate)return res.status(409).json({error:'An identical open task already exists.',id:duplicate.id});
-      const tx=db.transaction(()=>{const info=db.prepare(`INSERT INTO v2_tasks(shop_id,repair_order_id,assigned_to,title,details,priority,due_at,created_by) VALUES(?,?,?,?,?,?,?,?)`).run(a.s,ro,assigned,title,details,priority,due,a.e);db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'task.created',ro?'repair_order':'task',ro||info.lastInsertRowid,JSON.stringify({task_id:info.lastInsertRowid,title,assigned_to:assigned,priority,due_at:due}));return info.lastInsertRowid;});
-      return res.json({ok:true,id:tx()});
+      const tx=db.transaction(()=>{
+        if(assigned&&!db.prepare(`SELECT id FROM employees WHERE id=? AND shop_id=?`).get(assigned,a.s))throw new Error('ASSIGNEE_INVALID');
+        if(ro){const order=db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,a.s);if(!order)throw new Error('RO_NOT_FOUND');if(order.status==='completed'||String(order.workflow_status||'').toLowerCase()==='delivered')throw new Error('RO_CLOSED');}
+        const duplicate=db.prepare(`SELECT id FROM v2_tasks WHERE shop_id=? AND status='open' AND COALESCE(repair_order_id,0)=COALESCE(?,0) AND COALESCE(assigned_to,0)=COALESCE(?,0) AND title=? LIMIT 1`).get(a.s,ro,assigned,title);if(duplicate){const err=new Error('TASK_DUPLICATE');err.taskId=duplicate.id;throw err;}
+        const info=db.prepare(`INSERT INTO v2_tasks(shop_id,repair_order_id,assigned_to,title,details,priority,due_at,created_by) VALUES(?,?,?,?,?,?,?,?)`).run(a.s,ro,assigned,title,details,priority,due,a.e);db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'task.created',ro?'repair_order':'task',ro||info.lastInsertRowid,JSON.stringify({task_id:info.lastInsertRowid,title,assigned_to:assigned,priority,due_at:due}));return info.lastInsertRowid;
+      });
+      try{return res.json({ok:true,id:tx()});}catch(err){const code=String(err.message||'');if(code==='ASSIGNEE_INVALID')return res.status(400).json({error:'Assigned employee is not in this shop.'});if(code==='RO_NOT_FOUND')return res.status(400).json({error:'Repair order not found.'});if(code==='RO_CLOSED')return res.status(409).json({error:'Cannot create a task for a completed or delivered repair order.'});if(code==='TASK_DUPLICATE'||code.includes('UNIQUE constraint failed')){const existing=db.prepare(`SELECT id FROM v2_tasks WHERE shop_id=? AND status='open' AND COALESCE(repair_order_id,0)=COALESCE(?,0) AND COALESCE(assigned_to,0)=COALESCE(?,0) AND title=? LIMIT 1`).get(a.s,ro,assigned,title);return res.status(409).json({error:'An identical open task already exists.',id:err.taskId||existing?.id||null});}throw err;}
     }catch(err){console.error('Garavex V2 task creation error:',err);return res.status(500).json({error:'Unable to create the task.'});}
   });
 
   app.patch('/api/v2/tasks/:id/complete',requireLogin,requireTasks,(req,res)=>{
     try{
       const a=auth(req,res);if(!a)return;const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Valid task ID is required.'});
-      const task=db.prepare(`SELECT t.*,r.status repair_order_status,r.workflow_status FROM v2_tasks t LEFT JOIN repair_orders r ON r.id=t.repair_order_id AND r.shop_id=t.shop_id WHERE t.id=? AND t.shop_id=? AND t.status='open'`).get(id,a.s);
-      if(!task)return res.status(404).json({error:'Open task not found.'});
-      if(task.repair_order_id&&(task.repair_order_status==='completed'||String(task.workflow_status||'').toLowerCase()==='delivered'))return res.status(409).json({error:'Repair-order tasks cannot be changed after completion or delivery.'});
-      const tx=db.transaction(()=>{const changed=db.prepare(`UPDATE v2_tasks SET status='completed',completed_by=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status='open'`).run(a.e,id,a.s);if(changed.changes!==1)throw new Error('TASK_CHANGED');db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'task.completed',task.repair_order_id?'repair_order':'task',task.repair_order_id||id,JSON.stringify({task_id:id,title:task.title,assigned_to:task.assigned_to}));});
-      try{tx();}catch(err){return res.status(409).json({error:'Task changed before completion could be saved.'});}
+      const tx=db.transaction(()=>{const task=db.prepare(`SELECT t.*,r.status repair_order_status,r.workflow_status FROM v2_tasks t LEFT JOIN repair_orders r ON r.id=t.repair_order_id AND r.shop_id=t.shop_id WHERE t.id=? AND t.shop_id=? AND t.status='open'`).get(id,a.s);if(!task)throw new Error('TASK_NOT_FOUND');if(task.repair_order_id&&(task.repair_order_status==='completed'||String(task.workflow_status||'').toLowerCase()==='delivered'))throw new Error('RO_CLOSED');const changed=db.prepare(`UPDATE v2_tasks SET status='completed',completed_by=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status='open'`).run(a.e,id,a.s);if(changed.changes!==1)throw new Error('TASK_CHANGED');db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'task.completed',task.repair_order_id?'repair_order':'task',task.repair_order_id||id,JSON.stringify({task_id:id,title:task.title,assigned_to:task.assigned_to}));});
+      try{tx();}catch(err){const code=String(err.message||'');if(code==='TASK_NOT_FOUND')return res.status(404).json({error:'Open task not found.'});if(code==='RO_CLOSED')return res.status(409).json({error:'Repair-order tasks cannot be changed after completion or delivery.'});return res.status(409).json({error:'Task changed before completion could be saved.'});}
       return res.json({ok:true});
     }catch(err){console.error('Garavex V2 task completion error:',err);return res.status(500).json({error:'Unable to complete the task.'});}
   });
