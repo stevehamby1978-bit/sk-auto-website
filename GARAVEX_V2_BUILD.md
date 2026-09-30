@@ -17,7 +17,7 @@ This branch is the isolated development baseline for Garavex V2.
 6. Technician time clock and actual-vs-billed labor
 7. Deferred/declined service tracking and follow-up
 8. Expanded automated customer SMS/status notifications
-9. Customer portal for approvals, inspections, invoices, payments, service history
+9. Customer portal for approvals, inspections, invoices, Stripe payments, service history
 10. Inventory, vendors, purchase orders, parts status
 11. Expanded KPI/profitability reporting
 12. Global customer/vehicle/VIN/RO search
@@ -27,8 +27,15 @@ This branch is the isolated development baseline for Garavex V2.
 16. Mobile/tablet usability improvements
 17. V2 onboarding and shop configuration
 
+## Payments and accounting decision
+- Garavex V2 is Stripe-only for integrated payments.
+- Preserve and expand Stripe Connect/payment functionality.
+- QuickBooks is intentionally excluded from the V2 product and V2 user interface.
+- V2 must not require QuickBooks credentials, connection, invoice sync, payment sync, or QuickBooks setup.
+- Legacy QuickBooks fields/code inherited from the V1 baseline may remain dormant during development only when removing them would create unnecessary migration risk; they are not part of the V2 feature set and must not be invoked by V2 workflows.
+
 ## Compatibility requirements
-Preserve multi-shop `shop_id` isolation and existing authentication, appointments, estimates, repair orders, invoices/payments, Stripe Connect, QuickBooks, Twilio, customer/vehicle history, employee management, and shop settings.
+Preserve multi-shop `shop_id` isolation and existing authentication, appointments, estimates, repair orders, invoices/payments, Stripe Connect, Twilio, customer/vehicle history, employee management, and shop settings. Do not carry QuickBooks forward as a V2 integration.
 
 ## Delivery target
 A tested `Garavex-V2.zip` built from this branch after V2 implementation and validation.
