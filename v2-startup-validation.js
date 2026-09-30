@@ -5,6 +5,7 @@
 'use strict';
 const fs=require('fs');
 const path=require('path');
+const Module=require('module');
 const root=__dirname;
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 const exists=name=>fs.existsSync(path.join(root,name));
@@ -12,6 +13,10 @@ const fail=[];
 const warn=[];
 const ok=[];
 function check(condition,message){(condition?ok:fail).push(message);return condition;}
+function syntaxCheck(file){
+ try{new Function(read(file));ok.push(`JavaScript syntax valid: ${file}`);return true;}
+ catch(err){fail.push(`JavaScript syntax invalid: ${file}: ${err.message}`);return false;}
+}
 
 const bootstrapName='v2-bootstrap.js';
 check(exists(bootstrapName),`${bootstrapName} exists`);
@@ -28,10 +33,13 @@ check(!/require\(['"]\.\/v2-api['"]\)/.test(bootstrap),'Retired v2-api.js is not
 check(/installV2Schema\(db\)/.test(bootstrap),'V2 schema installs from centralized bootstrap');
 check(/installedApps\s*=\s*new WeakSet\(\)/.test(bootstrap)&&/installedApps\.has\(app\)/.test(bootstrap),'Bootstrap has duplicate-install guard');
 
-const jsFiles=fs.readdirSync(root).filter(f=>/^v2-.*\.js$/.test(f)&&f!==path.basename(__filename));
+const jsFiles=fs.readdirSync(root).filter(f=>/^v2-.*\.js$/.test(f));
+for(const file of jsFiles)syntaxCheck(file);
+for(const file of ['garavex-start.js'])if(exists(file))syntaxCheck(file);
+
 const routes=new Map();
 const routeRe=/app\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]/g;
-for(const file of jsFiles){
+for(const file of jsFiles.filter(f=>f!==path.basename(__filename))){
  const src=read(file);let r;
  while((r=routeRe.exec(src))){
   const key=`${r[1].toUpperCase()} ${r[2]}`;
@@ -67,8 +75,15 @@ if(exists('package.json')){
  try{
   const pkg=JSON.parse(read('package.json'));
   check(pkg?.scripts?.start==='node garavex-start.js','Production start command uses the V2 launcher');
+  check(pkg?.scripts?.['validate:v2']==='node v2-startup-validation.js','V2 validation command is registered');
   if(pkg?.scripts?.['start:legacy']!=='node server.js')warn.push('Legacy start command is not explicitly preserved as node server.js.');
  }catch(err){fail.push(`package.json could not be parsed: ${err.message}`);}
+}
+
+if(check(exists('Dockerfile'),'Dockerfile exists')){
+ const docker=read('Dockerfile');
+ check(/CMD\s*\[\s*["']node["']\s*,\s*["']garavex-start\.js["']\s*\]/.test(docker),'Docker starts through garavex-start.js');
+ if(/CMD\s*\[\s*["']node["']\s*,\s*["']server\.js["']\s*\]/.test(docker))fail.push('Dockerfile still contains a legacy-only server.js CMD.');
 }
 
 const summary={ok:fail.length===0,passed:ok.length,failed:fail.length,warnings:warn.length,failures:fail,warningDetails:warn};
