@@ -45,6 +45,13 @@ if(check(exists('v2-schema.js'),'v2-schema.js exists')){
  check(/applyV2Schema\(db\)/.test(schema),'V2 schema changes are grouped behind the transactional migration wrapper');
 }
 
+if(check(exists('v2-permissions.js'),'v2-permissions.js exists')){
+ const permissions=read('v2-permissions.js');
+ check(/WHERE\s+id\s*=\s*\?\s+AND\s+shop_id\s*=\s*\?\s+AND\s+active\s*=\s*1/i.test(permissions),'V2 live employee authorization rejects inactive employees');
+ check(/loadCurrentEmployee\(db,\s*sessionEmployee\)/.test(permissions),'V2 permission middleware authorizes from the live employee row');
+ check(/req\.v2ShopId\s*=\s*Number\(employee\.shop_id\)/.test(permissions),'V2 permission middleware derives request shop identity from the live employee row');
+}
+
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
  if(check(exists(file),`${file} exists`)){
   const src=read(file);
