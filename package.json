@@ -5,7 +5,7 @@
   "description": "Garavex multi-shop automotive management platform with Stripe Connect payments",
   "main": "server.js",
   "scripts": {
-    "start": "node -r ./v1-scheduling-migration.js -r ./v1-appointment-isolation-preload.js -r ./v1-public-scheduling.js -r ./v1-reminder-runtime.js -r ./v1-balance-reminder-runtime.js -r ./v1-customer-links-preload.js -r ./v1-core-isolation-preload.js -r ./v1-payment-receipt-preload.js -r ./v1-estimate-preload.js -r ./v1-manual-balance-reminder-preload.js server.js",
+    "start": "node -r ./v1-scheduling-migration.js -r ./v1-appointment-isolation-preload.js -r ./v1-public-scheduling.js -r ./v1-reminder-runtime.js -r ./v1-balance-reminder-runtime.js -r ./v1-customer-links-preload.js -r ./v1-core-isolation-preload.js -r ./v1-payment-receipt-preload.js -r ./v1-estimate-preload.js -r ./v1-manual-balance-reminder-preload.js -r ./v1-final-safety-preload.js server.js",
     "view-bookings": "node view-bookings.js",
     "export-bookings": "node export-bookings.js"
   },
