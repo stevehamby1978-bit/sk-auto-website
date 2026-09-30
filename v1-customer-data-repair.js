@@ -81,7 +81,32 @@ setImmediate(()=>{
       `).run(skShop.id,skShop.id).changes||0);
     }
 
-    console.log(`V1 Thomas Eubanks ownership repair: customer_id=${customerId||'none'}, customer rows moved=${customerMove}, appointment rows moved=${appointmentMoves}, target shop #${skShop.id} (${skShop.name}).`);
+
+    let repairedEstimateOrders=0;
+    if(tableExists(db,'repair_orders')&&tableExists(db,'estimates')){
+      const roCols=cols(db,'repair_orders'),estCols=cols(db,'estimates');
+      if(roCols.has('estimate_id')&&roCols.has('shop_id')&&estCols.has('shop_id')){
+        const result=db.prepare(`
+          UPDATE repair_orders
+          SET shop_id=(
+            SELECT e.shop_id
+            FROM estimates e
+            WHERE e.id=repair_orders.estimate_id
+          )
+          WHERE estimate_id IS NOT NULL
+            AND EXISTS(
+              SELECT 1
+              FROM estimates e
+              WHERE e.id=repair_orders.estimate_id
+                AND e.shop_id IS NOT NULL
+                AND (repair_orders.shop_id IS NULL OR repair_orders.shop_id<>e.shop_id)
+            )
+        `).run();
+        repairedEstimateOrders=Number(result.changes||0);
+      }
+    }
+
+    console.log(`V1 Thomas Eubanks ownership repair: customer_id=${customerId||'none'}, customer rows moved=${customerMove}, appointment rows moved=${appointmentMoves}, estimate repair-order ownership rows repaired=${repairedEstimateOrders}, target shop #${skShop.id} (${skShop.name}).`);
   }catch(err){
     console.error('V1 customer data repair failed:',err);
   }finally{
