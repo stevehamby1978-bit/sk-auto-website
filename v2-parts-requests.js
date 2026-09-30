@@ -1,10 +1,132 @@
-const {permissionMiddleware}=require('./v2-permissions');
-function installV2PartsRequests(app,db,{requireLogin}){
- const sid=req=>Number(req.session.employee.shop_id),eid=req=>Number(req.session.employee.id),requireParts=permissionMiddleware('parts');
- db.exec(`CREATE TABLE IF NOT EXISTS v2_parts_requests(id INTEGER PRIMARY KEY AUTOINCREMENT,shop_id INTEGER NOT NULL,repair_order_id INTEGER NOT NULL,description TEXT NOT NULL,quantity REAL NOT NULL DEFAULT 1,status TEXT NOT NULL DEFAULT 'requested',vendor TEXT,eta DATETIME,requested_by INTEGER,requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_by INTEGER,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);CREATE INDEX IF NOT EXISTS idx_v2_parts_requests_shop_status ON v2_parts_requests(shop_id,status,requested_at);`);
- const allowed=['requested','ordered','received','installed','cancelled'],rank={requested:0,ordered:1,received:2,installed:3,cancelled:4};
- app.get('/api/v2/parts-requests',requireLogin,requireParts,(req,res)=>{const s=sid(req);res.json(db.prepare(`SELECT p.*,c.name customer_name,v.year,v.make,v.model,e.name requested_by_name FROM v2_parts_requests p JOIN repair_orders r ON r.id=p.repair_order_id AND r.shop_id=p.shop_id JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id LEFT JOIN employees e ON e.id=p.requested_by AND e.shop_id=p.shop_id WHERE p.shop_id=? AND p.status!='cancelled' ORDER BY CASE p.status WHEN 'requested' THEN 0 WHEN 'ordered' THEN 1 WHEN 'received' THEN 2 ELSE 3 END,p.requested_at LIMIT 250`).all(s));});
- app.post('/api/v2/repair-orders/:id/parts-requests',requireLogin,requireParts,(req,res)=>{const s=sid(req),ro=Number(req.params.id),description=String(req.body.description||'').trim().slice(0,1000),qty=Number(req.body.quantity??1);if(!Number.isInteger(ro)||ro<=0)return res.status(400).json({error:'Valid repair order ID is required.'});const order=db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,s);if(!order)return res.status(404).json({error:'Repair order not found.'});if(String(order.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot request parts for a delivered repair order.'});if(!description)return res.status(400).json({error:'Part description is required.'});if(!Number.isFinite(qty)||qty<=0||qty>10000)return res.status(400).json({error:'Part quantity must be greater than zero.'});const duplicate=db.prepare(`SELECT id FROM v2_parts_requests WHERE shop_id=? AND repair_order_id=? AND description=? AND quantity=? AND status IN ('requested','ordered','received') LIMIT 1`).get(s,ro,description,qty);if(duplicate)return res.status(409).json({error:'An identical active parts request already exists.',id:duplicate.id});const tx=db.transaction(()=>{const info=db.prepare(`INSERT INTO v2_parts_requests(shop_id,repair_order_id,description,quantity,requested_by)VALUES(?,?,?,?,?)`).run(s,ro,description,qty,eid(req));db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details)VALUES(?,?,?,?,?,?)`).run(s,eid(req),'parts_request.created','repair_order',ro,JSON.stringify({parts_request_id:info.lastInsertRowid,description,quantity:qty}));return info.lastInsertRowid;});const id=tx();res.json({ok:true,id});});
- app.patch('/api/v2/parts-requests/:id',requireLogin,requireParts,(req,res)=>{const s=sid(req),id=Number(req.params.id),status=String(req.body.status||'');if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'Valid parts request ID is required.'});if(!allowed.includes(status))return res.status(400).json({error:'Invalid parts status.'});const row=db.prepare(`SELECT p.*,r.workflow_status FROM v2_parts_requests p JOIN repair_orders r ON r.id=p.repair_order_id AND r.shop_id=p.shop_id WHERE p.id=? AND p.shop_id=?`).get(id,s);if(!row)return res.status(404).json({error:'Parts request not found.'});if(String(row.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot change parts workflow after vehicle delivery.'});if(row.status==='cancelled'||row.status==='installed')return res.status(409).json({error:`This parts request is already ${row.status}.`});if(status!=='cancelled'&&rank[status]<rank[row.status])return res.status(409).json({error:'Parts status cannot move backward.'});const vendor=req.body.vendor===undefined?row.vendor:String(req.body.vendor||'').trim().slice(0,300),eta=req.body.eta===undefined?row.eta:(req.body.eta||null);if(status==='ordered'&&!vendor)return res.status(400).json({error:'Vendor is required when marking a part ordered.'});if(eta!==null&&eta!==''&&Number.isNaN(Date.parse(String(eta))))return res.status(400).json({error:'Valid ETA is required.'});if(status===row.status&&vendor===row.vendor&&String(eta||'')===String(row.eta||''))return res.json({ok:true,status,unchanged:true});const tx=db.transaction(()=>{const changed=db.prepare(`UPDATE v2_parts_requests SET status=?,vendor=?,eta=?,updated_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status=?`).run(status,vendor,eta||null,eid(req),id,s,row.status);if(changed.changes!==1)throw new Error('Parts request changed before update.');db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details)VALUES(?,?,?,?,?,?)`).run(s,eid(req),'parts_request.updated','repair_order',row.repair_order_id,JSON.stringify({parts_request_id:id,previous_status:row.status,status,previous_vendor:row.vendor,vendor,previous_eta:row.eta,eta:eta||null}));});try{tx();}catch(e){return res.status(409).json({error:'Parts request changed before this update could be saved.'});}res.json({ok:true,status});});
+const { permissionMiddleware } = require('./v2-permissions');
+
+function installV2PartsRequests(app, db, { requireLogin }) {
+  if (!app || !db) throw new Error('V2 parts requests require app and db.');
+  if (!requireLogin) throw new Error('V2 parts requests require login middleware.');
+
+  const requireParts = permissionMiddleware('parts');
+  const validId = value => Number.isInteger(value) && value > 0;
+  const sid = req => Number(req.session?.employee?.shop_id || 0);
+  const eid = req => Number(req.session?.employee?.id || 0);
+  const allowed = ['requested','ordered','received','installed','cancelled'];
+  const rank = { requested:0, ordered:1, received:2, installed:3, cancelled:4 };
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS v2_parts_requests(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      repair_order_id INTEGER NOT NULL,
+      description TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'requested',
+      vendor TEXT,
+      eta DATETIME,
+      requested_by INTEGER,
+      requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by INTEGER,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_v2_parts_requests_shop_status ON v2_parts_requests(shop_id,status,requested_at);
+    CREATE INDEX IF NOT EXISTS idx_v2_parts_requests_ro ON v2_parts_requests(shop_id,repair_order_id,status);
+  `);
+
+  const auth = (req, res) => {
+    const s = sid(req), e = eid(req);
+    if (!validId(s) || !validId(e)) {
+      res.status(401).json({ error: 'A valid employee shop session is required.' });
+      return null;
+    }
+    return { s, e };
+  };
+
+  app.get('/api/v2/parts-requests', requireLogin, requireParts, (req, res) => {
+    try {
+      const a = auth(req, res); if (!a) return;
+      const rows = db.prepare(`
+        SELECT p.*,c.name customer_name,v.year,v.make,v.model,e.name requested_by_name
+        FROM v2_parts_requests p
+        JOIN repair_orders r ON r.id=p.repair_order_id AND r.shop_id=p.shop_id
+        JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
+        LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id
+        LEFT JOIN employees e ON e.id=p.requested_by AND e.shop_id=p.shop_id
+        WHERE p.shop_id=? AND p.status!='cancelled'
+        ORDER BY CASE p.status WHEN 'requested' THEN 0 WHEN 'ordered' THEN 1 WHEN 'received' THEN 2 ELSE 3 END,p.requested_at,p.id
+        LIMIT 250
+      `).all(a.s);
+      return res.json(rows);
+    } catch (err) {
+      console.error('Garavex V2 parts request list error:', err);
+      return res.status(500).json({ error: 'Unable to load parts requests.' });
+    }
+  });
+
+  app.post('/api/v2/repair-orders/:id/parts-requests', requireLogin, requireParts, (req, res) => {
+    try {
+      const a = auth(req, res); if (!a) return;
+      const ro = Number(req.params.id);
+      if (!validId(ro)) return res.status(400).json({ error: 'Valid repair order ID is required.' });
+      const order = db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,a.s);
+      if (!order) return res.status(404).json({ error: 'Repair order not found.' });
+      if (order.status === 'completed' || String(order.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'Completed or delivered repair orders cannot receive new parts requests.' });
+
+      const description = String(req.body?.description || '').trim().slice(0,1000);
+      const qty = Number(req.body?.quantity ?? 1);
+      if (!description) return res.status(400).json({ error: 'Part description is required.' });
+      if (!Number.isFinite(qty) || qty <= 0 || qty > 10000) return res.status(400).json({ error: 'Part quantity must be greater than zero.' });
+
+      const duplicate = db.prepare(`SELECT id FROM v2_parts_requests WHERE shop_id=? AND repair_order_id=? AND description=? AND quantity=? AND status IN ('requested','ordered','received') LIMIT 1`).get(a.s,ro,description,qty);
+      if (duplicate) return res.status(409).json({ error: 'An identical active parts request already exists.', id: duplicate.id });
+
+      const tx = db.transaction(() => {
+        const info = db.prepare(`INSERT INTO v2_parts_requests(shop_id,repair_order_id,description,quantity,requested_by) VALUES(?,?,?,?,?)`).run(a.s,ro,description,qty,a.e);
+        db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'parts_request.created','repair_order',ro,JSON.stringify({ parts_request_id:info.lastInsertRowid,description,quantity:qty }));
+        return info.lastInsertRowid;
+      });
+      return res.json({ ok:true,id:tx() });
+    } catch (err) {
+      console.error('Garavex V2 parts request creation error:', err);
+      return res.status(500).json({ error: 'Unable to create the parts request.' });
+    }
+  });
+
+  app.patch('/api/v2/parts-requests/:id', requireLogin, requireParts, (req, res) => {
+    try {
+      const a = auth(req, res); if (!a) return;
+      const id = Number(req.params.id);
+      const status = String(req.body?.status || '').trim().toLowerCase();
+      if (!validId(id)) return res.status(400).json({ error: 'Valid parts request ID is required.' });
+      if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid parts status.' });
+
+      const row = db.prepare(`
+        SELECT p.*,r.status repair_order_status,r.workflow_status
+        FROM v2_parts_requests p
+        JOIN repair_orders r ON r.id=p.repair_order_id AND r.shop_id=p.shop_id
+        WHERE p.id=? AND p.shop_id=?
+      `).get(id,a.s);
+      if (!row) return res.status(404).json({ error: 'Parts request not found.' });
+      if (row.repair_order_status === 'completed' || String(row.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'Cannot change parts workflow after repair-order completion or vehicle delivery.' });
+      if (row.status === 'cancelled' || row.status === 'installed') return res.status(409).json({ error: `This parts request is already ${row.status}.` });
+      if (status !== 'cancelled' && rank[status] < rank[row.status]) return res.status(409).json({ error: 'Parts status cannot move backward.' });
+
+      const vendor = req.body?.vendor === undefined ? row.vendor : String(req.body.vendor || '').trim().slice(0,300);
+      const rawEta = req.body?.eta === undefined ? row.eta : req.body.eta;
+      const eta = rawEta === null || rawEta === '' ? null : rawEta;
+      if (status === 'ordered' && !vendor) return res.status(400).json({ error: 'Vendor is required when marking a part ordered.' });
+      if (eta !== null && Number.isNaN(Date.parse(String(eta)))) return res.status(400).json({ error: 'Valid ETA is required.' });
+      if (status === row.status && vendor === row.vendor && String(eta || '') === String(row.eta || '')) return res.json({ ok:true,status,unchanged:true });
+
+      const tx = db.transaction(() => {
+        const changed = db.prepare(`UPDATE v2_parts_requests SET status=?,vendor=?,eta=?,updated_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND status=?`).run(status,vendor,eta,a.e,id,a.s,row.status);
+        if (changed.changes !== 1) throw new Error('Parts request changed before update.');
+        db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'parts_request.updated','repair_order',row.repair_order_id,JSON.stringify({ parts_request_id:id,previous_status:row.status,status,previous_vendor:row.vendor,vendor,previous_eta:row.eta,eta }));
+      });
+      try { tx(); } catch (err) { return res.status(409).json({ error: 'Parts request changed before this update could be saved.' }); }
+      return res.json({ ok:true,status });
+    } catch (err) {
+      console.error('Garavex V2 parts request update error:', err);
+      return res.status(500).json({ error: 'Unable to update the parts request.' });
+    }
+  });
 }
-module.exports={installV2PartsRequests};
+
+module.exports = { installV2PartsRequests };
