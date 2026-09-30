@@ -45,21 +45,24 @@ function installV2Health(app, db, { requireLogin, requireOwner }) {
       let dbWriteDetail = '';
       try { db.prepare(`SELECT 1 AS ok`).get(); dbRead = true; } catch {}
       try {
-        // Older builds could leave this diagnostic table behind. Remove only our reserved probe table
-        // before testing so one stale artifact cannot create a false release blocker forever.
-        db.exec('DROP TABLE IF EXISTS v2_health_probe');
-        db.exec('SAVEPOINT v2_health_write');
-        db.prepare(`CREATE TABLE v2_health_probe(id INTEGER PRIMARY KEY,checked_at DATETIME)`).run();
-        db.prepare(`INSERT INTO v2_health_probe(id,checked_at) VALUES(1,CURRENT_TIMESTAMP)`).run();
-        db.exec('ROLLBACK TO v2_health_write');
-        db.exec('RELEASE v2_health_write');
-        dbWrite = !table('v2_health_probe');
-        if (!dbWrite) dbWriteDetail = 'Health probe rollback left a probe table behind.';
+        // Probe writes inside a uniquely named savepoint and TEMP table. TEMP schema keeps
+        // the probe connection-local and avoids collisions if two owners run health checks together.
+        const suffix = `${process.pid}_${Date.now()}_${Math.random().toString(16).slice(2)}`.replace(/[^a-zA-Z0-9_]/g,'');
+        const savepoint = `v2_health_${suffix}`;
+        const probe = `v2_health_probe_${suffix}`;
+        db.exec(`SAVEPOINT ${savepoint}`);
+        db.exec(`CREATE TEMP TABLE ${probe}(id INTEGER PRIMARY KEY,checked_at TEXT)`);
+        db.prepare(`INSERT INTO ${probe}(id,checked_at) VALUES(1,CURRENT_TIMESTAMP)`).run();
+        const wrote = Number(db.prepare(`SELECT COUNT(*) n FROM temp.${probe}`).get()?.n || 0) === 1;
+        db.exec(`ROLLBACK TO ${savepoint}`);
+        db.exec(`RELEASE ${savepoint}`);
+        const tempExists = Boolean(db.prepare(`SELECT 1 FROM sqlite_temp_master WHERE type='table' AND name=?`).get(probe));
+        dbWrite = wrote && !tempExists;
+        if (!dbWrite) dbWriteDetail = 'Health write probe did not roll back cleanly.';
       } catch (err) {
         dbWriteDetail = err?.message || 'Database write probe failed.';
-        try { db.exec('ROLLBACK TO v2_health_write'); } catch {}
-        try { db.exec('RELEASE v2_health_write'); } catch {}
-        try { db.exec('DROP TABLE IF EXISTS v2_health_probe'); } catch {}
+        // A failed TEMP probe is connection-local and its savepoint name is unique; do not
+        // issue a broad DROP that could interfere with another health request.
       }
 
       let foreignKeys = false;
