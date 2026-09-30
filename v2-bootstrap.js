@@ -9,6 +9,7 @@ const { installV2Api } = require('./v2-api');
 const { installV2AdminApi } = require('./v2-admin-api');
 const { installVinApi } = require('./v2-vin');
 const { installV2Communications } = require('./v2-communications');
+const { installV2Followups } = require('./v2-followups');
 
 function installGaravexV2(app, db, deps) {
   if (!app || !db) throw new Error('Garavex V2 requires app and db.');
@@ -37,6 +38,11 @@ function installGaravexV2(app, db, deps) {
     requireLogin: deps.requireLogin,
     twilioClient: deps.twilioClient,
     resend: deps.resend
+  });
+
+  installV2Followups(app, db, {
+    requireLogin: deps.requireLogin,
+    twilioClient: deps.twilioClient
   });
 
   console.log('Garavex V2 modules installed.');
