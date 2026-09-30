@@ -21,15 +21,7 @@ function assertBaseSchema(db) {
   }
 }
 
-function installV2Schema(db) {
-  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
-    throw new Error('Garavex V2 schema requires an initialized SQLite database connection.');
-  }
-
-  // V2 extends these V1 tables. Fail early with a clear startup error instead of
-  // partially installing V2 and then failing on a later ALTER TABLE statement.
-  assertBaseSchema(db);
-
+function applyV2Schema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS dvi_inspections (
       id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, repair_order_id INTEGER, customer_id INTEGER, vehicle_id INTEGER, technician_id INTEGER,
@@ -136,5 +128,26 @@ function installV2Schema(db) {
   ensureColumn(db, 'shops', 'parts_markup_percent', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'shops', 'dvi_enabled', 'INTEGER NOT NULL DEFAULT 1');
   ensureColumn(db, 'shops', 'customer_portal_enabled', 'INTEGER NOT NULL DEFAULT 1');
+}
+
+function installV2Schema(db) {
+  if (!db || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
+    throw new Error('Garavex V2 schema requires an initialized SQLite database connection.');
+  }
+
+  // V2 extends these V1 tables. Fail before opening the migration transaction if
+  // the base schema is not ready.
+  assertBaseSchema(db);
+
+  // SQLite DDL is transactional. If any V2 table/index/column migration fails,
+  // roll the entire V2 schema change back instead of leaving a half-migrated DB.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    applyV2Schema(db);
+    db.exec('COMMIT');
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    throw new Error(`Garavex V2 schema migration failed and was rolled back: ${err.message}`, { cause: err });
+  }
 }
 module.exports = { installV2Schema };
