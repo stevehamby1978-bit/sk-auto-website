@@ -39,52 +39,49 @@ setImmediate(()=>{
       ORDER BY id
     `).all();
 
-    if(matches.length!==1){
-      if(matches.length>1){
-        console.warn('V1 customer data repair: multiple Thomas Eubanks records found; no automatic reassignment performed.');
+    let customerMove=0;
+    let customerId=null;
+
+    if(matches.length===1){
+      const customer=matches[0];
+      customerId=Number(customer.id);
+
+      if(Number(customer.shop_id)!==Number(skShop.id)){
+        const tx=db.transaction(()=>{
+          const vehicleCols=cols(db,'vehicles');
+          if(vehicleCols.has('customer_id')&&vehicleCols.has('shop_id')){
+            db.prepare('UPDATE vehicles SET shop_id=? WHERE customer_id=?').run(skShop.id,customer.id);
+          }
+
+          const estimateCols=cols(db,'estimates');
+          if(estimateCols.has('customer_id')&&estimateCols.has('shop_id')){
+            db.prepare('UPDATE estimates SET shop_id=? WHERE customer_id=?').run(skShop.id,customer.id);
+          }
+
+          const roCols=cols(db,'repair_orders');
+          if(roCols.has('customer_id')&&roCols.has('shop_id')){
+            db.prepare('UPDATE repair_orders SET shop_id=? WHERE customer_id=?').run(skShop.id,customer.id);
+          }
+
+          customerMove=Number(db.prepare('UPDATE customers SET shop_id=? WHERE id=?').run(skShop.id,customer.id).changes||0);
+        });
+        tx();
       }
-      return;
+    }else if(matches.length>1){
+      console.warn('V1 customer data repair: multiple Thomas Eubanks customer records found; customer reassignment skipped.');
     }
-
-    const customer=matches[0];
-    if(Number(customer.shop_id)===Number(skShop.id)){
-      console.log('V1 customer data repair: Thomas Eubanks already belongs to S&K Auto.');
-      return;
-    }
-
-    const tx=db.transaction(()=>{
-      const vehicleCols=cols(db,'vehicles');
-      if(vehicleCols.has('customer_id')&&vehicleCols.has('shop_id')){
-        db.prepare('UPDATE vehicles SET shop_id=? WHERE customer_id=?').run(skShop.id,customer.id);
-      }
-
-      const estimateCols=cols(db,'estimates');
-      if(estimateCols.has('customer_id')&&estimateCols.has('shop_id')){
-        db.prepare('UPDATE estimates SET shop_id=? WHERE customer_id=?').run(skShop.id,customer.id);
-      }
-
-      const roCols=cols(db,'repair_orders');
-      if(roCols.has('customer_id')&&roCols.has('shop_id')){
-        db.prepare('UPDATE repair_orders SET shop_id=? WHERE customer_id=?').run(skShop.id,customer.id);
-      }
-
-      db.prepare('UPDATE customers SET shop_id=? WHERE id=?').run(skShop.id,customer.id);
-    });
-
-    tx();
 
     let appointmentMoves=0;
     if(tableExists(db,'bookings')&&cols(db,'bookings').has('shop_id')&&cols(db,'bookings').has('name')){
-      const moved=db.prepare(`
+      appointmentMoves=Number(db.prepare(`
         UPDATE bookings
         SET shop_id=?
         WHERE LOWER(TRIM(name))='thomas eubanks'
           AND (shop_id IS NULL OR shop_id<>?)
-      `).run(skShop.id,skShop.id);
-      appointmentMoves=Number(moved.changes||0);
+      `).run(skShop.id,skShop.id).changes||0);
     }
 
-    console.log(`V1 customer data repair: moved Thomas Eubanks customer #${customer.id} to shop #${skShop.id} (${skShop.name}); appointment rows moved: ${appointmentMoves}.`);
+    console.log(`V1 Thomas Eubanks ownership repair: customer_id=${customerId||'none'}, customer rows moved=${customerMove}, appointment rows moved=${appointmentMoves}, target shop #${skShop.id} (${skShop.name}).`);
   }catch(err){
     console.error('V1 customer data repair failed:',err);
   }finally{
