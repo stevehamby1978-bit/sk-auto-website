@@ -7,6 +7,7 @@ function installV2Loaners(app,db,{requireLogin}){
   const validId=v=>Number.isInteger(v)&&v>0;
   const sid=req=>Number(req.session?.employee?.shop_id||0);
   const eid=req=>Number(req.session?.employee?.id||0);
+  const fuelValues=['empty','1/4','1/2','3/4','full'];
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS v2_loaners(id INTEGER PRIMARY KEY AUTOINCREMENT,shop_id INTEGER NOT NULL,name TEXT NOT NULL,year TEXT,make TEXT,model TEXT,plate TEXT,vin TEXT,status TEXT NOT NULL DEFAULT 'available',active INTEGER NOT NULL DEFAULT 1);
@@ -16,15 +17,18 @@ function installV2Loaners(app,db,{requireLogin}){
     CREATE INDEX IF NOT EXISTS idx_v2_loaner_assignments_ro ON v2_loaner_assignments(shop_id,repair_order_id,returned_at);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_loaner_one_open_vehicle ON v2_loaner_assignments(shop_id,loaner_id) WHERE returned_at IS NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_loaner_one_open_ro ON v2_loaner_assignments(shop_id,repair_order_id) WHERE returned_at IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_loaner_active_vin ON v2_loaners(shop_id,UPPER(vin)) WHERE active=1 AND vin IS NOT NULL AND TRIM(vin)!='';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_loaner_active_plate ON v2_loaners(shop_id,UPPER(plate)) WHERE active=1 AND plate IS NOT NULL AND TRIM(plate)!='';
   `);
 
   const auth=(req,res)=>{const s=sid(req),e=eid(req);if(!validId(s)||!validId(e)){res.status(401).json({error:'A valid employee shop session is required.'});return null;}return{s,e};};
+  const normalizeDue=value=>{if(value===undefined||value===null||value==='')return null;const ms=Date.parse(String(value));if(Number.isNaN(ms))return null;return new Date(ms).toISOString();};
 
   app.get('/api/v2/loaners',requireLogin,requireLoaners,(req,res)=>{
     try{
       const a=auth(req,res);if(!a)return;
       const vehicles=db.prepare(`SELECT * FROM v2_loaners WHERE shop_id=? AND active=1 ORDER BY name LIMIT 250`).all(a.s);
-      const assignments=db.prepare(`SELECT a.*,l.name loaner_name,c.name customer_name,v.year vehicle_year,v.make vehicle_make,v.model vehicle_model FROM v2_loaner_assignments a JOIN v2_loaners l ON l.id=a.loaner_id AND l.shop_id=a.shop_id JOIN customers c ON c.id=a.customer_id AND c.shop_id=a.shop_id JOIN repair_orders r ON r.id=a.repair_order_id AND r.shop_id=a.shop_id AND r.customer_id=a.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id WHERE a.shop_id=? AND a.returned_at IS NULL ORDER BY a.due_back_at,a.id LIMIT 250`).all(a.s);
+      const assignments=db.prepare(`SELECT a.*,l.name loaner_name,c.name customer_name,v.year vehicle_year,v.make vehicle_make,v.model vehicle_model,CASE WHEN a.due_back_at IS NOT NULL AND datetime(a.due_back_at)<datetime('now') THEN 1 ELSE 0 END overdue FROM v2_loaner_assignments a JOIN v2_loaners l ON l.id=a.loaner_id AND l.shop_id=a.shop_id JOIN customers c ON c.id=a.customer_id AND c.shop_id=a.shop_id JOIN repair_orders r ON r.id=a.repair_order_id AND r.shop_id=a.shop_id AND r.customer_id=a.customer_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id WHERE a.shop_id=? AND a.returned_at IS NULL ORDER BY overdue DESC,a.due_back_at IS NULL,a.due_back_at,a.id LIMIT 250`).all(a.s);
       return res.json({vehicles,assignments});
     }catch(err){console.error('Garavex V2 loaners list error:',err);return res.status(500).json({error:'Unable to load loaner vehicles.'});}
   });
@@ -32,11 +36,14 @@ function installV2Loaners(app,db,{requireLogin}){
   app.post('/api/v2/loaners',requireLogin,requireLoaners,(req,res)=>{
     try{
       const a=auth(req,res);if(!a)return;
-      const name=String(req.body?.name||'').trim().slice(0,150),vin=String(req.body?.vin||'').trim().toUpperCase().slice(0,30),plate=String(req.body?.plate||'').trim().toUpperCase().slice(0,30);
+      const name=String(req.body?.name||'').trim(),vin=String(req.body?.vin||'').trim().toUpperCase(),plate=String(req.body?.plate||'').trim().toUpperCase();
+      const year=String(req.body?.year||'').trim(),make=String(req.body?.make||'').trim(),model=String(req.body?.model||'').trim();
       if(!name)return res.status(400).json({error:'Loaner name is required.'});
+      if(name.length>150||vin.length>30||plate.length>30||year.length>10||make.length>100||model.length>100)return res.status(400).json({error:'One or more loaner vehicle fields exceed their allowed length.'});
       if(vin&&db.prepare(`SELECT id FROM v2_loaners WHERE shop_id=? AND UPPER(vin)=? AND active=1`).get(a.s,vin))return res.status(409).json({error:'That loaner VIN is already in the fleet.'});
-      const info=db.prepare(`INSERT INTO v2_loaners(shop_id,name,year,make,model,plate,vin) VALUES(?,?,?,?,?,?,?)`).run(a.s,name,String(req.body?.year||'').trim().slice(0,10),String(req.body?.make||'').trim().slice(0,100),String(req.body?.model||'').trim().slice(0,100),plate,vin);
-      return res.json({ok:true,id:info.lastInsertRowid});
+      if(plate&&db.prepare(`SELECT id FROM v2_loaners WHERE shop_id=? AND UPPER(plate)=? AND active=1`).get(a.s,plate))return res.status(409).json({error:'That loaner plate is already in the fleet.'});
+      try{const info=db.prepare(`INSERT INTO v2_loaners(shop_id,name,year,make,model,plate,vin) VALUES(?,?,?,?,?,?,?)`).run(a.s,name,year,make,model,plate,vin);return res.json({ok:true,id:info.lastInsertRowid});}
+      catch(err){if(String(err?.message||'').includes('UNIQUE'))return res.status(409).json({error:'That loaner VIN or plate is already in the fleet.'});throw err;}
     }catch(err){console.error('Garavex V2 loaner creation error:',err);return res.status(500).json({error:'Unable to add the loaner vehicle.'});}
   });
 
@@ -45,17 +52,21 @@ function installV2Loaners(app,db,{requireLogin}){
       const a=auth(req,res);if(!a)return;
       const loaner=Number(req.params.id),ro=Number(req.body?.repair_order_id);
       if(!validId(loaner)||!validId(ro))return res.status(400).json({error:'Valid loaner and repair order IDs are required.'});
-      const r=db.prepare(`SELECT id,customer_id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,a.s);
-      if(!r)return res.status(404).json({error:'Repair order not found.'});
+      const r=db.prepare(`SELECT r.id,r.customer_id,r.status,r.workflow_status,c.id verified_customer_id FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=?`).get(ro,a.s);
+      if(!r)return res.status(404).json({error:'Repair order or customer not found.'});
       if(r.status==='completed'||String(r.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot assign a loaner to a completed or delivered repair order.'});
       const rawMileage=req.body?.out_mileage,mileage=rawMileage===undefined||rawMileage===null||rawMileage===''?null:Number(rawMileage);
       if(mileage!==null&&(!Number.isInteger(mileage)||mileage<0||mileage>10000000))return res.status(400).json({error:'Loaner mileage is invalid.'});
-      const due=req.body?.due_back_at||null;if(due&&Number.isNaN(Date.parse(String(due))))return res.status(400).json({error:'Loaner due-back date is invalid.'});
+      const dueRaw=req.body?.due_back_at,due=normalizeDue(dueRaw);if(dueRaw!==undefined&&dueRaw!==null&&dueRaw!==''&&!due)return res.status(400).json({error:'Loaner due-back date is invalid.'});
+      if(due&&Date.parse(due)<Date.now()-60000)return res.status(400).json({error:'Loaner due-back time cannot be in the past.'});
+      if(due&&Date.parse(due)>Date.now()+1000*60*60*24*365)return res.status(400).json({error:'Loaner due-back time is too far in the future.'});
+      const fuel=String(req.body?.out_fuel||'').trim().toLowerCase();if(fuel&&!fuelValues.includes(fuel))return res.status(400).json({error:`Loaner fuel level must be one of: ${fuelValues.join(', ')}.`});
+      const note=String(req.body?.note||'').trim();if(note.length>1000)return res.status(400).json({error:'Loaner checkout note cannot exceed 1000 characters.'});
       const tx=db.transaction(()=>{
         const l=db.prepare(`SELECT id FROM v2_loaners WHERE id=? AND shop_id=? AND active=1 AND status='available'`).get(loaner,a.s);if(!l)throw new Error('NOT_AVAILABLE');
         const changed=db.prepare(`UPDATE v2_loaners SET status='out' WHERE id=? AND shop_id=? AND active=1 AND status='available'`).run(loaner,a.s);if(changed.changes!==1)throw new Error('NOT_AVAILABLE');
-        const info=db.prepare(`INSERT INTO v2_loaner_assignments(shop_id,loaner_id,repair_order_id,customer_id,due_back_at,out_mileage,out_fuel,note,employee_id) VALUES(?,?,?,?,?,?,?,?,?)`).run(a.s,loaner,ro,r.customer_id,due,mileage,String(req.body?.out_fuel||'').trim().slice(0,50),String(req.body?.note||'').trim().slice(0,1000),a.e);
-        db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'loaner.checked_out','repair_order',ro,JSON.stringify({assignment_id:info.lastInsertRowid,loaner_id:loaner,due_back_at:due,out_mileage:mileage}));
+        const info=db.prepare(`INSERT INTO v2_loaner_assignments(shop_id,loaner_id,repair_order_id,customer_id,due_back_at,out_mileage,out_fuel,note,employee_id) VALUES(?,?,?,?,?,?,?,?,?)`).run(a.s,loaner,ro,r.customer_id,due,mileage,fuel,note,a.e);
+        db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'loaner.checked_out','repair_order',ro,JSON.stringify({assignment_id:info.lastInsertRowid,loaner_id:loaner,due_back_at:due,out_mileage:mileage,out_fuel:fuel||null}));
       });
       try{tx();}catch(err){if(String(err.message).includes('NOT_AVAILABLE')||String(err.message).includes('UNIQUE'))return res.status(409).json({error:'Loaner is no longer available or this repair order already has an active loaner.'});throw err;}
       return res.json({ok:true});
@@ -66,9 +77,10 @@ function installV2Loaners(app,db,{requireLogin}){
     try{
       const a=auth(req,res);if(!a)return;const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Valid loaner assignment ID is required.'});
       const assignment=db.prepare(`SELECT a.*,l.status loaner_status FROM v2_loaner_assignments a JOIN v2_loaners l ON l.id=a.loaner_id AND l.shop_id=a.shop_id WHERE a.id=? AND a.shop_id=? AND a.returned_at IS NULL`).get(id,a.s);if(!assignment)return res.status(404).json({error:'Open loaner assignment not found.'});
+      if(assignment.loaner_status!=='out')return res.status(409).json({error:'Loaner fleet status does not match the active assignment.'});
       const tx=db.transaction(()=>{
         const returned=db.prepare(`UPDATE v2_loaner_assignments SET returned_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=? AND returned_at IS NULL`).run(id,a.s);if(returned.changes!==1)throw new Error('ASSIGNMENT_CHANGED');
-        const released=db.prepare(`UPDATE v2_loaners SET status='available' WHERE id=? AND shop_id=? AND status='out'`).run(assignment.loaner_id,a.s);if(released.changes!==1)throw new Error('LOANER_CHANGED');
+        const released=db.prepare(`UPDATE v2_loaners SET status='available' WHERE id=? AND shop_id=? AND active=1 AND status='out'`).run(assignment.loaner_id,a.s);if(released.changes!==1)throw new Error('LOANER_CHANGED');
         db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'loaner.returned','repair_order',assignment.repair_order_id,JSON.stringify({assignment_id:id,loaner_id:assignment.loaner_id}));
       });
       try{tx();}catch(err){return res.status(409).json({error:'Loaner assignment changed before the return could be saved.'});}
