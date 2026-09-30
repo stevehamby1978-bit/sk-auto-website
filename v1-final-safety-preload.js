@@ -161,6 +161,125 @@ async function emailReceipt(req,res){
 }
 
 
+
+function secureBase(req){
+  const configured=String(process.env.PUBLIC_APP_URL||'').trim().replace(/\/$/,'');
+  if(configured)return configured;
+  const proto=String(req.get('x-forwarded-proto')||req.protocol||'https').split(',')[0].trim();
+  return `${proto}://${req.get('host')}`;
+}
+
+function ensureInvoiceToken(orderId,shopId,current){
+  if(current)return current;
+  const token=crypto.randomBytes(32).toString('hex');
+  db.prepare('UPDATE repair_orders SET invoice_token=? WHERE id=? AND shop_id=?').run(token,orderId,shopId);
+  return token;
+}
+
+async function textPaymentReceipt(req,res){
+  try{
+    const shopId=requireShop(req,res);if(!shopId)return;
+    const orderId=Number(req.params.id),paymentId=Number(req.params.paymentId);
+    const shop=shopProfile(shopId);if(!shop)return res.status(404).json({error:'Shop not found.'});
+    const order=db.prepare(`
+      SELECT r.id,r.invoice_token,r.customer_id,c.name customer_name,c.phone customer_phone
+      FROM repair_orders r
+      JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
+      WHERE r.id=? AND r.shop_id=?
+    `).get(orderId,shopId);
+    if(!order)return res.status(404).json({error:'Repair order not found.'});
+    const payment=db.prepare(`
+      SELECT id,amount,payment_method,voided
+      FROM repair_order_payments
+      WHERE id=? AND repair_order_id=?
+    `).get(paymentId,orderId);
+    if(!payment)return res.status(404).json({error:'Payment not found.'});
+    if(payment.voided)return res.status(400).json({error:'A voided payment receipt cannot be texted.'});
+    const to=normalizePhone(order.customer_phone);if(!to)return res.status(400).json({error:'Customer phone number is missing or invalid.'});
+    if(!process.env.TWILIO_ACCOUNT_SID||!process.env.TWILIO_AUTH_TOKEN||!process.env.TWILIO_PHONE_NUMBER)return res.status(503).json({error:'Text messaging is not configured.'});
+    const token=ensureInvoiceToken(orderId,shopId,order.invoice_token);
+    const url=`${secureBase(req)}/invoice.html?id=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`;
+    const first=String(order.customer_name||'').trim().split(/\s+/)[0];
+    const body=`${shop.name}: ${first?first+', ':''}thank you for your payment of ${Number(payment.amount||0).toFixed(2)}. Payment method: ${payment.payment_method||'Not listed'}. View your invoice/receipt: ${url}`;
+    const client=twilio(process.env.TWILIO_ACCOUNT_SID,process.env.TWILIO_AUTH_TOKEN);
+    const msg=await client.messages.create({from:process.env.TWILIO_PHONE_NUMBER,to,body});
+    return res.json({success:true,phone:order.customer_phone,message:'Payment receipt texted successfully.',message_sid:msg.sid});
+  }catch(e){console.error('V1 text payment receipt failed:',e);return res.status(500).json({error:'Unable to text payment receipt.'});}
+}
+
+async function emailSpecificReceipt(req,res){
+  try{
+    const shopId=requireShop(req,res);if(!shopId)return;
+    const orderId=Number(req.params.id),paymentId=Number(req.params.paymentId);
+    const shop=shopProfile(shopId);if(!shop)return res.status(404).json({error:'Shop not found.'});
+    if(!resend)return res.status(503).json({error:'Email is not configured.'});
+    const order=db.prepare(`
+      SELECT r.id,r.amount_paid,c.name customer_name,c.email customer_email,
+             v.year vehicle_year,v.make vehicle_make,v.model vehicle_model
+      FROM repair_orders r
+      LEFT JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
+      LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id
+      WHERE r.id=? AND r.shop_id=?
+    `).get(orderId,shopId);
+    if(!order)return res.status(404).json({error:'Repair order not found.'});
+    if(!order.customer_email)return res.status(400).json({error:'This customer does not have an email address.'});
+    const payment=db.prepare('SELECT id,amount,payment_method,paid_at,voided FROM repair_order_payments WHERE id=? AND repair_order_id=?').get(paymentId,orderId);
+    if(!payment)return res.status(404).json({error:'Payment not found.'});
+    if(payment.voided)return res.status(400).json({error:'A receipt cannot be emailed for a voided payment.'});
+    const items=db.prepare('SELECT parts,labor FROM repair_order_items WHERE repair_order_id=?').all(orderId);
+    const subtotal=money(items.reduce((n,x)=>n+Number(x.parts||0)+Number(x.labor||0),0)),total=money(subtotal+subtotal*.075);
+    const paidRows=db.prepare('SELECT amount FROM repair_order_payments WHERE repair_order_id=? AND COALESCE(voided,0)=0 AND id<=?').all(orderId,paymentId);
+    const paidThrough=money(paidRows.reduce((n,x)=>n+Number(x.amount||0),0)),remaining=money(Math.max(0,total-paidThrough));
+    const vehicle=[order.vehicle_year,order.vehicle_make,order.vehicle_model].filter(Boolean).join(' ');
+    const receiptNumber=`R-${String(orderId).padStart(5,'0')}-${String(paymentId).padStart(4,'0')}`;
+    const address=[shop.address,[shop.city,shop.state,shop.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const fromAddr=String(process.env.RECEIPT_FROM_EMAIL||process.env.FROM_EMAIL||'receipts@garavex.com').trim();
+    await resend.emails.send({
+      from:`${String(shop.name||'Garavex Shop').replace(/[<>]/g,'')} <${fromAddr}>`,
+      to:[order.customer_email],
+      subject:`${shop.name} Payment Receipt ${receiptNumber}`,
+      html:`<div style="font-family:Arial,sans-serif;max-width:650px;margin:auto"><h1>${esc(shop.name)}</h1><h2>Payment Receipt</h2><p>Thank you, ${esc(order.customer_name||'Customer')}.</p><p><strong>Receipt:</strong> ${receiptNumber}</p><p><strong>Vehicle:</strong> ${esc(vehicle||'Not listed')}</p><p><strong>Payment:</strong> ${Number(payment.amount||0).toFixed(2)}</p><p><strong>Method:</strong> ${esc(payment.payment_method||'Not listed')}</p><p><strong>Invoice Total:</strong> ${total.toFixed(2)}</p><p><strong>Remaining Balance:</strong> ${remaining.toFixed(2)}</p><hr><p><strong>${esc(shop.name)}</strong></p>${address?`<p>${esc(address)}</p>`:''}${shop.phone?`<p>${esc(shop.phone)}</p>`:''}</div>`
+    });
+    return res.json({success:true,email:order.customer_email,receipt_number:receiptNumber});
+  }catch(e){console.error('V1 email payment receipt failed:',e);return res.status(500).json({error:'Unable to email payment receipt.'});}
+}
+
+async function emailInvoiceV1(req,res){
+  try{
+    const shopId=requireShop(req,res);if(!shopId)return;
+    const orderId=Number(req.params.id),shop=shopProfile(shopId);
+    if(!shop)return res.status(404).json({error:'Shop not found.'});
+    if(!resend)return res.status(503).json({error:'Email is not configured.'});
+    const order=db.prepare(`
+      SELECT r.id,r.customer_id,r.amount_paid,r.payment_status,r.invoice_token,
+             c.name customer_name,c.email customer_email,
+             v.year vehicle_year,v.make vehicle_make,v.model vehicle_model,v.vin vehicle_vin
+      FROM repair_orders r
+      LEFT JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
+      LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id
+      WHERE r.id=? AND r.shop_id=?
+    `).get(orderId,shopId);
+    if(!order)return res.status(404).json({error:'Repair order not found.'});
+    if(!order.customer_email)return res.status(400).json({error:'This customer does not have an email address.'});
+    const token=ensureInvoiceToken(orderId,shopId,order.invoice_token);
+    const url=`${secureBase(req)}/invoice.html?id=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`;
+    const items=db.prepare('SELECT description,parts,labor FROM repair_order_items WHERE repair_order_id=? ORDER BY id').all(orderId);
+    const subtotal=money(items.reduce((n,x)=>n+Number(x.parts||0)+Number(x.labor||0),0)),tax=money(subtotal*.075),total=money(subtotal+tax),paid=money(order.amount_paid),balance=money(Math.max(0,total-paid));
+    const vehicle=[order.vehicle_year,order.vehicle_make,order.vehicle_model].filter(Boolean).join(' ');
+    const rows=items.map(x=>`<tr><td>${esc(x.description||'')}</td><td style="text-align:right">${Number(x.parts||0).toFixed(2)}</td><td style="text-align:right">${Number(x.labor||0).toFixed(2)}</td></tr>`).join('');
+    const address=[shop.address,[shop.city,shop.state,shop.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const fromAddr=String(process.env.INVOICE_FROM_EMAIL||process.env.FROM_EMAIL||'invoices@garavex.com').trim();
+    await resend.emails.send({
+      from:`${String(shop.name||'Garavex Shop').replace(/[<>]/g,'')} <${fromAddr}>`,
+      to:[order.customer_email],
+      subject:`${shop.name} Invoice #${orderId}`,
+      html:`<div style="font-family:Arial,sans-serif;max-width:700px;margin:auto"><h1>${esc(shop.name)}</h1><h2>Invoice #${orderId}</h2><p>Thank you, ${esc(order.customer_name||'Customer')}.</p><p><a href="${url}">View Invoice</a></p><p><strong>Vehicle:</strong> ${esc(vehicle||'Not listed')}</p><table style="width:100%"><thead><tr><th style="text-align:left">Service</th><th>Parts</th><th>Labor</th></tr></thead><tbody>${rows}</tbody></table><p><strong>Total:</strong> ${total.toFixed(2)}</p><p><strong>Amount Paid:</strong> ${paid.toFixed(2)}</p><p><strong>Balance Due:</strong> ${balance.toFixed(2)}</p><hr><p><strong>${esc(shop.name)}</strong></p>${address?`<p>${esc(address)}</p>`:''}${shop.phone?`<p>${esc(shop.phone)}</p>`:''}</div>`
+    });
+    try{db.prepare('INSERT INTO invoice_email_history(repair_order_id,email) VALUES(?,?)').run(orderId,order.customer_email);}catch(_){}
+    return res.json({success:true,email:order.customer_email});
+  }catch(e){console.error('V1 email invoice failed:',e);return res.status(500).json({error:'Unable to email invoice.'});}
+}
+
 function respondEstimate(req,res){
   try{
     const token=String(req.params?.token||'').trim();
@@ -233,6 +352,9 @@ express.application.get=function(route,...handlers){
 express.application.post=function(route,...handlers){
   if(route==='/api/repair-orders/:id/recommendations')return post.call(this,route,addRecommendation);
   if(route==='/api/repair-orders/:id/email-receipt')return post.call(this,route,emailReceipt);
+  if(route==='/api/repair-orders/:id/email-invoice')return post.call(this,route,emailInvoiceV1);
+  if(route==='/api/repair-orders/:id/payments/:paymentId/text-receipt')return post.call(this,route,textPaymentReceipt);
+  if(route==='/api/repair-orders/:id/payments/:paymentId/email-receipt')return post.call(this,route,emailSpecificReceipt);
   if(route==='/api/estimates/:token/respond')return post.call(this,route,respondEstimate);
   if(route==='/api/text-invoice')return post.call(this,route,disabledLegacyTextInvoice);
   if(route==='/api/text-authorization')return post.call(this,route,disabledLegacyTextAuthorization);
