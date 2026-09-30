@@ -10,6 +10,7 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
   app.get('/api/v2/release-tests', requireLogin, requireOwner, (req, res) => {
     try {
       const shopId = Number(req.session?.employee?.shop_id || 0);
+      const employeeId = Number(req.session?.employee?.id || 0);
       const scoped = [
         'customers','vehicles','repair_orders','appointments','employees','dvi_inspections','dvi_items','dvi_attachments',
         'technician_time_entries','deferred_services','inventory_items','vendors','purchase_orders','purchase_order_items',
@@ -55,18 +56,36 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
       link('Purchase orders linked to repair orders across shops','purchase_orders','repair_order_id','repair_orders');
       link('Purchase-order items linked across shops','purchase_order_items','purchase_order_id','purchase_orders');
       link('Portal tokens linked to customers across shops','customer_portal_tokens','customer_id','customers');
+      link('Comebacks linked to original repair orders across shops','v2_comebacks','original_repair_order_id','repair_orders');
+      link('Comebacks linked to comeback repair orders across shops','v2_comebacks','comeback_repair_order_id','repair_orders');
+      link('Comebacks linked to customers across shops','v2_comebacks','customer_id','customers');
+      link('Comebacks linked to vehicles across shops','v2_comebacks','vehicle_id','vehicles');
 
       [
         ['v2_tasks','repair_order_id'],['v2_ro_blockers','repair_order_id'],['v2_ro_promises','repair_order_id'],
         ['v2_parts_requests','repair_order_id'],['v2_vehicle_keys','repair_order_id'],['v2_road_tests','repair_order_id'],
-        ['v2_deliveries','repair_order_id'],['v2_customer_requests','repair_order_id']
+        ['v2_deliveries','repair_order_id'],['v2_customer_requests','repair_order_id'],['v2_shop_handoffs','repair_order_id']
       ].forEach(([table, key]) => link(`${table} linked across shops`, table, key, 'repair_orders'));
 
       if (exists('dvi_items')) run('DVI items with invalid condition', `SELECT COUNT(*) n FROM dvi_items WHERE condition NOT IN ('green','yellow','red')`);
       if (exists('dvi_items')) run('DVI items with invalid customer decision', `SELECT COUNT(*) n FROM dvi_items WHERE customer_decision NOT IN ('pending','approved','declined')`);
-      if (exists('technician_time_entries')) run('Technician time with negative minutes', `SELECT COUNT(*) n FROM technician_time_entries WHERE minutes IS NOT NULL AND minutes<0`);
+      if (exists('technician_time_entries')) {
+        run('Technician time with negative minutes', `SELECT COUNT(*) n FROM technician_time_entries WHERE minutes IS NOT NULL AND minutes<0`);
+        run('Multiple open clocks for one technician', `SELECT COUNT(*) n FROM (SELECT shop_id,employee_id FROM technician_time_entries WHERE clock_out IS NULL GROUP BY shop_id,employee_id HAVING COUNT(*)>1)`);
+      }
       if (exists('customer_portal_tokens')) run('Duplicate active portal tokens', `SELECT COUNT(*) n FROM (SELECT token FROM customer_portal_tokens WHERE revoked_at IS NULL GROUP BY token HAVING COUNT(*)>1)`);
       if (exists('dvi_inspections')) run('Duplicate DVI public tokens', `SELECT COUNT(*) n FROM (SELECT public_token FROM dvi_inspections WHERE public_token IS NOT NULL GROUP BY public_token HAVING COUNT(*)>1)`);
+      if (exists('deferred_services')) {
+        run('Deferred services with invalid status', `SELECT COUNT(*) n FROM deferred_services WHERE status NOT IN ('deferred','scheduled','completed','dismissed')`);
+        run('Scheduled deferred services without follow-up date', `SELECT COUNT(*) n FROM deferred_services WHERE status='scheduled' AND (follow_up_date IS NULL OR TRIM(follow_up_date)='')`);
+        run('Duplicate active deferred services', `SELECT COUNT(*) n FROM (SELECT shop_id,customer_id,COALESCE(vehicle_id,0) vehicle_key,description FROM deferred_services WHERE status IN ('deferred','scheduled') GROUP BY shop_id,customer_id,COALESCE(vehicle_id,0),description HAVING COUNT(*)>1)`);
+      }
+      if (exists('v2_comebacks')) {
+        run('Comebacks with invalid status', `SELECT COUNT(*) n FROM v2_comebacks WHERE status NOT IN ('open','in_progress','resolved','dismissed')`);
+        run('Resolved comebacks without resolution', `SELECT COUNT(*) n FROM v2_comebacks WHERE status='resolved' AND (resolution IS NULL OR TRIM(resolution)='')`);
+        run('Duplicate active comebacks for original RO', `SELECT COUNT(*) n FROM (SELECT shop_id,original_repair_order_id FROM v2_comebacks WHERE status IN ('open','in_progress') GROUP BY shop_id,original_repair_order_id HAVING COUNT(*)>1)`);
+        run('Comebacks with negative costs', `SELECT COUNT(*) n FROM v2_comebacks WHERE labor_cost<0 OR parts_cost<0`);
+      }
       if (exists('v2_deliveries')) run('Delivered records without delivered workflow state', `SELECT COUNT(*) n FROM v2_deliveries d JOIN repair_orders r ON r.id=d.repair_order_id AND r.shop_id=d.shop_id WHERE d.delivered_at IS NOT NULL AND COALESCE(r.workflow_status,'')!='delivered'`);
       if (exists('v2_vehicle_keys')) run('Delivered ROs with missing keys', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_vehicle_keys k ON k.repair_order_id=r.id AND k.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND k.status='missing'`);
       if (exists('v2_ro_blockers')) run('Delivered ROs with open blockers', `SELECT COUNT(*) n FROM repair_orders r JOIN v2_ro_blockers b ON b.repair_order_id=r.id AND b.shop_id=r.shop_id WHERE r.workflow_status='delivered' AND b.status='open'`);
@@ -79,13 +98,14 @@ function installV2ReleaseTests(app, db, { requireLogin, requireOwner }) {
 
       const currentShop = {
         id: shopId,
+        employee_id: employeeId,
         customers: validId(shopId) && exists('customers') ? Number(db.prepare(`SELECT COUNT(*) n FROM customers WHERE shop_id=?`).get(shopId)?.n || 0) : 0,
         repair_orders: validId(shopId) && exists('repair_orders') ? Number(db.prepare(`SELECT COUNT(*) n FROM repair_orders WHERE shop_id=?`).get(shopId)?.n || 0) : 0
       };
       const checks = [
         { label: 'All critical V2 tables are shop-scoped', ok: isolation.every(x => x.ok) },
         { label: 'No detected cross-shop or workflow integrity problems', ok: dataChecks.every(x => x.ok) },
-        { label: 'Current session has shop scope', ok: validId(shopId) }
+        { label: 'Current session has employee and shop scope', ok: validId(shopId) && validId(employeeId) }
       ];
 
       return res.json({ ok: checks.every(x => x.ok), checks, isolation, data_checks: dataChecks, current_shop: currentShop, timestamp: new Date().toISOString() });
