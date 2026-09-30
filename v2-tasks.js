@@ -29,6 +29,7 @@ function installV2Tasks(app,db,{requireLogin}){
       const assignedRaw=req.query.assigned_to;
       const assigned=assignedRaw===undefined||assignedRaw===''?null:Number(assignedRaw);
       if(assigned!==null&&!validId(assigned))return res.status(400).json({error:'Invalid assigned employee filter.'});
+      if(assigned&&!db.prepare(`SELECT id FROM employees WHERE id=? AND shop_id=?`).get(assigned,a.s))return res.status(400).json({error:'Assigned employee is not in this shop.'});
       const rows=db.prepare(`
         SELECT t.*,a.name assigned_name,c.name created_name,r.workflow_status,cu.name customer_name,v.year,v.make,v.model,
                CASE WHEN t.status='open' AND t.due_at IS NOT NULL AND datetime(t.due_at)<datetime('now') THEN 1 ELSE 0 END overdue
@@ -52,14 +53,15 @@ function installV2Tasks(app,db,{requireLogin}){
       const title=String(req.body?.title||'').trim().slice(0,160),details=String(req.body?.details||'').trim().slice(0,2000);
       if(!title)return res.status(400).json({error:'Task title is required.'});
       const requestedPriority=String(req.body?.priority||'normal').toLowerCase();
-      const priority=['normal','high','urgent'].includes(requestedPriority)?requestedPriority:'normal';
+      if(!['normal','high','urgent'].includes(requestedPriority))return res.status(400).json({error:'Task priority must be normal, high, or urgent.'});
+      const priority=requestedPriority;
       const assignedRaw=req.body?.assigned_to,assigned=assignedRaw===undefined||assignedRaw===null||assignedRaw===''?null:Number(assignedRaw);
       if(assigned!==null&&!validId(assigned))return res.status(400).json({error:'Assigned employee is invalid.'});
       if(assigned&&!db.prepare(`SELECT id FROM employees WHERE id=? AND shop_id=?`).get(assigned,a.s))return res.status(400).json({error:'Assigned employee is not in this shop.'});
       const roRaw=req.body?.repair_order_id,ro=roRaw===undefined||roRaw===null||roRaw===''?null:Number(roRaw);
       if(ro!==null&&!validId(ro))return res.status(400).json({error:'Repair order ID is invalid.'});
       if(ro){const order=db.prepare(`SELECT id,status,workflow_status FROM repair_orders WHERE id=? AND shop_id=?`).get(ro,a.s);if(!order)return res.status(400).json({error:'Repair order not found.'});if(order.status==='completed'||String(order.workflow_status||'').toLowerCase()==='delivered')return res.status(409).json({error:'Cannot create a task for a completed or delivered repair order.'});}
-      const due=req.body?.due_at||null;if(due&&Number.isNaN(Date.parse(String(due))))return res.status(400).json({error:'Task due date is invalid.'});
+      const due=req.body?.due_at===undefined||req.body?.due_at===null||req.body?.due_at===''?null:String(req.body.due_at).trim();if(due&&Number.isNaN(Date.parse(due)))return res.status(400).json({error:'Task due date is invalid.'});
       const duplicate=db.prepare(`SELECT id FROM v2_tasks WHERE shop_id=? AND status='open' AND COALESCE(repair_order_id,0)=COALESCE(?,0) AND COALESCE(assigned_to,0)=COALESCE(?,0) AND title=? LIMIT 1`).get(a.s,ro,assigned,title);
       if(duplicate)return res.status(409).json({error:'An identical open task already exists.',id:duplicate.id});
       const tx=db.transaction(()=>{const info=db.prepare(`INSERT INTO v2_tasks(shop_id,repair_order_id,assigned_to,title,details,priority,due_at,created_by) VALUES(?,?,?,?,?,?,?,?)`).run(a.s,ro,assigned,title,details,priority,due,a.e);db.prepare(`INSERT INTO audit_log(shop_id,employee_id,action,entity_type,entity_id,details) VALUES(?,?,?,?,?,?)`).run(a.s,a.e,'task.created',ro?'repair_order':'task',ro||info.lastInsertRowid,JSON.stringify({task_id:info.lastInsertRowid,title,assigned_to:assigned,priority,due_at:due}));return info.lastInsertRowid;});
