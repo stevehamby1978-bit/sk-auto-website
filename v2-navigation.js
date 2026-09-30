@@ -9,6 +9,8 @@
     ['v2-inventory.html','Inventory'],
     ['v2-parts.html','Purchasing'],
     ['v2-reports.html','Reports'],
+    ['v2-team.html','Team'],
+    ['v2-audit.html','Audit'],
     ['v2-settings.html','Setup']
   ];
   const current = location.pathname.split('/').pop();
