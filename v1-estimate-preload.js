@@ -1,5 +1,6 @@
 /* Garavex V1 tenant-aware estimate creation + notification route. */
 const path=require('path'),Database=require('better-sqlite3'),express=require('express'),crypto=require('crypto'),twilio=require('twilio');
+const {Resend}=require('resend');
 const db=new Database(path.join(process.env.DATA_DIR||path.join(__dirname,'data'),'bookings.db'));
 function sid(req){const n=Number(req.session?.employee?.shop_id);return Number.isInteger(n)&&n>0?n:null;}
 function phone(v){const d=String(v||'').replace(/\D/g,'');return d.length===10?`+1${d}`:d.length===11&&d[0]==='1'?`+${d}`:null;}
@@ -21,7 +22,7 @@ async function createEstimate(req,res){try{
  })();
  const total=Math.round(cleanItems.reduce((n,i)=>n+i.parts+i.labor,0)*1.075*100)/100,url=`${appUrl()}/estimate.html?token=${encodeURIComponent(token)}`,client=sms(),to=phone(rawPhone);
  if(client&&to){try{await client.messages.create({from:process.env.TWILIO_PHONE_NUMBER,to,body:`${shop.name}: ${name.split(/\s+/)[0]}, your estimate #${result.estimateId} for $${total.toFixed(2)} is ready. Review and respond here: ${url}`});}catch(e){console.error('V1 estimate customer SMS failed:',e?.message||e);}}
- if(client&&process.env.SMS_TO_NUMBER){try{await client.messages.create({from:process.env.TWILIO_PHONE_NUMBER,to:process.env.SMS_TO_NUMBER,body:`New ${shop.name} estimate #${result.estimateId}\nCustomer: ${name}\nTotal: $${total.toFixed(2)}\nReview: ${url}`});}catch(e){console.error('V1 estimate shop SMS failed:',e?.message||e);}}
+ if(process.env.RESEND_API_KEY&&shop.email){try{const mail=new Resend(process.env.RESEND_API_KEY),from=String(process.env.FROM_EMAIL||'notifications@garavex.com').trim();await mail.emails.send({from:`Garavex <${from}>`,to:[shop.email],subject:`New estimate #${result.estimateId} - ${name}`,html:`<h2>New estimate created</h2><p><strong>Shop:</strong> ${shop.name}</p><p><strong>Customer:</strong> ${name}</p><p><strong>Total:</strong> ${total.toFixed(2)}</p><p><a href="${url}">Review estimate</a></p>`});}catch(e){console.error('V1 estimate shop email failed:',e?.message||e);}}
  return res.status(201).json({success:true,id:result.estimateId,token});
  }catch(e){console.error('V1 create estimate failed:',e);return res.status(500).json({error:'Unable to create estimate.'});}}
 const post=express.application.post;
