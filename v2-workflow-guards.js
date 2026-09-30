@@ -7,12 +7,14 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
   const requireRepairOrders = permissionMiddleware('repair_orders', db);
   const validId = value => Number.isInteger(value) && value > 0;
   const tableExists = name => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
-  const noStore = res => { res.set('Cache-Control','no-store, private, max-age=0'); res.set('Pragma','no-cache'); res.set('Expires','0'); };
+  const noStore = res => { res.set('Cache-Control','no-store, private, max-age=0'); res.set('Pragma','no-cache'); res.set('Expires','0'); res.set('X-Content-Type-Options','nosniff'); };
   const auth = (req,res) => {
     const employee=req.v2Employee||loadCurrentEmployee(db,req.session?.employee);
     const shop=Number(employee?.shop_id||0), employeeId=Number(employee?.id||0);
     if(!employee||!validId(shop)||!validId(employeeId)){res.status(401).json({error:'Employee session is no longer valid for this shop.'});return null;}
-    req.v2Employee=employee; req.v2ShopId=shop;
+    const live=loadCurrentEmployee(db,req.session?.employee);
+    if(!live||Number(live.id)!==employeeId||Number(live.shop_id)!==shop){res.status(401).json({error:'Employee session is no longer valid for this shop.'});return null;}
+    req.v2Employee=live; req.v2ShopId=shop;
     return {shop,employeeId};
   };
 
@@ -34,7 +36,7 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
       };
 
       addCountCheck('blockers','v2_ro_blockers',"status='open'",n=>`${n} open blocker(s)`,'No open blockers');
-      addCountCheck('parts','v2_parts_requests',"status IN ('requested','ordered','received')",n=>`${n} unresolved parts request(s)`,'Parts requests resolved');
+      addCountCheck('parts','v2_parts_requests',"status IN ('requested','ordered')",n=>`${n} unresolved parts request(s)`,'Parts requests resolved');
       addCountCheck('road_test_open','v2_road_tests',"status='in_progress'",()=> 'Road test still in progress','No road test in progress');
       addCountCheck('customer_requests','v2_customer_requests',"status='open'",n=>`${n} customer workflow request(s) open`,'Customer workflow requests clear');
       addCountCheck('loaner','v2_loaner_assignments','returned_at IS NULL',()=> 'Loaner vehicle still checked out','No active loaner vehicle');
@@ -53,18 +55,21 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
         checks.push({key:'key',ok:accountedFor,label:accountedFor?'Vehicle key accounted for':`Vehicle key custody must be resolved${status?` (${status})`:''}`});
       }
 
-      const workflow=String(ro.workflow_status||'').toLowerCase(),delivered=workflow==='delivered';
-      const operationalBlocking=checks.filter(check=>!check.ok),ready=!delivered&&operationalBlocking.length===0;
-      const paid=String(ro.payment_status||'').toLowerCase()==='paid',readyStatus=workflow==='ready';
-      const deliveryChecks=checks.concat([{key:'ready_status',ok:readyStatus,label:readyStatus?'Repair order is in ready status':'Repair order must be in ready status'},{key:'payment',ok:paid,label:paid?'Payment complete':'Payment must be collected before delivery'}]);
+      const workflow=String(ro.workflow_status||'').trim().toLowerCase();
+      const legacyStatus=String(ro.status||'').trim().toLowerCase();
+      const delivered=workflow==='delivered';
+      const closed=delivered||legacyStatus==='completed';
+      const operationalBlocking=checks.filter(check=>!check.ok),ready=!closed&&operationalBlocking.length===0;
+      const paid=String(ro.payment_status||'').trim().toLowerCase()==='paid',readyStatus=workflow==='ready';
+      const deliveryChecks=checks.concat([{key:'repair_order_open',ok:!closed,label:closed?'Repair order is already completed or delivered':'Repair order remains open for delivery'},{key:'ready_status',ok:readyStatus,label:readyStatus?'Repair order is in ready status':'Repair order must be in ready status'},{key:'payment',ok:paid,label:paid?'Payment complete':'Payment must be collected before delivery'}]);
 
       if(tableExists('v2_deliveries')){
-        const delivery=db.prepare(`SELECT customer_notified,keys_returned,documents_given,delivered_at FROM v2_deliveries WHERE shop_id=? AND repair_order_id=?`).get(a.shop,id);
+        const delivery=db.prepare(`SELECT customer_notified,keys_returned,documents_given,delivered_at FROM v2_deliveries WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`).get(a.shop,id);
         deliveryChecks.push({key:'delivery_started',ok:Boolean(delivery),label:delivery?'Delivery checklist started':'Start the delivery checklist'},{key:'customer_notified',ok:Boolean(delivery?.customer_notified),label:delivery?.customer_notified?'Customer notification confirmed':'Confirm customer was notified'},{key:'keys_returned',ok:Boolean(delivery?.keys_returned),label:delivery?.keys_returned?'Key return confirmed':'Confirm keys will be returned to customer'},{key:'documents_given',ok:Boolean(delivery?.documents_given),label:delivery?.documents_given?'Invoice/documents confirmed':'Confirm invoice and service documents are provided'});
       }
 
-      const deliveryBlocking=deliveryChecks.filter(check=>!check.ok),deliverable=!delivered&&deliveryBlocking.length===0;
-      return res.json({repair_order_id:id,status:ro.status,workflow_status:ro.workflow_status,payment_status:ro.payment_status,delivered,ready,deliverable,checks,blocking:operationalBlocking,blocking_count:operationalBlocking.length,delivery_checks:deliveryChecks,delivery_blocking:deliveryBlocking,delivery_blocking_count:deliveryBlocking.length});
+      const deliveryBlocking=deliveryChecks.filter(check=>!check.ok),deliverable=!closed&&deliveryBlocking.length===0;
+      return res.json({repair_order_id:id,status:ro.status,workflow_status:ro.workflow_status,payment_status:ro.payment_status,delivered,closed,ready,deliverable,checks,blocking:operationalBlocking,blocking_count:operationalBlocking.length,delivery_checks:deliveryChecks,delivery_blocking:deliveryBlocking,delivery_blocking_count:deliveryBlocking.length});
     } catch(err){console.error('Garavex V2 completion check error:',err);return res.status(500).json({error:'Unable to run the repair order completion check.'});}
   });
 }
