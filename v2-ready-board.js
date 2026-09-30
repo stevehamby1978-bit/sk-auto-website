@@ -42,7 +42,8 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
         loaner: exists('v2_loaner_assignments') ? db.prepare(`SELECT 1 FROM v2_loaner_assignments WHERE shop_id=? AND repair_order_id=? AND returned_at IS NULL LIMIT 1`) : null,
         technicianClock: exists('technician_time_entries') ? db.prepare(`SELECT 1 FROM technician_time_entries WHERE shop_id=? AND repair_order_id=? AND clock_out IS NULL LIMIT 1`) : null,
         task: exists('v2_tasks') ? db.prepare(`SELECT 1 FROM v2_tasks WHERE shop_id=? AND repair_order_id=? AND status='open' LIMIT 1`) : null,
-        promise: exists('v2_ro_promises') ? db.prepare(`SELECT promised_at FROM v2_ro_promises WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`) : null
+        promise: exists('v2_ro_promises') ? db.prepare(`SELECT promised_at FROM v2_ro_promises WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`) : null,
+        delivery: exists('v2_deliveries') ? db.prepare(`SELECT customer_notified,keys_returned,documents_given,delivered_at FROM v2_deliveries WHERE shop_id=? AND repair_order_id=?`) : null
       };
 
       const rows = repairOrders.map(ro => {
@@ -67,6 +68,16 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
         const deliveryIssues = [...issues];
         if (workflow !== 'ready') deliveryIssues.push('Repair order not in ready status');
         if (!paymentPaid) deliveryIssues.push('Payment not complete');
+
+        const delivery = statements.delivery?.get(shopId, ro.id) || null;
+        if (workflow === 'ready') {
+          if (!delivery) deliveryIssues.push('Delivery checklist not started');
+          else {
+            if (!delivery.customer_notified) deliveryIssues.push('Customer notification not confirmed');
+            if (!delivery.keys_returned) deliveryIssues.push('Key return not confirmed');
+            if (!delivery.documents_given) deliveryIssues.push('Invoice/documents not confirmed');
+          }
+        }
         const deliverable = workflow === 'ready' && deliveryIssues.length === 0;
 
         return {
@@ -76,11 +87,12 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
           issue_count: issues.length,
           ready,
           payment_paid: paymentPaid,
+          delivery_started: Boolean(delivery),
           delivery_issues: deliveryIssues,
           delivery_issue_count: deliveryIssues.length,
           deliverable,
           action_required: deliveryIssues.length > 0,
-          board_state: deliverable ? 'deliverable' : ready ? 'ready_payment_due' : issues.length ? 'blocked' : workflow || 'waiting'
+          board_state: deliverable ? 'deliverable' : ready ? 'ready_handoff' : issues.length ? 'blocked' : workflow || 'waiting'
         };
       });
 
@@ -91,8 +103,9 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
         else if (row.issue_count > 0) acc.blocked += 1;
         else acc.in_progress += 1;
         if (row.ready && !row.payment_paid) acc.payment_due += 1;
+        if (row.ready && row.payment_paid && !row.deliverable) acc.handoff_due += 1;
         return acc;
-      }, { total: 0, ready: 0, deliverable: 0, payment_due: 0, blocked: 0, in_progress: 0 });
+      }, { total: 0, ready: 0, deliverable: 0, payment_due: 0, handoff_due: 0, blocked: 0, in_progress: 0 });
 
       return res.json({ summary, repair_orders: rows });
     } catch (err) {
