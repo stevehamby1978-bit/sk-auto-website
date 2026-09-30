@@ -58,6 +58,17 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
         {key:'ready_status',ok:readyStatus,label:readyStatus?'Repair order is in ready status':'Repair order must be in ready status'},
         {key:'payment',ok:paid,label:paid?'Payment complete':'Payment must be collected before delivery'}
       ]);
+
+      if (tableExists('v2_deliveries')) {
+        const delivery=db.prepare(`SELECT customer_notified,keys_returned,documents_given,delivered_at FROM v2_deliveries WHERE shop_id=? AND repair_order_id=?`).get(shop,id);
+        deliveryChecks.push(
+          {key:'delivery_started',ok:Boolean(delivery),label:delivery?'Delivery checklist started':'Start the delivery checklist'},
+          {key:'customer_notified',ok:Boolean(delivery?.customer_notified),label:delivery?.customer_notified?'Customer notification confirmed':'Confirm customer was notified'},
+          {key:'keys_returned',ok:Boolean(delivery?.keys_returned),label:delivery?.keys_returned?'Key return confirmed':'Confirm keys will be returned to customer'},
+          {key:'documents_given',ok:Boolean(delivery?.documents_given),label:delivery?.documents_given?'Invoice/documents confirmed':'Confirm invoice and service documents are provided'}
+        );
+      }
+
       const deliveryBlocking=deliveryChecks.filter(check=>!check.ok);
       const deliverable=!delivered&&deliveryBlocking.length===0;
 
