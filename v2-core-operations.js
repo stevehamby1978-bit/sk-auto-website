@@ -1,13 +1,14 @@
-const { permissionMiddleware } = require('./v2-permissions');
+const { permissionMiddleware, loadCurrentEmployee } = require('./v2-permissions');
 
 function installV2CoreOperations(app, db, { requireLogin, requireOwner }) {
   if (!app || !db) throw new Error('V2 core operations require app and db.');
   if (!requireLogin || !requireOwner) throw new Error('V2 core operations require authentication middleware.');
 
-  const requireRO = permissionMiddleware('repair_orders');
+  const requireRO = permissionMiddleware('repair_orders', db);
   const validId = value => Number.isInteger(value) && value > 0;
-  const shopId = req => Number(req.session?.employee?.shop_id || 0);
-  const employeeId = req => Number(req.session?.employee?.id || 0);
+  const currentEmployee = req => req.v2Employee || loadCurrentEmployee(db, req.session?.employee);
+  const shopId = req => Number(currentEmployee(req)?.shop_id || 0);
+  const employeeId = req => Number(currentEmployee(req)?.id || 0);
 
   function audit(req, action, repairOrderId, details = {}) {
     const s = shopId(req);
@@ -22,8 +23,14 @@ function installV2CoreOperations(app, db, { requireLogin, requireOwner }) {
   function route(handler) {
     return (req, res) => {
       try {
-        const s = shopId(req);
-        if (!validId(s)) return res.status(401).json({ error: 'A valid shop session is required.' });
+        res.set('Cache-Control', 'no-store, private, max-age=0');
+        res.set('Pragma', 'no-cache');
+        const employee = currentEmployee(req);
+        const s = Number(employee?.shop_id || 0);
+        const e = Number(employee?.id || 0);
+        if (!validId(s) || !validId(e)) return res.status(401).json({ error: 'Employee session is no longer valid for this shop.' });
+        req.v2Employee = employee;
+        req.v2ShopId = s;
         return handler(req, res, s);
       } catch (err) {
         console.error('Garavex V2 core operation error:', err);
