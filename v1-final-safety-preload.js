@@ -280,6 +280,83 @@ async function emailInvoiceV1(req,res){
   }catch(e){console.error('V1 email invoice failed:',e);return res.status(500).json({error:'Unable to email invoice.'});}
 }
 
+
+async function notifyShopDecision(shopId,subject,html){
+  try{
+    const shop=shopProfile(shopId);
+    if(!shop?.email||!resend)return;
+    const fromAddr=String(process.env.FROM_EMAIL||process.env.RECEIPT_FROM_EMAIL||'notifications@garavex.com').trim();
+    await resend.emails.send({
+      from:`Garavex <${fromAddr}>`,
+      to:[shop.email],
+      subject,
+      html
+    });
+  }catch(e){console.error('V1 shop decision notification failed:',e?.message||e);}
+}
+
+async function customerApproveRecommendation(req,res){
+  try{
+    const orderId=Number(req.params.repairOrderId),recId=Number(req.params.recommendationId),token=String(req.body?.token||'').trim();
+    if(!token)return res.status(401).json({error:'Authorization token required.'});
+    const rec=db.prepare(`
+      SELECT rr.id,rr.description,rr.parts,rr.labor,rr.status,r.shop_id
+      FROM repair_order_recommendations rr
+      JOIN repair_orders r ON r.id=rr.repair_order_id
+      WHERE rr.id=? AND rr.repair_order_id=? AND rr.authorization_token=?
+    `).get(recId,orderId,token);
+    if(!rec)return res.status(404).json({error:'Repair authorization link is invalid or expired.'});
+    if(String(rec.status||'').toLowerCase()!=='pending')return res.status(409).json({error:'This repair has already been approved or declined.'});
+
+    const result=db.transaction(()=>{
+      const upd=db.prepare(`
+        UPDATE repair_order_recommendations
+        SET status='approved',authorized_at=CURRENT_TIMESTAMP,authorization_source='customer'
+        WHERE id=? AND repair_order_id=? AND authorization_token=? AND status='pending'
+      `).run(recId,orderId,token);
+      if(upd.changes!==1)throw new Error('Recommendation status changed before approval.');
+      return db.prepare('INSERT INTO repair_order_items(repair_order_id,description,parts,labor) VALUES(?,?,?,?)')
+        .run(orderId,rec.description,Number(rec.parts)||0,Number(rec.labor)||0);
+    })();
+
+    notifyShopDecision(
+      rec.shop_id,
+      `Customer approved repair on RO #${orderId}`,
+      `<p>Customer approved the recommended repair on repair order #${orderId}.</p><p><strong>${esc(rec.description)}</strong></p><p>Total: ${(Number(rec.parts||0)+Number(rec.labor||0)).toFixed(2)}</p>`
+    );
+    return res.json({success:true,status:'approved',message:'Repair authorized successfully.',itemId:Number(result.lastInsertRowid)});
+  }catch(e){console.error('V1 customer approval failed:',e);return res.status(500).json({error:'Unable to authorize repair.'});}
+}
+
+async function customerDeclineRecommendation(req,res){
+  try{
+    const orderId=Number(req.params.repairOrderId),recId=Number(req.params.recommendationId),token=String(req.body?.token||'').trim();
+    if(!token)return res.status(401).json({error:'Authorization token required.'});
+    const rec=db.prepare(`
+      SELECT rr.id,rr.description,rr.status,r.shop_id
+      FROM repair_order_recommendations rr
+      JOIN repair_orders r ON r.id=rr.repair_order_id
+      WHERE rr.id=? AND rr.repair_order_id=? AND rr.authorization_token=?
+    `).get(recId,orderId,token);
+    if(!rec)return res.status(404).json({error:'Repair authorization link is invalid or expired.'});
+    if(String(rec.status||'').toLowerCase()!=='pending')return res.status(409).json({error:'This repair has already been approved or declined.'});
+
+    const upd=db.prepare(`
+      UPDATE repair_order_recommendations
+      SET status='declined',authorized_at=CURRENT_TIMESTAMP,authorization_source='customer'
+      WHERE id=? AND repair_order_id=? AND authorization_token=? AND status='pending'
+    `).run(recId,orderId,token);
+    if(upd.changes!==1)return res.status(409).json({error:'This repair has already been approved or declined.'});
+
+    notifyShopDecision(
+      rec.shop_id,
+      `Customer declined repair on RO #${orderId}`,
+      `<p>Customer declined the recommended repair on repair order #${orderId}.</p><p><strong>${esc(rec.description||'Recommended repair')}</strong></p>`
+    );
+    return res.json({success:true,status:'declined',message:'Repair declined.'});
+  }catch(e){console.error('V1 customer decline failed:',e);return res.status(500).json({error:'Unable to decline repair.'});}
+}
+
 function respondEstimate(req,res){
   try{
     const token=String(req.params?.token||'').trim();
@@ -364,6 +441,8 @@ express.application.patch=function(route,...handlers){
   if(route==='/api/appointments/:id')return patch.call(this,route,updateAppointment);
   if(route==='/api/repair-orders/:repairOrderId/recommendations/:recommendationId/approve')return patch.call(this,route,approveRecommendation);
   if(route==='/api/repair-orders/:repairOrderId/recommendations/:recommendationId/decline')return patch.call(this,route,declineRecommendation);
+  if(route==='/api/customer-repair-authorization/:repairOrderId/:recommendationId/approve')return patch.call(this,route,customerApproveRecommendation);
+  if(route==='/api/customer-repair-authorization/:repairOrderId/:recommendationId/decline')return patch.call(this,route,customerDeclineRecommendation);
   return patch.call(this,route,...handlers);
 };
 express.application.delete=function(route,...handlers){
