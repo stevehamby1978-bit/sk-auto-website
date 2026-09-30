@@ -9,7 +9,7 @@ function installV2PartsRequests(app, db, { requireLogin }) {
   const sid = req => Number(req.session?.employee?.shop_id || 0);
   const eid = req => Number(req.session?.employee?.id || 0);
   const allowed = ['requested','ordered','received','installed','cancelled'];
-  const rank = { requested:0, ordered:1, received:2, installed:3, cancelled:4 };
+  const transitions = { requested:['ordered','cancelled'], ordered:['received','cancelled'], received:['installed','cancelled'], installed:[], cancelled:[] };
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS v2_parts_requests(
@@ -106,13 +106,14 @@ function installV2PartsRequests(app, db, { requireLogin }) {
       if (!row) return res.status(404).json({ error: 'Parts request not found.' });
       if (row.repair_order_status === 'completed' || String(row.workflow_status || '').toLowerCase() === 'delivered') return res.status(409).json({ error: 'Cannot change parts workflow after repair-order completion or vehicle delivery.' });
       if (row.status === 'cancelled' || row.status === 'installed') return res.status(409).json({ error: `This parts request is already ${row.status}.` });
-      if (status !== 'cancelled' && rank[status] < rank[row.status]) return res.status(409).json({ error: 'Parts status cannot move backward.' });
+      if (status !== row.status && !(transitions[row.status] || []).includes(status)) return res.status(409).json({ error: `Cannot change parts status from ${row.status} to ${status}.` });
 
       const vendor = req.body?.vendor === undefined ? row.vendor : String(req.body.vendor || '').trim().slice(0,300);
       const rawEta = req.body?.eta === undefined ? row.eta : req.body.eta;
-      const eta = rawEta === null || rawEta === '' ? null : rawEta;
+      const eta = rawEta === null || rawEta === '' ? null : String(rawEta).trim();
       if (status === 'ordered' && !vendor) return res.status(400).json({ error: 'Vendor is required when marking a part ordered.' });
-      if (eta !== null && Number.isNaN(Date.parse(String(eta)))) return res.status(400).json({ error: 'Valid ETA is required.' });
+      if (status === 'ordered' && !eta) return res.status(400).json({ error: 'ETA is required when marking a part ordered.' });
+      if (eta !== null && Number.isNaN(Date.parse(eta))) return res.status(400).json({ error: 'Valid ETA is required.' });
       if (status === row.status && vendor === row.vendor && String(eta || '') === String(row.eta || '')) return res.json({ ok:true,status,unchanged:true });
 
       const tx = db.transaction(() => {
