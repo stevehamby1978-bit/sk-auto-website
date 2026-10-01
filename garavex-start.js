@@ -12,6 +12,10 @@ const fs = require('fs');
 const path = require('path');
 const Module = require('module');
 
+// The scheduling preload opens the same SQLite file as server.js, so ensure the
+// configured data directory exists before the preload is required.
+fs.mkdirSync(process.env.DATA_DIR || path.join(__dirname, 'data'), { recursive: true });
+
 // Register tenant-safe replacements before server.js defines the legacy scheduling
 // routes. The preload only intercepts the specific scheduling endpoints it owns.
 require('./v2-scheduling-preload');
