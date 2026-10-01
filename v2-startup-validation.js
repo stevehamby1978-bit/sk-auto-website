@@ -117,6 +117,15 @@ if(check(exists('v2-vin.js'),'v2-vin.js exists')){
  check(/no-store, private, max-age=0/.test(vin),'V2 VIN responses disable caching');
 }
 
+if(check(exists('v2-warranty.js'),'v2-warranty.js exists')){
+ const warranty=read('v2-warranty.js');
+ check(/normalizedRole\}=require\(['"]\.\/v2-permissions['"]\)/.test(warranty),'V2 warranty imports canonical role normalization');
+ check(/normalizedRole\(employee\)!==['"]owner['"]/.test(warranty),'V2 warranty owner middleware uses normalized roles');
+ check(/normalizedRole\(current\)!==['"]owner['"]/.test(warranty),'V2 warranty transaction revalidates normalized owner role');
+ check(/w\.shop_id=\?/.test(warranty)&&/r\.shop_id=w\.shop_id/.test(warranty),'V2 warranty records remain shop scoped to repair orders');
+ check(/no-store, private, max-age=0/.test(warranty),'V2 warranty responses disable caching');
+}
+
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
  if(check(exists(file),`${file} exists`)){
   const src=read(file);
