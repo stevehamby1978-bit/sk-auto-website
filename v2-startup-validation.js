@@ -130,7 +130,7 @@ const customerFacingV2Pages=['v2-dashboard.html','v2-dvi.html','v2-inventory.htm
 for(const file of customerFacingV2Pages){
  if(exists(file)){
   const src=read(file);
-  check(!/S&K\\s+Auto|S&amp;K\\s+Auto|S&K\\s+AUTO|S&amp;K\\s+AUTO/i.test(src),`V2 customer-facing page has no hard-coded S&K Auto branding: ${file}`);
+  check(!/S&K\s+Auto|S&amp;K\s+Auto|S&K\s+AUTO|S&amp;K\s+AUTO/i.test(src),`V2 customer-facing page has no hard-coded S&K Auto branding: ${file}`);
  }
 }
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
