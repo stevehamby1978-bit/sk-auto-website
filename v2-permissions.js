@@ -1,12 +1,23 @@
 /* Garavex V2 role/permission helpers. */
+function normalizedRole(employee) {
+  return String(employee?.role || '').trim().toLowerCase();
+}
+
 function parsePermissions(employee) {
   if (!employee) return {};
-  if (employee.role === 'owner') return { owner: true, all: true };
+  if (normalizedRole(employee) === 'owner') return { owner: true, all: true };
   try {
     const value = typeof employee.permissions_json === 'string'
       ? JSON.parse(employee.permissions_json || '{}')
       : (employee.permissions_json || {});
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    // Only an explicit boolean true grants a permission. Ignore prototype keys
+    // and non-boolean truthy values from malformed or legacy permission JSON.
+    const permissions = Object.create(null);
+    for (const [key, granted] of Object.entries(value)) {
+      if (Object.prototype.hasOwnProperty.call(value, key) && granted === true) permissions[key] = true;
+    }
+    return permissions;
   } catch (_) {
     return {};
   }
@@ -43,6 +54,7 @@ function permissionMiddleware(permission, db) {
   if (typeof permission !== 'string' || !permission.trim()) {
     throw new Error('Garavex V2 permission middleware requires a permission name.');
   }
+  const requiredPermission = permission.trim();
   return function requireV2Permission(req, res, next) {
     const sessionEmployee = req.session?.employee;
     if (!validSessionEmployee(sessionEmployee)) {
@@ -62,11 +74,11 @@ function permissionMiddleware(permission, db) {
       req.v2ShopId = Number(employee.shop_id);
     }
 
-    if (employee.role === 'owner') return next();
+    if (normalizedRole(employee) === 'owner') return next();
     const permissions = parsePermissions(employee);
-    if (permissions[permission] === true) return next();
-    return deny(req, res, 403, `Permission required: ${permission}`);
+    if (Object.prototype.hasOwnProperty.call(permissions, requiredPermission) && permissions[requiredPermission] === true) return next();
+    return deny(req, res, 403, `Permission required: ${requiredPermission}`);
   };
 }
 
-module.exports = { parsePermissions, permissionMiddleware, validSessionEmployee, loadCurrentEmployee };
+module.exports = { parsePermissions, permissionMiddleware, validSessionEmployee, loadCurrentEmployee, normalizedRole };
