@@ -124,10 +124,52 @@ function applyV2Schema(db) {
   ensureColumn(db, 'vehicles', 'plate_state', 'TEXT');
   ensureColumn(db, 'employees', 'hourly_cost', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'employees', 'permissions_json', "TEXT NOT NULL DEFAULT '{}'");
+  // Nullable shop link required by the V2 auth JOIN (employees -> shops).
+  ensureColumn(db, 'employees', 'shop_id', 'INTEGER');
   ensureColumn(db, 'shops', 'default_labor_rate', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'shops', 'parts_markup_percent', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'shops', 'dvi_enabled', 'INTEGER NOT NULL DEFAULT 1');
   ensureColumn(db, 'shops', 'customer_portal_enabled', 'INTEGER NOT NULL DEFAULT 1');
+
+  backfillEmployeeShopIds(db);
+}
+
+// Assigns shop_id only where the relationship is unambiguous. Anything else stays
+// NULL and cannot log in until an admin assigns a shop explicitly.
+function backfillEmployeeShopIds(db) {
+  const unassigned = db.prepare('SELECT * FROM employees WHERE shop_id IS NULL').all();
+  if (!unassigned.length) return;
+
+  const shopColumns = new Set(db.prepare('PRAGMA table_info(shops)').all().map(c => c.name));
+  const shops = db.prepare('SELECT * FROM shops').all();
+  const normalize = value => (value == null ? '' : String(value).trim().toLowerCase());
+  const assign = db.prepare('UPDATE employees SET shop_id = ? WHERE id = ? AND shop_id IS NULL');
+
+  for (const employee of unassigned) {
+    let shop = null;
+    let reason = '';
+
+    if (shops.length === 1 && normalize(employee.role) === 'owner') {
+      shop = shops[0];
+      reason = 'sole shop and owner role';
+    } else if (shopColumns.has('email')) {
+      const email = normalize(employee.email);
+      if (email) {
+        const matches = shops.filter(s => normalize(s.email) === email);
+        if (matches.length === 1) {
+          shop = matches[0];
+          reason = 'email match';
+        }
+      }
+    }
+
+    if (shop) {
+      assign.run(shop.id, employee.id);
+      console.log(`[v2-schema] Assigned employee ${employee.id} to shop ${shop.id} (${reason})`);
+    } else {
+      console.log(`[v2-schema] Employee ${employee.id} left without shop_id (no unambiguous shop match; assign manually)`);
+    }
+  }
 }
 
 function installV2Schema(db) {
