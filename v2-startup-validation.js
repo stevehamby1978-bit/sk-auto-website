@@ -66,6 +66,11 @@ if(check(exists('v2-permissions-admin.js'),'v2-permissions-admin.js exists')){
  check(/loadCurrentEmployee\(db,sessionEmployee\)/.test(admin),'V2 permissions admin reloads the live employee');
  check(/WHERE id=\? AND shop_id=\? AND active=1/.test(admin),'V2 permissions admin targets active employees in the current shop');
  check(/UPDATE employees SET permissions_json=\? WHERE id=\? AND shop_id=\? AND active=1/.test(admin),'V2 permission writes remain active-employee and shop scoped');
+ check(/stillLiveOwner\(req,sc\)/.test(admin),'V2 permission writes revalidate the acting owner inside the transaction');
+ check(/normalizedRole\(emp\)===['"]owner['"]/.test(admin),'V2 permission admin protects normalized owner roles');
+ check(/LOWER\(TRIM\(COALESCE\(role,''\)\)\)!='owner'/.test(admin),'V2 permission SQL refuses to restrict owner accounts');
+ check(/no-store, private, max-age=0/.test(admin),'V2 permission admin disables caching for sensitive responses');
+ check(/employee\.permissions_updated/.test(admin),'V2 permission changes remain audit logged');
  const catalogMatch=admin.match(/const catalog=\{([\s\S]*?)\};/);
  if(check(Boolean(catalogMatch),'V2 permission catalog can be inspected by release validation')){
   const catalogKeys=new Set();
