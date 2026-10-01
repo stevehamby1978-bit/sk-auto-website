@@ -101,6 +101,7 @@ if(check(exists('v2-admin-api.js'),'v2-admin-api.js exists')){
  check(/requireSettings\s*=\s*permissionMiddleware\(['"]settings['"],\s*db\)/.test(adminApi),'V2 admin API defines settings authorization');
  check(/app\.get\(['"]\/api\/v2\/settings['"],\s*requireLogin,\s*requireOwner,\s*requireSettings/.test(adminApi),'V2 settings read requires owner and settings authorization');
  check(/app\.patch\(['"]\/api\/v2\/settings['"],\s*requireLogin,\s*requireOwner,\s*requireSettings/.test(adminApi),'V2 settings update requires owner and settings authorization');
+ check(/app\.get\(['"]\/api\/v2\/canned-jobs['"],\s*requireLogin,\s*requireSettings/.test(adminApi),'V2 canned-job reads require settings authorization');
  check(/app\.post\(['"]\/api\/v2\/canned-jobs['"],\s*requireLogin,\s*requireOwner,\s*requireSettings/.test(adminApi),'V2 canned-job creation requires owner and settings authorization');
  check(/stillLive\(req,scope\)/.test(adminApi),'V2 admin writes revalidate the live employee inside transactions');
  check(/no-store, private, max-age=0/.test(adminApi),'V2 admin API disables caching for sensitive responses');
