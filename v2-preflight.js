@@ -10,7 +10,7 @@ function installV2Preflight(app,db,{requireLogin,requireOwner}){
    res.set('Cache-Control','no-store, private, max-age=0');res.set('Pragma','no-cache');res.set('Expires','0');
    const employee=loadCurrentEmployee(db,req.session?.employee),shopId=Number(employee?.shop_id||0),employeeId=Number(employee?.id||0);
    if(!employee||!validId(shopId)||!validId(employeeId))return res.status(401).json({ok:false,ready:false,error:'Employee session is no longer valid for this shop.'});
-   const requiredTables=['shops','employees','customers','vehicles','repair_orders','dvi_inspections','dvi_items','technician_time_entries','deferred_services','inventory_items','vendors','purchase_orders','customer_portal_tokens','audit_log'];
+   const requiredTables=['shops','employees','customers','vehicles','repair_orders','repair_order_items','dvi_inspections','dvi_items','dvi_attachments','technician_time_entries','deferred_services','inventory_items','vendors','purchase_orders','purchase_order_items','canned_jobs','audit_log','customer_portal_tokens','v2_comebacks','v2_tasks','v2_ro_blockers','v2_ro_promises','v2_parts_requests','v2_vehicle_keys','v2_road_tests','v2_deliveries','v2_customer_requests','v2_shop_handoffs','v2_loaners','v2_loaner_assignments','v2_warranties'];
    const missingTables=requiredTables.filter(name=>!table(name));
    const scopedTables=requiredTables.filter(name=>name!=='shops');
    const missingShopScope=scopedTables.filter(name=>table(name)&&!column(name,'shop_id'));
