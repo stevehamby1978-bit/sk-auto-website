@@ -12,13 +12,14 @@ const fs = require('fs');
 const path = require('path');
 const Module = require('module');
 
-// The scheduling preload opens the same SQLite file as server.js, so ensure the
-// configured data directory exists before the preload is required.
+// Safety preloads open the same SQLite file as server.js, so ensure the configured
+// data directory exists before they are required.
 fs.mkdirSync(process.env.DATA_DIR || path.join(__dirname, 'data'), { recursive: true });
 
-// Register tenant-safe replacements before server.js defines the legacy scheduling
-// routes. The preload only intercepts the specific scheduling endpoints it owns.
+// Register tenant-safe replacements before server.js defines the corresponding
+// legacy routes. Each preload intercepts only the endpoints it owns.
 require('./v2-scheduling-preload');
+require('./v2-recommendations-preload');
 
 const serverFilename = path.join(__dirname, 'server.js');
 const listenerNeedle = '\napp.listen(PORT, () => {';
