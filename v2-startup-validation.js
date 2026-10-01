@@ -5,7 +5,7 @@
 'use strict';
 const fs=require('fs');
 const path=require('path');
-const root=__dirname;
+const root=__dirname__;
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 const exists=name=>fs.existsSync(path.join(root,name));
 const fail=[];
@@ -73,6 +73,15 @@ if(check(exists('v2-permissions-admin.js'),'v2-permissions-admin.js exists')){
   check(unknown.length===0,`All permissionMiddleware keys exist in the V2 permission catalog${unknown.length?`: ${unknown.map(u=>`${u.file}:${u.key}`).join(', ')}`:''}`);
   check(usages.some(u=>u.file==='v2-time.js'&&u.key==='time_clock'),'V2 technician time uses canonical time_clock permission');
  }
+}
+
+if(check(exists('v2-core-operations.js'),'v2-core-operations.js exists')){
+ const core=read('v2-core-operations.js');
+ check(/requireRO\s*=\s*permissionMiddleware\(['"]repair_orders['"],\s*db\)/.test(core),'V2 core operations define repair_orders authorization');
+ check(/requireReports\s*=\s*permissionMiddleware\(['"]reports['"],\s*db\)/.test(core),'V2 core operations define reports authorization');
+ check(/app\.get\(['"]\/api\/v2\/overview['"],\s*requireLogin,\s*requireRO/.test(core),'V2 overview requires repair_orders permission');
+ check(/app\.get\(['"]\/api\/v2\/technician-performance['"],\s*requireLogin,\s*requireOwner,\s*requireReports/.test(core),'Technician performance requires owner and reports authorization');
+ check(/app\.get\(['"]\/api\/v2\/profitability['"],\s*requireLogin,\s*requireOwner,\s*requireReports/.test(core),'Profitability requires owner and reports authorization');
 }
 
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
