@@ -33,7 +33,23 @@ async function multiShopLogin(req, res) {
       if (!employee.active || !employee.shop_active || !employee.password_hash) continue;
       if (await bcrypt.compare(password, employee.password_hash)) matches.push(employee);
     }
-    if (matches.length !== 1) return res.status(401).json({ error: 'Invalid email or password.' });
+
+    if (matches.length !== 1) {
+      console.log('[V2 AUTH DIAG]', JSON.stringify({
+        candidateCount: candidates.length,
+        candidates: candidates.map(e => ({
+          id: e.id,
+          shop_id: e.shop_id,
+          role: e.role,
+          employee_active: e.active,
+          shop_active: e.shop_active,
+          has_password_hash: !!e.password_hash,
+          shop_name: e.shop_name
+        })),
+        matchedPasswordCount: matches.length
+      }));
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
 
     const employee = matches[0];
     req.session.regenerate(err => {
