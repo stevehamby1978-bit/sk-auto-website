@@ -4,14 +4,17 @@
  * Garavex application launcher.
  *
  * server.js is the legacy production server and is intentionally left intact while
- * V2 is developed additively. This launcher injects the centralized V2 bootstrap
- * immediately before the HTTP listener starts, after the legacy schema/routes have
- * been defined. That guarantees every V2 schema migration and route is installed
- * exactly once without duplicating dozens of require/install calls in server.js.
+ * V2 is developed additively. This launcher installs V2 safety overrides before
+ * compiling the legacy server, then injects the centralized V2 bootstrap immediately
+ * before the HTTP listener starts.
  */
 const fs = require('fs');
 const path = require('path');
 const Module = require('module');
+
+// Register tenant-safe replacements before server.js defines the legacy scheduling
+// routes. The preload only intercepts the specific scheduling endpoints it owns.
+require('./v2-scheduling-preload');
 
 const serverFilename = path.join(__dirname, 'server.js');
 const listenerNeedle = '\napp.listen(PORT, () => {';
@@ -25,6 +28,10 @@ if (!source.includes(listenerNeedle)) {
 if (source.includes(bootstrapMarker)) {
   throw new Error('Garavex startup aborted: V2 bootstrap is already wired directly into server.js. Remove garavex-start.js from the start command before deploying.');
 }
+
+// V2 owns appointment reminders. Disable only the two legacy scheduler calls while
+// leaving the legacy function definition intact for rollback/debugging.
+source = source.replace(/\nsendAppointmentReminders\(\);\s*\n\s*setInterval\(sendAppointmentReminders,\s*15\s*\*\s*60\s*\*\s*1000\);/, '\n// Legacy appointment reminder scheduler disabled by Garavex V2.');
 
 const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
