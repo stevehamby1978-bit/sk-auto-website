@@ -17,7 +17,7 @@ function installV2PermissionsAdmin(app,db,{requireLogin,requireOwner}){
  };
  const stillLiveOwner=(req,sc)=>{const live=loadCurrentEmployee(db,req.session?.employee);return Boolean(live&&Number(live.id)===sc.employee&&Number(live.shop_id)===sc.shop&&normalizedRole(live)==='owner');};
  const catalog={
-  repair_orders:'Repair orders',dispatch:'Technician dispatch',dvi:'Digital inspections',time_clock:'Technician time',parts:'Parts requests',inventory:'Inventory & vendors',purchase_orders:'Purchase orders',customer_contact:'Customer contact & approvals',tasks:'Tasks',road_tests:'Road tests',keys:'Vehicle keys',loaners:'Loaner vehicles',delivery:'Final QC & delivery',reports:'Reports',settings:'Shop settings',employees:'Employee management',audit:'Audit log'
+  dashboard:'Dashboard & KPIs',repair_orders:'Repair orders',dispatch:'Technician dispatch',dvi:'Digital inspections',time_clock:'Technician time',parts:'Parts requests',inventory:'Inventory & vendors',purchase_orders:'Purchase orders',customer_contact:'Customer contact & approvals',tasks:'Tasks',road_tests:'Road tests',keys:'Vehicle keys',loaners:'Loaner vehicles',delivery:'Final QC & delivery',reports:'Reports',settings:'Shop settings',employees:'Employee management',audit:'Audit log'
  };
  const valid=new Set(Object.keys(catalog));
 
