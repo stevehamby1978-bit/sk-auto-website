@@ -86,6 +86,16 @@ if(check(exists('v2-core-operations.js'),'v2-core-operations.js exists')){
  check(/app\.get\(['"]\/api\/v2\/audit['"],\s*requireLogin,\s*requireOwner,\s*requireAudit/.test(core),'Audit log requires owner and audit authorization');
 }
 
+if(check(exists('v2-admin-api.js'),'v2-admin-api.js exists')){
+ const adminApi=read('v2-admin-api.js');
+ check(/requireSettings\s*=\s*permissionMiddleware\(['"]settings['"],\s*db\)/.test(adminApi),'V2 admin API defines settings authorization');
+ check(/app\.get\(['"]\/api\/v2\/settings['"],\s*requireLogin,\s*requireOwner,\s*requireSettings/.test(adminApi),'V2 settings read requires owner and settings authorization');
+ check(/app\.patch\(['"]\/api\/v2\/settings['"],\s*requireLogin,\s*requireOwner,\s*requireSettings/.test(adminApi),'V2 settings update requires owner and settings authorization');
+ check(/app\.post\(['"]\/api\/v2\/canned-jobs['"],\s*requireLogin,\s*requireOwner,\s*requireSettings/.test(adminApi),'V2 canned-job creation requires owner and settings authorization');
+ check(/stillLive\(req,scope\)/.test(adminApi),'V2 admin writes revalidate the live employee inside transactions');
+ check(/no-store, private, max-age=0/.test(adminApi),'V2 admin API disables caching for sensitive responses');
+}
+
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
  if(check(exists(file),`${file} exists`)){
   const src=read(file);
