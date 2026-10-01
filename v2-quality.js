@@ -12,7 +12,7 @@ function installV2Quality(app, db, { requireLogin }) {
   const live=(req,a)=>{const employee=loadCurrentEmployee(db,req.session?.employee);return employee&&Number(employee.id)===a.employeeId&&Number(employee.shop_id)===a.shop;};
 
   function checksFor(shop, id) {
-    const ro = db.prepare(`SELECT r.id,r.status,r.workflow_status,r.customer_concern,r.technician_diagnosis,r.customer_id,r.vehicle_id,c.name customer_name,v.year,v.make,v.model,v.mileage FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)`).get(id, shop);
+    const ro = db.prepare(`SELECT r.id,r.status,r.workflow_status,r.customer_concern,r.technician_diagnosis,r.customer_id,r.vehicle_id,c.name customer_name,v.year,v.make,v.model,v.mileage FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id AND v.customer_id=r.customer_id WHERE r.id=? AND r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)`).get(id, shop);
     if (!ro) return null;
     const itemCount = Number(db.prepare(`SELECT COUNT(*) n FROM repair_order_items i JOIN repair_orders r ON r.id=i.repair_order_id WHERE i.repair_order_id=? AND r.shop_id=?`).get(id, shop)?.n || 0);
     const openTime = Number(db.prepare(`SELECT COUNT(*) n FROM technician_time_entries WHERE shop_id=? AND repair_order_id=? AND clock_out IS NULL`).get(shop, id)?.n || 0);
