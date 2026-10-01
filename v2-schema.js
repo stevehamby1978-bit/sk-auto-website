@@ -122,12 +122,68 @@ function applyV2Schema(db) {
   ensureColumn(db, 'vehicles', 'trim', 'TEXT');
   ensureColumn(db, 'vehicles', 'license_plate', 'TEXT');
   ensureColumn(db, 'vehicles', 'plate_state', 'TEXT');
+  // Nullable on purpose: no foreign key yet. Required by the V2 auth JOIN (employees.shop_id = shops.id).
+  ensureColumn(db, 'employees', 'shop_id', 'INTEGER');
   ensureColumn(db, 'employees', 'hourly_cost', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'employees', 'permissions_json', "TEXT NOT NULL DEFAULT '{}'");
   ensureColumn(db, 'shops', 'default_labor_rate', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'shops', 'parts_markup_percent', 'REAL NOT NULL DEFAULT 0');
   ensureColumn(db, 'shops', 'dvi_enabled', 'INTEGER NOT NULL DEFAULT 1');
   ensureColumn(db, 'shops', 'customer_portal_enabled', 'INTEGER NOT NULL DEFAULT 1');
+
+  // Runs after the column exists and inside the migration transaction.
+  backfillEmployeeShopIds(db);
+}
+
+/* Deterministic, conservative backfill of employees.shop_id. Only unambiguous
+ * relationships are assigned; everything else stays NULL and cannot log in until
+ * explicitly assigned. Passwords, hashes, and existing assignments are never touched.
+ */
+function backfillEmployeeShopIds(db) {
+  const unassigned = db.prepare(
+    "SELECT id, email, role FROM employees WHERE shop_id IS NULL ORDER BY id"
+  ).all();
+  if (!unassigned.length) return;
+
+  const shops = db.prepare('SELECT id, email FROM shops ORDER BY id').all();
+  const setShop = db.prepare('UPDATE employees SET shop_id=? WHERE id=? AND shop_id IS NULL');
+  const audit = db.prepare(
+    "INSERT INTO audit_log (shop_id, employee_id, action, entity_type, entity_id, details) VALUES (?, ?, 'v2_schema_backfill_employee_shop', 'employee', ?, ?)"
+  );
+  const normalize = value => String(value || '').trim().toLowerCase();
+
+  for (const employee of unassigned) {
+    let shopId = null;
+    let reason = null;
+
+    // (a) Exactly one shop exists and the employee is an owner.
+    if (shops.length === 1 && employee.role === 'owner') {
+      shopId = shops[0].id;
+      reason = 'single_shop_owner';
+    } else {
+      // (b) Employee email matches exactly one shop's email.
+      const employeeEmail = normalize(employee.email);
+      if (employeeEmail) {
+        const matches = shops.filter(shop => normalize(shop.email) === employeeEmail);
+        if (matches.length === 1) {
+          shopId = matches[0].id;
+          reason = 'email_match';
+        }
+      }
+    }
+
+    // (c) Ambiguous or unknown: leave NULL.
+    if (shopId === null) {
+      console.log(`[v2-schema] employee ${employee.id} left without shop_id (no unambiguous match)`);
+      continue;
+    }
+
+    const result = setShop.run(shopId, employee.id);
+    if (result.changes) {
+      console.log(`[v2-schema] assigned employee ${employee.id} to shop ${shopId} (${reason})`);
+      audit.run(shopId, employee.id, employee.id, JSON.stringify({ shop_id: shopId, reason }));
+    }
+  }
 }
 
 function installV2Schema(db) {
