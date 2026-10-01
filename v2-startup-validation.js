@@ -61,6 +61,18 @@ if(check(exists('v2-permissions-admin.js'),'v2-permissions-admin.js exists')){
  check(/loadCurrentEmployee\(db,sessionEmployee\)/.test(admin),'V2 permissions admin reloads the live employee');
  check(/WHERE id=\? AND shop_id=\? AND active=1/.test(admin),'V2 permissions admin targets active employees in the current shop');
  check(/UPDATE employees SET permissions_json=\? WHERE id=\? AND shop_id=\? AND active=1/.test(admin),'V2 permission writes remain active-employee and shop scoped');
+ const catalogMatch=admin.match(/const catalog=\{([\s\S]*?)\};/);
+ if(check(Boolean(catalogMatch),'V2 permission catalog can be inspected by release validation')){
+  const catalogKeys=new Set();
+  const keyRe=/([A-Za-z_][A-Za-z0-9_]*)\s*:/g;let k;
+  while((k=keyRe.exec(catalogMatch[1])))catalogKeys.add(k[1]);
+  const usages=[];
+  const usageRe=/permissionMiddleware\(\s*['"]([^'"]+)['"]/g;
+  for(const file of jsFiles){const src=read(file);let u;while((u=usageRe.exec(src)))usages.push({file,key:u[1]});}
+  const unknown=usages.filter(u=>!catalogKeys.has(u.key));
+  check(unknown.length===0,`All permissionMiddleware keys exist in the V2 permission catalog${unknown.length?`: ${unknown.map(u=>`${u.file}:${u.key}`).join(', ')}`:''}`);
+  check(usages.some(u=>u.file==='v2-time.js'&&u.key==='time_clock'),'V2 technician time uses canonical time_clock permission');
+ }
 }
 
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
