@@ -21,7 +21,7 @@ function installV2WorkflowSummary(app, db, { requireLogin }) {
       if (!validId(id)) return res.status(400).json({ error: 'Valid repair order ID is required.' });
       req.v2Employee = live; req.v2ShopId = shopId; noStore(res);
 
-      const ro = db.prepare(`SELECT r.*,c.name customer_name,c.phone customer_phone,v.year,v.make,v.model,v.vin FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)`).get(id, shopId);
+      const ro = db.prepare(`SELECT r.*,c.name customer_name,c.phone customer_phone,v.year,v.make,v.model,v.vin FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id AND v.customer_id=r.customer_id WHERE r.id=? AND r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)`).get(id, shopId);
       if (!ro) return res.status(404).json({ error: 'Repair order, customer, or vehicle relationship was not found.' });
 
       const count = (table, where='1=1') => { safeTable(table); if(!tableExists(table))return 0; return Number(db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE shop_id=? AND repair_order_id=? AND ${where}`).get(shopId,id)?.n||0); };
