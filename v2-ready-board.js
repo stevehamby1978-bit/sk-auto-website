@@ -24,7 +24,7 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
                c.name customer_name,c.phone customer_phone,v.year,v.make,v.model
         FROM repair_orders r
         JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
-        LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id
+        LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id AND v.customer_id=r.customer_id
         WHERE r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)
           AND LOWER(COALESCE(r.workflow_status,''))!='delivered'
           AND (LOWER(COALESCE(r.status,''))!='completed' OR datetime(r.completed_at)>=datetime('now','-1 day'))
