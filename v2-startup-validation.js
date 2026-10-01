@@ -126,7 +126,14 @@ if(check(exists('v2-warranty.js'),'v2-warranty.js exists')){
  check(/no-store, private, max-age=0/.test(warranty),'V2 warranty responses disable caching');
 }
 
-for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
+const customerFacingV2Pages=['v2-dashboard.html','v2-dvi.html','v2-inventory.html','v2-vin.html','v2-parts.html','v2-reports.html','v2-settings.html','dvi-review.html','customer-portal.html'];
+for(const file of customerFacingV2Pages){
+ if(exists(file)){
+  const src=read(file);
+  check(!/S&K\\s+Auto|S&amp;K\\s+Auto|S&K\\s+AUTO|S&amp;K\\s+AUTO/i.test(src),`V2 customer-facing page has no hard-coded S&K Auto branding: ${file}`);
+ }
+}
+if(exists('v2-preflight.js')){for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
  if(check(exists(file),`${file} exists`)){
   const src=read(file);
   check(/requireOwner/.test(src),`${file} requires owner authorization`);
