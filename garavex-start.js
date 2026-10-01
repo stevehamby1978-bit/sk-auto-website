@@ -18,6 +18,7 @@ fs.mkdirSync(process.env.DATA_DIR || path.join(__dirname, 'data'), { recursive: 
 
 // Register tenant-safe replacements before server.js defines the corresponding
 // legacy routes. Each preload intercepts only the endpoints it owns.
+require('./v2-auth-preload');
 require('./v2-scheduling-preload');
 require('./v2-recommendations-preload');
 require('./v2-communications-preload');
