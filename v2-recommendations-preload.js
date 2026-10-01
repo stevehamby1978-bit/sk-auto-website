@@ -50,7 +50,7 @@ function install(app) {
       if (parts < 0 || labor < 0) return res.status(400).json({ error: 'Parts and labor cannot be negative.' });
 
       const order = db.prepare(`
-        SELECT r.id,r.status,r.amount_paid,c.name AS customer_name,c.phone AS customer_phone,s.name AS shop_name
+        SELECT r.id,r.status,r.amount_paid,c.name AS customer_name,c.phone AS customer_phone,s.name AS shop_name,s.slug AS shop_slug
         FROM repair_orders r
         JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
         JOIN shops s ON s.id=r.shop_id
@@ -62,11 +62,11 @@ function install(app) {
       const token = crypto.randomBytes(32).toString('hex');
       const result = db.prepare(`INSERT INTO repair_order_recommendations(repair_order_id,description,parts,labor,status,authorization_token) VALUES(?,?,?,?, 'pending',?)`).run(orderId, description, parts, labor, token);
 
-      // Messaging is tenant-branded. The authorization page remains the existing public page
-      // until the Garavex public authorization host is migrated separately.
+      // The shared Twilio account belongs to S&K Auto. Other Garavex tenants must not
+      // inherit S&K's SMS provider or S&K's public authorization URL.
       try {
         const twilioClient = global.twilioClient;
-        if (twilioClient && order.customer_phone) {
+        if (twilioClient && order.customer_phone && String(order.shop_slug || '').toLowerCase() === 'sk-auto') {
           const base = process.env.REPAIR_AUTHORIZATION_BASE_URL || 'https://skautohutch.com/repair-authorization.html';
           const url = `${base}?order=${encodeURIComponent(orderId)}&repair=${encodeURIComponent(result.lastInsertRowid)}&token=${encodeURIComponent(token)}`;
           await twilioClient.messages.create({
