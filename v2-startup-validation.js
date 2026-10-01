@@ -133,7 +133,7 @@ for(const file of customerFacingV2Pages){
   check(!/S&K\\s+Auto|S&amp;K\\s+Auto|S&K\\s+AUTO|S&amp;K\\s+AUTO/i.test(src),`V2 customer-facing page has no hard-coded S&K Auto branding: ${file}`);
  }
 }
-if(exists('v2-preflight.js')){for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
+for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
  if(check(exists(file),`${file} exists`)){
   const src=read(file);
   check(/requireOwner/.test(src),`${file} requires owner authorization`);
