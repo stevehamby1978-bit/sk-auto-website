@@ -79,9 +79,11 @@ if(check(exists('v2-core-operations.js'),'v2-core-operations.js exists')){
  const core=read('v2-core-operations.js');
  check(/requireRO\s*=\s*permissionMiddleware\(['"]repair_orders['"],\s*db\)/.test(core),'V2 core operations define repair_orders authorization');
  check(/requireReports\s*=\s*permissionMiddleware\(['"]reports['"],\s*db\)/.test(core),'V2 core operations define reports authorization');
+ check(/requireAudit\s*=\s*permissionMiddleware\(['"]audit['"],\s*db\)/.test(core),'V2 core operations define audit authorization');
  check(/app\.get\(['"]\/api\/v2\/overview['"],\s*requireLogin,\s*requireRO/.test(core),'V2 overview requires repair_orders permission');
  check(/app\.get\(['"]\/api\/v2\/technician-performance['"],\s*requireLogin,\s*requireOwner,\s*requireReports/.test(core),'Technician performance requires owner and reports authorization');
  check(/app\.get\(['"]\/api\/v2\/profitability['"],\s*requireLogin,\s*requireOwner,\s*requireReports/.test(core),'Profitability requires owner and reports authorization');
+ check(/app\.get\(['"]\/api\/v2\/audit['"],\s*requireLogin,\s*requireOwner,\s*requireAudit/.test(core),'Audit log requires owner and audit authorization');
 }
 
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
