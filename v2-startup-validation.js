@@ -5,7 +5,7 @@
 'use strict';
 const fs=require('fs');
 const path=require('path');
-const root=__dirname__;
+const root=__dirname;
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 const exists=name=>fs.existsSync(path.join(root,name));
 const fail=[];
@@ -55,6 +55,11 @@ if(check(exists('v2-permissions.js'),'v2-permissions.js exists')){
  check(/WHERE\s+id\s*=\s*\?\s+AND\s+shop_id\s*=\s*\?\s+AND\s+active\s*=\s*1/i.test(permissions),'V2 live employee authorization rejects inactive employees');
  check(/loadCurrentEmployee\(db,\s*sessionEmployee\)/.test(permissions),'V2 permission middleware authorizes from the live employee row');
  check(/req\.v2ShopId\s*=\s*Number\(employee\.shop_id\)/.test(permissions),'V2 permission middleware derives request shop identity from the live employee row');
+ check(/function normalizedRole\(employee\)/.test(permissions)&&/\.trim\(\)\.toLowerCase\(\)/.test(permissions),'V2 owner authorization uses normalized live roles');
+ check(/Object\.create\(null\)/.test(permissions),'V2 parsed permissions use a prototype-free object');
+ check(/granted\s*===\s*true/.test(permissions),'V2 permission parsing grants only explicit boolean true values');
+ check(/Object\.prototype\.hasOwnProperty\.call\(permissions,\s*requiredPermission\)/.test(permissions),'V2 permission authorization requires an own permission property');
+ check(/const requiredPermission\s*=\s*permission\.trim\(\)/.test(permissions),'V2 permission names are normalized before authorization');
 }
 if(check(exists('v2-permissions-admin.js'),'v2-permissions-admin.js exists')){
  const admin=read('v2-permissions-admin.js');
