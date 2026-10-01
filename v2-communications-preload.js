@@ -61,6 +61,13 @@ function install(app) {
     next();
   });
 
+  // Legacy estimate creation immediately sends S&K-branded Twilio messages and
+  // builds skautohutch.com customer links, so it must never run for another tenant.
+  originalPost.call(app, '/api/estimates', (req, res, next) => {
+    const shopId = requireSk(req, res); if (!shopId) return;
+    next();
+  });
+
   // All legacy Twilio endpoints below use S&K's account/branding and therefore stay S&K-only.
   for (const route of [
     '/api/repair-orders/:id/text-invoice',
