@@ -1,5 +1,6 @@
 /* Garavex V2 centralized additive bootstrap. */
 const {installV2Schema}=require('./v2-schema');
+const {installV2SchedulingSchema}=require('./v2-scheduling-schema');
 const {installV2CoreOperations}=require('./v2-core-operations');
 const {installV2Time}=require('./v2-time');
 const {installV2Deferred}=require('./v2-deferred');
@@ -54,6 +55,7 @@ function installGaravexV2(app,db,deps){
  installingApps.add(app);
  try{
   installV2Schema(db);
+  installV2SchedulingSchema(db);
   installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});
