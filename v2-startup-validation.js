@@ -76,12 +76,14 @@ if(check(exists('v2-permissions-admin.js'),'v2-permissions-admin.js exists')){
   const catalogKeys=new Set();
   const keyRe=/([A-Za-z_][A-Za-z0-9_]*)\s*:/g;let k;
   while((k=keyRe.exec(catalogMatch[1])))catalogKeys.add(k[1]);
+  check(catalogKeys.has('dashboard'),'V2 permission catalog includes dashboard authorization');
   const usages=[];
   const usageRe=/permissionMiddleware\(\s*['"]([^'"]+)['"]/g;
   for(const file of jsFiles){const src=read(file);let u;while((u=usageRe.exec(src)))usages.push({file,key:u[1]});}
   const unknown=usages.filter(u=>!catalogKeys.has(u.key));
   check(unknown.length===0,`All permissionMiddleware keys exist in the V2 permission catalog${unknown.length?`: ${unknown.map(u=>`${u.file}:${u.key}`).join(', ')}`:''}`);
   check(usages.some(u=>u.file==='v2-time.js'&&u.key==='time_clock'),'V2 technician time uses canonical time_clock permission');
+  check(usages.some(u=>u.file==='v2-dashboard-kpis.js'&&u.key==='dashboard'),'V2 dashboard KPIs use canonical dashboard permission');
  }
 }
 
