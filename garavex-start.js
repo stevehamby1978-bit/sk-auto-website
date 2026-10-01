@@ -20,6 +20,7 @@ fs.mkdirSync(process.env.DATA_DIR || path.join(__dirname, 'data'), { recursive: 
 // legacy routes. Each preload intercepts only the endpoints it owns.
 require('./v2-scheduling-preload');
 require('./v2-recommendations-preload');
+require('./v2-communications-preload');
 
 const serverFilename = path.join(__dirname, 'server.js');
 const listenerNeedle = '\napp.listen(PORT, () => {';
