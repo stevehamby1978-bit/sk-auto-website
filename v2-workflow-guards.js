@@ -25,7 +25,7 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
       const id=Number(req.params.id);
       if(!validId(id))return res.status(400).json({error:'Valid repair order ID is required.'});
 
-      const ro=db.prepare(`SELECT r.id,r.status,r.workflow_status,r.payment_status,r.customer_id,r.vehicle_id FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id WHERE r.id=? AND r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)`).get(id,a.shop);
+      const ro=db.prepare(`SELECT r.id,r.status,r.workflow_status,r.payment_status,r.customer_id,r.vehicle_id FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id AND v.customer_id=r.customer_id WHERE r.id=? AND r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)`).get(id,a.shop);
       if(!ro)return res.status(404).json({error:'Repair order, customer, or vehicle relationship was not found.'});
 
       const checks=[];
