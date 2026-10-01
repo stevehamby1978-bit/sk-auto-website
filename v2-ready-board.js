@@ -7,7 +7,7 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
   const requireRepairOrders = permissionMiddleware('repair_orders', db);
   const validId = value => Number.isInteger(value) && value > 0;
   const exists = name => Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
-  const noStore = res => { res.set('Cache-Control','no-store, private, max-age=0'); res.set('Pragma','no-cache'); res.set('Expires','0'); };
+  const noStore = res => { res.set('Cache-Control','no-store, private, max-age=0'); res.set('Pragma','no-cache'); res.set('Expires','0'); res.set('X-Content-Type-Options','nosniff'); };
 
   app.get('/api/v2/ready-board', requireLogin, requireRepairOrders, (req, res) => {
     try {
@@ -15,7 +15,9 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
       const employee=req.v2Employee||loadCurrentEmployee(db,req.session?.employee);
       const shopId=Number(employee?.shop_id||0),employeeId=Number(employee?.id||0);
       if(!employee||!validId(shopId)||!validId(employeeId))return res.status(401).json({error:'Employee session is no longer valid for this shop.'});
-      req.v2Employee=employee; req.v2ShopId=shopId;
+      const live=loadCurrentEmployee(db,req.session?.employee);
+      if(!live||Number(live.id)!==employeeId||Number(live.shop_id)!==shopId)return res.status(401).json({error:'Employee session is no longer valid for this shop.'});
+      req.v2Employee=live; req.v2ShopId=Number(live.shop_id);
 
       const repairOrders=db.prepare(`
         SELECT r.id,r.status,r.workflow_status,r.payment_status,r.completed_at,r.created_at,
@@ -25,22 +27,22 @@ function installV2ReadyBoard(app, db, { requireLogin }) {
         LEFT JOIN vehicles v ON v.id=r.vehicle_id AND v.shop_id=r.shop_id
         WHERE r.shop_id=? AND (r.vehicle_id IS NULL OR v.id IS NOT NULL)
           AND LOWER(COALESCE(r.workflow_status,''))!='delivered'
-          AND (r.status!='completed' OR datetime(r.completed_at)>=datetime('now','-1 day'))
+          AND (LOWER(COALESCE(r.status,''))!='completed' OR datetime(r.completed_at)>=datetime('now','-1 day'))
         ORDER BY CASE WHEN LOWER(COALESCE(r.workflow_status,''))='ready' THEN 0 ELSE 1 END,
           CASE WHEN r.completed_at IS NULL THEN 1 ELSE 0 END,r.completed_at,r.id DESC
         LIMIT 150
       `).all(shopId);
 
       const statements={
-        blocker:exists('v2_ro_blockers')?db.prepare(`SELECT 1 FROM v2_ro_blockers WHERE shop_id=? AND repair_order_id=? AND status='open' LIMIT 1`):null,
-        parts:exists('v2_parts_requests')?db.prepare(`SELECT 1 FROM v2_parts_requests WHERE shop_id=? AND repair_order_id=? AND status IN ('requested','ordered','received') LIMIT 1`):null,
-        roadTest:exists('v2_road_tests')?db.prepare(`SELECT 1 FROM v2_road_tests WHERE shop_id=? AND repair_order_id=? AND status='in_progress' LIMIT 1`):null,
+        blocker:exists('v2_ro_blockers')?db.prepare(`SELECT 1 FROM v2_ro_blockers WHERE shop_id=? AND repair_order_id=? AND LOWER(COALESCE(status,''))='open' LIMIT 1`):null,
+        parts:exists('v2_parts_requests')?db.prepare(`SELECT 1 FROM v2_parts_requests WHERE shop_id=? AND repair_order_id=? AND LOWER(COALESCE(status,'')) IN ('requested','ordered','received') LIMIT 1`):null,
+        roadTest:exists('v2_road_tests')?db.prepare(`SELECT 1 FROM v2_road_tests WHERE shop_id=? AND repair_order_id=? AND LOWER(COALESCE(status,''))='in_progress' LIMIT 1`):null,
         latestRoadTest:exists('v2_road_tests')?db.prepare(`SELECT result FROM v2_road_tests WHERE shop_id=? AND repair_order_id=? AND completed_at IS NOT NULL ORDER BY datetime(completed_at) DESC,id DESC LIMIT 1`):null,
         key:exists('v2_vehicle_keys')?db.prepare(`SELECT status FROM v2_vehicle_keys WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`):null,
-        customerRequest:exists('v2_customer_requests')?db.prepare(`SELECT 1 FROM v2_customer_requests WHERE shop_id=? AND repair_order_id=? AND status='open' LIMIT 1`):null,
+        customerRequest:exists('v2_customer_requests')?db.prepare(`SELECT 1 FROM v2_customer_requests WHERE shop_id=? AND repair_order_id=? AND LOWER(COALESCE(status,''))='open' LIMIT 1`):null,
         loaner:exists('v2_loaner_assignments')?db.prepare(`SELECT 1 FROM v2_loaner_assignments WHERE shop_id=? AND repair_order_id=? AND returned_at IS NULL LIMIT 1`):null,
         technicianClock:exists('technician_time_entries')?db.prepare(`SELECT 1 FROM technician_time_entries WHERE shop_id=? AND repair_order_id=? AND clock_out IS NULL LIMIT 1`):null,
-        task:exists('v2_tasks')?db.prepare(`SELECT 1 FROM v2_tasks WHERE shop_id=? AND repair_order_id=? AND status='open' LIMIT 1`):null,
+        task:exists('v2_tasks')?db.prepare(`SELECT 1 FROM v2_tasks WHERE shop_id=? AND repair_order_id=? AND LOWER(COALESCE(status,''))='open' LIMIT 1`):null,
         promise:exists('v2_ro_promises')?db.prepare(`SELECT promised_at FROM v2_ro_promises WHERE shop_id=? AND repair_order_id=? ORDER BY id DESC LIMIT 1`):null,
         delivery:exists('v2_deliveries')?db.prepare(`SELECT customer_notified,keys_returned,documents_given,delivered_at FROM v2_deliveries WHERE shop_id=? AND repair_order_id=?`):null
       };
