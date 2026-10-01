@@ -36,7 +36,7 @@ function installV2WorkflowGuards(app, db, { requireLogin }) {
       };
 
       addCountCheck('blockers','v2_ro_blockers',"status='open'",n=>`${n} open blocker(s)`,'No open blockers');
-      addCountCheck('parts','v2_parts_requests',"status IN ('requested','ordered')",n=>`${n} unresolved parts request(s)`,'Parts requests resolved');
+      addCountCheck('parts','v2_parts_requests',"status IN ('requested','ordered','received')",n=>`${n} unresolved parts request(s)`,'Parts requests resolved');
       addCountCheck('road_test_open','v2_road_tests',"status='in_progress'",()=> 'Road test still in progress','No road test in progress');
       addCountCheck('customer_requests','v2_customer_requests',"status='open'",n=>`${n} customer workflow request(s) open`,'Customer workflow requests clear');
       addCountCheck('loaner','v2_loaner_assignments','returned_at IS NULL',()=> 'Loaner vehicle still checked out','No active loaner vehicle');
