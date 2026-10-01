@@ -107,6 +107,14 @@ if(check(exists('v2-admin-api.js'),'v2-admin-api.js exists')){
  check(/no-store, private, max-age=0/.test(adminApi),'V2 admin API disables caching for sensitive responses');
 }
 
+if(check(exists('v2-vin.js'),'v2-vin.js exists')){
+ const vin=read('v2-vin.js');
+ check(/permissionMiddleware\(['"]repair_orders['"],\s*db\)/.test(vin),'V2 VIN decoding defines repair_orders authorization');
+ check(/app\.get\(['"]\/api\/v2\/vin\/:vin['"],\s*requireLogin,\s*requireRO/.test(vin),'V2 VIN decoding requires repair_orders permission');
+ check(/loadCurrentEmployee\(db,req\.session\?\.employee\)/.test(vin),'V2 VIN decoding revalidates the live employee after the external request');
+ check(/no-store, private, max-age=0/.test(vin),'V2 VIN responses disable caching');
+}
+
 for(const file of ['v2-preflight.js','v2-health.js','v2-release-tests.js']){
  if(check(exists(file),`${file} exists`)){
   const src=read(file);
