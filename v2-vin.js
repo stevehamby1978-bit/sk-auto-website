@@ -2,10 +2,10 @@
 const { loadCurrentEmployee, permissionMiddleware } = require('./v2-permissions');
 function installVinApi(app, db, { requireLogin }) {
   if (!app || !db || !requireLogin) throw new Error('V2 VIN service requires app, db and login middleware.');
-  const requireRepairOrders=permissionMiddleware('repair_orders',db);
+  const requireRO=permissionMiddleware('repair_orders',db);
   const validId=v=>Number.isInteger(v)&&v>0;
   const noStore=res=>{res.set('Cache-Control','no-store, private, max-age=0');res.set('Pragma','no-cache');res.set('Expires','0');res.set('X-Content-Type-Options','nosniff');};
-  app.get('/api/v2/vin/:vin', requireLogin, requireRepairOrders, async (req,res)=>{
+  app.get('/api/v2/vin/:vin', requireLogin, requireRO, async (req,res)=>{
     noStore(res);
     const sessionEmployee=req.v2Employee||loadCurrentEmployee(db,req.session?.employee),shopId=Number(sessionEmployee?.shop_id||0),employeeId=Number(sessionEmployee?.id||0);
     if(!sessionEmployee||!validId(shopId)||!validId(employeeId))return res.status(401).json({error:'Employee session is no longer valid for this shop.'});
