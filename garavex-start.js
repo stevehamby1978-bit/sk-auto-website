@@ -147,7 +147,7 @@ app.use((req, res, next) => {
     if (!String(filePath || '').toLowerCase().endsWith('.html')) return originalSendFile(filePath, options, callback);
     try {
       let html = fs.readFileSync(filePath, 'utf8');
-      if (!html.includes('/v2-global-navigation.js')) html = html.replace(/<\/body>/i, globalNavTag + '\n</body>');
+      if (!html.includes('/v2-global-navigation.js')) html = html.replace(new RegExp('</body>', 'i'), globalNavTag + '\n</body>');
       return res.type('html').send(html);
     } catch (err) {
       return originalSendFile(filePath, options, callback);
