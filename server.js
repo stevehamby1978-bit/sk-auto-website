@@ -272,13 +272,22 @@ function requireLogin(req, res, next) {
 }
 // ===== S&K AUTO - REQUIRE OWNER =====
 function requireOwner(req, res, next) {
-  if (req.session?.employee?.role === 'owner') {
-    return next();
-  }
+  const sessionEmployee = req.session?.employee;
+  const employeeId = Number(sessionEmployee?.id || 0);
+  const shopId = Number(sessionEmployee?.shop_id || 0);
+  if (!employeeId || !shopId) return res.status(401).send('Login required.');
 
-  return res.status(403).send(
-    'Access denied. Owner permission required.'
-  );
+  const liveOwner = db.prepare(`
+    SELECT id, name, email, role, shop_id, must_change_password
+    FROM employees
+    WHERE id = ? AND shop_id = ? AND active = 1
+      AND LOWER(TRIM(COALESCE(role, ''))) = 'owner'
+    LIMIT 1
+  `).get(employeeId, shopId);
+
+  if (!liveOwner) return res.status(403).send('Access denied. Owner permission required.');
+  req.session.employee = liveOwner;
+  return next();
 }
 // ===== S&K AUTO - PROTECTED SHOP PAGES =====
 const protectedPages = [
