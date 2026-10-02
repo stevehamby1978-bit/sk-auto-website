@@ -7235,22 +7235,26 @@ const vehicleText = [
   estimate.vehicle_model
 ].filter(Boolean).join(" ");
 
-const responseText =
-  `S&K Auto Estimate Update\n\n` +
-  `${estimate.customer_name} has ${status.toUpperCase()} Estimate #${estimate.id}\n` +
-  `Vehicle: ${vehicleText}`;
+// The legacy shop-notification number is S&K-specific. Do not send another
+// tenant's estimate response to that global destination.
+if (Number(estimate.shop_id) === Number(primaryShop?.id) && process.env.SMS_TO_NUMBER) {
+  const responseText =
+    `S&K Auto Estimate Update\n\n` +
+    `${estimate.customer_name} has ${status.toUpperCase()} Estimate #${estimate.id}\n` +
+    `Vehicle: ${vehicleText}`;
 
-twilioClient.messages.create({
-  body: responseText,
-  from: process.env.TWILIO_PHONE_NUMBER,
-  to: process.env.SMS_TO_NUMBER
-})
-.then(message => {
-  console.log("Estimate response SMS sent:", message.sid);
-})
-.catch(err => {
-  console.error("Estimate response SMS failed:", err);
-});
+  twilioClient.messages.create({
+    body: responseText,
+    from: process.env.TWILIO_PHONE_NUMBER,
+    to: process.env.SMS_TO_NUMBER
+  })
+  .then(message => {
+    console.log("Estimate response SMS sent:", message.sid);
+  })
+  .catch(err => {
+    console.error("Estimate response SMS failed:", err);
+  });
+}
     res.json({
       success: true,
       status: status
