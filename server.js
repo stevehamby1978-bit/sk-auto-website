@@ -6652,12 +6652,16 @@ try {
             c.phone AS customer_phone,
             v.year AS vehicle_year,
             v.make AS vehicle_make,
-            v.model AS vehicle_model
+            v.model AS vehicle_model,
+            s.name AS shop_name,
+            s.phone AS shop_phone
         FROM repair_orders r
         LEFT JOIN customers c
             ON r.customer_id = c.id
         LEFT JOIN vehicles v
             ON r.vehicle_id = v.id
+        LEFT JOIN shops s
+            ON r.shop_id = s.id
         WHERE r.id = ?
           AND r.shop_id = ?
     `).get(req.params.id, shopId);
@@ -6683,12 +6687,12 @@ try {
 
             const message = await twilioClient.messages.create({
                 body:
-                    `S&K Auto: ` +
+                    `${readyInfo.shop_name || "Your repair shop"}: ` +
                     `${customerFirstName ? customerFirstName + ", " : ""}` +
                     `your ${vehicleDescription || "vehicle"} is ready! ` +
                     `Your repairs have been completed. ` +
-                    `Please contact S&K Auto if you have any questions. ` +
-                    `Thank you for choosing S&K Auto!`,
+                    `Please contact ${readyInfo.shop_name || "the shop"}${readyInfo.shop_phone ? " at " + readyInfo.shop_phone : ""} if you have any questions. ` +
+                    `Thank you for choosing ${readyInfo.shop_name || "us"}!`,
                 from: process.env.TWILIO_PHONE_NUMBER,
                 to: customerPhone
             });
