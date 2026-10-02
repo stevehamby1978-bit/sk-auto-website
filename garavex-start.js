@@ -34,6 +34,33 @@ function runReadOnlyOwnershipAudit() {
   }
 }
 
+// Cleanup S&K duplicate owners before repair attempts
+try {
+  const Database = require('better-sqlite3');
+  const skDbPath = path.join(dataDir, 'bookings.db');
+  if (fs.existsSync(skDbPath)) {
+    const skDb = new Database(skDbPath);
+    try {
+      const owners = skDb.prepare("SELECT id,active FROM employees WHERE shop_id=1 AND LOWER(TRIM(role))='owner'").all();
+      if (owners.length > 1) {
+        const inactive = owners.filter(o => !o.active);
+        if (inactive.length > 0) {
+          skDb.transaction(() => {
+            inactive.forEach(o => {
+              skDb.prepare("DELETE FROM employees WHERE id=? AND shop_id=1 AND LOWER(TRIM(role))='owner' AND COALESCE(active,0)<>1").run(o.id);
+            });
+          })();
+          console.log('[V2] Removed ' + inactive.length + ' inactive S&K owner(s)');
+        }
+      }
+    } finally {
+      skDb.close();
+    }
+  }
+} catch (err) {
+  console.error('[V2] S&K cleanup (non-fatal):', err.message);
+}
+
 if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
 if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
 runReadOnlyOwnershipAudit();
