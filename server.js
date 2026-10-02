@@ -4361,6 +4361,8 @@ app.post('/api/repair-orders/:id/invoice-token', (req, res) => {
 // ===== S&K AUTO - EMAIL / RESEND PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrder = db.prepare(`
       SELECT
         r.id,
@@ -4371,10 +4373,13 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
         v.year AS vehicle_year,
         v.make AS vehicle_make,
         v.model AS vehicle_model,
-        v.vin AS vehicle_vin
+        v.vin AS vehicle_vin,
+        s.name AS shop_name,
+        s.phone AS shop_phone
       FROM repair_orders r
       LEFT JOIN customers c ON r.customer_id = c.id
       LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      LEFT JOIN shops s ON r.shop_id = s.id
       WHERE r.id = ?
         AND r.shop_id = ?
     `).get(req.params.id, shopId);
@@ -4437,13 +4442,13 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
     await resend.emails.send({
       from: "S&K Auto <appointments@skautohutch.com>",
       to: [repairOrder.customer_email],
-      subject: `S&K Auto Payment Receipt - Invoice #${repairOrder.id}`,
+      subject: `${repairOrder.shop_name || "Your repair shop"} Payment Receipt - Invoice #${repairOrder.id}`,
       html: `
         <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
           <div style="max-width:650px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
 
             <div style="background:#151515;color:#ffffff;padding:22px;text-align:center;">
-              <h1 style="margin:0;font-size:26px;">S&K AUTO</h1>
+              <h1 style="margin:0;font-size:26px;">${repairOrder.shop_name || "Your repair shop"}</h1>
               <p style="margin:5px 0 0;color:#cccccc;">The Art of Automotive Repair</p>
             </div>
 
@@ -4487,10 +4492,10 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
 
               <hr style="margin:25px 0;border:none;border-top:1px solid #dddddd;">
 
-              <p style="margin-bottom:5px;"><strong>S&K Auto</strong></p>
+              <p style="margin-bottom:5px;"><strong>${repairOrder.shop_name || "Your repair shop"}</strong></p>
               <p style="margin:5px 0;">3107 Homestead</p>
               <p style="margin:5px 0;">Hutchinson, KS 67502</p>
-              <p style="margin:5px 0;">(620) 899-0425</p>
+              <p style="margin:5px 0;">${repairOrder.shop_phone || ""}</p>
 
               <p style="margin-top:25px;font-size:13px;color:#777777;">
                 Please keep this email for your records.
