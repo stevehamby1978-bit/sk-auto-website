@@ -80,8 +80,15 @@ function shopPlan(shop) {
   return getPlan(shop.subscription_plan);
 }
 
+function shopAccessActive(shop) {
+  if (!shop) return false;
+  if (ownerTestShop(shop)) return true;
+  if (trialIsActive(shop)) return true;
+  return Boolean(shop.stripe_subscription_id) && subscriptionIsActive(shop.subscription_status);
+}
+
 function shopHasFeature(shop, feature) {
-  return shopPlan(shop).features.includes(String(feature || '').trim());
+  return shopAccessActive(shop) && shopPlan(shop).features.includes(String(feature || '').trim());
 }
 
 function requireFeature(db, feature) {
@@ -94,6 +101,12 @@ function requireFeature(db, feature) {
       FROM shops WHERE id = ? LIMIT 1
     `).get(shopId);
     if (!shop) return res.status(404).json({ error: 'Shop not found.' });
+    if (!shopAccessActive(shop)) {
+      return res.status(402).json({
+        error: 'Your Garavex trial has ended or the subscription is inactive. Choose a plan to continue.',
+        code: 'SUBSCRIPTION_REQUIRED'
+      });
+    }
     if (!shopHasFeature(shop, feature)) {
       return res.status(403).json({
         error: 'This feature is not included in the current Garavex plan.',
@@ -120,5 +133,6 @@ module.exports = {
   requireFeature,
   getEmployeeLimit,
   subscriptionIsActive,
-  trialIsActive
+  trialIsActive,
+  shopAccessActive
 };
