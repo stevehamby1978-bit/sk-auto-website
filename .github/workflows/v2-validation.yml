@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - garavex-v2
+      - garavex-v2-subscriptions-final-integration
   pull_request:
     branches:
       - garavex-v2

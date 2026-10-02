@@ -42,6 +42,9 @@ const {installV2CustomerRequests}=require('./v2-customer-requests');
 const {installV2ShopHandoff}=require('./v2-shop-handoff');
 const {installV2WorkflowSummary}=require('./v2-workflow-summary');
 const {installV2Preflight}=require('./v2-preflight');
+const {installV2Subscriptions}=require('./v2-subscriptions');
+const {installV2SubscriptionEnforcement}=require('./v2-subscription-enforcement');
+const {installV2FeatureGates}=require('./v2-feature-gates');
 const {installV2RecommendationSafety}=require('./v2-recommendations-preload');
 
 const installedApps=new WeakSet();
@@ -54,6 +57,10 @@ function installGaravexV2(app,db,deps){
  installingApps.add(app);
  try{
   installV2Schema(db);installV2SchedulingSchema(db);
+  installV2Subscriptions(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner,stripe:deps.stripe});
+  installV2SubscriptionEnforcement(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  // Premium gates must be registered before their feature routers so direct API access cannot bypass plan entitlements.
+  installV2FeatureGates(app,db,{requireLogin:deps.requireLogin});
   installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});installV2Dvi(app,db,{requireLogin:deps.requireLogin});
@@ -69,7 +76,7 @@ function installGaravexV2(app,db,deps){
   installV2CustomerHistory(app,db,{requireLogin:deps.requireLogin});installV2WorkflowEvents(app,db,{requireLogin:deps.requireLogin});installV2Search(app,db,{requireLogin:deps.requireLogin});installV2Tasks(app,db,{requireLogin:deps.requireLogin});
   installV2DailyPlan(app,db,{requireLogin:deps.requireLogin});installV2Alerts(app,db,{requireLogin:deps.requireLogin});installV2CustomerRequests(app,db,{requireLogin:deps.requireLogin});installV2ShopHandoff(app,db,{requireLogin:deps.requireLogin});
   installV2WorkflowSummary(app,db,{requireLogin:deps.requireLogin});installV2Preflight(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
-  // Must be last: these routes depend on express-session already being in the middleware stack.
+  // Must remain last: these routes depend on express-session already being in the middleware stack.
   installV2RecommendationSafety(app);
   installedApps.add(app);console.log('Garavex V2 modules installed.');return true;
  }catch(err){console.error('Garavex V2 bootstrap failed:',err?.stack||err);throw err;}finally{installingApps.delete(app);}
