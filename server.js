@@ -2499,14 +2499,19 @@ active
       });
     }
 
-   req.session.employee = {
-  id: employee.id,
-  name: employee.name,
-  email: employee.email,
- role: employee.role,
-shop_id: employee.shop_id,
-must_change_password: employee.must_change_password
-};
+   req.session.regenerate(err => {
+     if (err) {
+       console.error("Session regeneration error:", err);
+       return res.status(500).json({ error: "Unable to complete login." });
+     }
+     req.session.employee = {
+       id: employee.id,
+       name: employee.name,
+       email: employee.email,
+       role: employee.role,
+       shop_id: employee.shop_id,
+       must_change_password: employee.must_change_password
+     };
     req.session.save(err => {
       if (err) {
         console.error("Session save error:", err);
@@ -2528,6 +2533,7 @@ must_change_password: employee.must_change_password
 }
       });
     });
+   });
 
   } catch (err) {
     console.error("Employee login error:", err);
