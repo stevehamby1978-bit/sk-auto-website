@@ -2969,8 +2969,8 @@ app.post("/api/employees", requireLogin, requireOwner, async (req, res) => {
     const existingEmployee = db.prepare(`
       SELECT id
       FROM employees
-      WHERE LOWER(email) = ? AND shop_id = ?
-    `).get(cleanEmail, currentEmployee.shop_id);
+      WHERE LOWER(email) = ?
+    `).get(cleanEmail);
 
     if (existingEmployee) {
       return res.status(409).json({
