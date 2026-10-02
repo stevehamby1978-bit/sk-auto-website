@@ -16,4 +16,16 @@ if(exists('estimates'))report.zwickl_test_records.estimates=db.prepare('SELECT i
 if(exists('repair_orders'))report.zwickl_test_records.repair_orders=db.prepare('SELECT id,customer_id,vehicle_id,status FROM repair_orders WHERE shop_id=? ORDER BY id').all(zwickl);
 if(exists('inventory_items'))report.zwickl_test_records.inventory=db.prepare('SELECT id,sku,part_number,description,quantity FROM inventory_items WHERE shop_id=? ORDER BY id').all(zwickl);
 if(exists('v2_loaners'))report.zwickl_test_records.loaners=db.prepare('SELECT id,name,year,make,model,plate,vin,status,active FROM v2_loaners WHERE shop_id=? ORDER BY id').all(zwickl);
+const childCounts={};
+for(const [label,table,column,id] of [
+ ['estimate_items','estimate_items','estimate_id',10],
+ ['repair_order_items','repair_order_items','repair_order_id',28],
+ ['repair_order_recommendations','repair_order_recommendations','repair_order_id',28],
+ ['repair_order_payments','repair_order_payments','repair_order_id',28],
+ ['customer_communication_history','customer_communication_history','repair_order_id',28],
+ ['invoice_email_history','invoice_email_history','repair_order_id',28],
+ ['booking_photos','booking_photos','booking_id',17],
+ ['v2_loaner_assignments','v2_loaner_assignments','repair_order_id',28]
+]){if(exists(table)&&has(table,column))childCounts[label]=Number(db.prepare(`SELECT COUNT(*) n FROM ${table} WHERE ${column}=?`).get(id).n||0);}
+report.zwickl_test_records.child_counts=childCounts;
 console.log('GARAVEX_DATA_OWNERSHIP_AUDIT '+JSON.stringify(report));}catch(err){console.error('GARAVEX_DATA_OWNERSHIP_AUDIT_FAILED',err.message);process.exitCode=1;}finally{db.close();}
