@@ -8,8 +8,6 @@ const Database = require('better-sqlite3');
 const express = require('express');
 
 const db = new Database(path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'bookings.db'));
-const originalPost = express.application.post;
-const originalGet = express.application.get;
 
 function shopId(req) {
   const id = Number(req.session?.employee?.shop_id);
@@ -19,7 +17,10 @@ function shopId(req) {
 function createEstimate(req, res) {
   try {
     const sid = shopId(req);
-    if (!sid) return res.status(401).json({ error: 'Not authorized.' });
+    if (!sid) {
+      console.warn('[V2 ESTIMATE AUTH]', JSON.stringify({ hasSession: !!req.session, hasEmployee: !!req.session?.employee, shopId: req.session?.employee?.shop_id || null }));
+      return res.status(401).json({ error: 'Not authorized.' });
+    }
 
     const { customer, vehicle, notes, items } = req.body || {};
     const name = String(customer?.name || '').trim();
@@ -54,15 +55,9 @@ function createEstimate(req, res) {
       const vehicleResult = db.prepare(`
         INSERT INTO vehicles (customer_id, year, make, model, vin, mileage, shop_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        customerId,
-        vehicle?.year || null,
-        String(vehicle?.make || '').trim() || null,
-        String(vehicle?.model || '').trim() || null,
-        String(vehicle?.vin || '').trim().toUpperCase() || null,
-        vehicle?.mileage || null,
-        sid
-      );
+      `).run(customerId, vehicle?.year || null, String(vehicle?.make || '').trim() || null,
+        String(vehicle?.model || '').trim() || null, String(vehicle?.vin || '').trim().toUpperCase() || null,
+        vehicle?.mileage || null, sid);
       const vehicleId = Number(vehicleResult.lastInsertRowid);
 
       const estimateResult = db.prepare(`
@@ -77,6 +72,7 @@ function createEstimate(req, res) {
     });
 
     const id = tx();
+    console.log(`[V2 ESTIMATE] created estimate=${id} shop_id=${sid}`);
     return res.status(201).json({ success: true, id, token });
   } catch (err) {
     console.error('V2 create estimate error:', err);
@@ -106,12 +102,18 @@ function listEstimates(req, res) {
   }
 }
 
+// IMPORTANT: resolve the current Express registration methods at call time.
+// Other V2 preloads also wrap app.post/app.get. Capturing an older method here
+// caused later preload wrappers to be bypassed, which is why estimate POSTs were
+// still reaching a 401 path even though the new estimate handler was deployed.
+const previousPost = express.application.post;
 express.application.post = function(route, ...handlers) {
-  if (route === '/api/estimates') return originalPost.call(this, route, createEstimate);
-  return originalPost.call(this, route, ...handlers);
+  if (route === '/api/estimates') return previousPost.call(this, route, createEstimate);
+  return previousPost.call(this, route, ...handlers);
 };
 
+const previousGet = express.application.get;
 express.application.get = function(route, ...handlers) {
-  if (route === '/api/estimates') return originalGet.call(this, route, listEstimates);
-  return originalGet.call(this, route, ...handlers);
+  if (route === '/api/estimates') return previousGet.call(this, route, listEstimates);
+  return previousGet.call(this, route, ...handlers);
 };
