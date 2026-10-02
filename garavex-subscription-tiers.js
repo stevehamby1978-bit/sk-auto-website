@@ -52,6 +52,14 @@ function subscriptionIsActive(status) {
   return ACTIVE_SUBSCRIPTION_STATUSES.has(String(status || '').trim().toLowerCase());
 }
 
+function trialIsActive(shop) {
+  if (!shop || shop.stripe_subscription_id) return false;
+  const status = String(shop.subscription_status || '').trim().toLowerCase();
+  if (status !== 'trialing' || !shop.trial_ends_at) return false;
+  const end = Date.parse(String(shop.trial_ends_at).replace(' ', 'T') + (String(shop.trial_ends_at).includes('Z') ? '' : 'Z'));
+  return Number.isFinite(end) && end > Date.now();
+}
+
 function ownerTestShop(shop) {
   const enabled = String(process.env.GARAVEX_OWNER_TEST_PLAN_ENABLED || '').trim() === '1';
   const testShopId = Number(process.env.GARAVEX_OWNER_TEST_SHOP_ID || 0);
@@ -64,11 +72,11 @@ function shopPlan(shop) {
   // The single explicitly configured owner/beta shop may preview plans without Stripe.
   if (ownerTestShop(shop)) return getPlan(shop.subscription_plan);
 
+  // A new ordinary shop receives Starter during its server-recorded 30-day trial.
+  if (trialIsActive(shop)) return getPlan('starter');
+
   // Paid tiers are never granted to ordinary shops from a database plan value alone.
-  // A real Stripe subscription must exist and be in an active/trialing state.
-  if (!shop.stripe_subscription_id || !subscriptionIsActive(shop.subscription_status)) {
-    return getPlan('starter');
-  }
+  if (!shop.stripe_subscription_id || !subscriptionIsActive(shop.subscription_status)) return getPlan('starter');
   return getPlan(shop.subscription_plan);
 }
 
@@ -82,7 +90,7 @@ function requireFeature(db, feature) {
     if (!shopId) return res.status(401).json({ error: 'Login required.' });
     const shop = db.prepare(`
       SELECT id, subscription_plan, subscription_status,
-             stripe_subscription_id, subscription_current_period_end
+             stripe_subscription_id, subscription_current_period_end, trial_ends_at
       FROM shops WHERE id = ? LIMIT 1
     `).get(shopId);
     if (!shop) return res.status(404).json({ error: 'Shop not found.' });
@@ -111,5 +119,6 @@ module.exports = {
   shopHasFeature,
   requireFeature,
   getEmployeeLimit,
-  subscriptionIsActive
+  subscriptionIsActive,
+  trialIsActive
 };
