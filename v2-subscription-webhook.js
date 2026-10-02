@@ -39,7 +39,7 @@ function betaProtectedShop(db, shopId) {
 function applySubscription(db, sub) {
   const shop = findShop(db, sub);
   if (!shop) return { handled:false, reason:'shop not found' };
-  if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
+  if (betaProtectedShop(db, shop.id)) return { handled:false, ignored:true, reason:'complimentary beta shop protected', shopId:shop.id };
   const priceId = sub?.items?.data?.[0]?.price?.id || '';
   const metadataPlan = String(sub?.metadata?.garavex_plan || '').toLowerCase();
   const pricePlan = planFromPrice(priceId);
@@ -70,7 +70,7 @@ function handleGaravexSubscriptionEvent(db, event) {
   if (type === 'checkout.session.completed' && object.mode === 'subscription') {
     const shop = findShop(db, object);
     if (!shop) return { handled:false, reason:'shop not found' };
-    if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
+    if (betaProtectedShop(db, shop.id)) return { handled:false, ignored:true, reason:'complimentary beta shop protected', shopId:shop.id };
     const planKey = String(object.metadata?.garavex_plan || '').toLowerCase();
     if (!GARAVEX_PLANS[planKey]) return { handled:false, reason:'unknown Garavex checkout plan', shopId:shop.id };
     const plan = planKey;
@@ -89,7 +89,7 @@ function handleGaravexSubscriptionEvent(db, event) {
   if (type === 'invoice.payment_failed' || type === 'invoice.paid') {
     const shop = findShop(db, object);
     if (!shop) return { handled:false, reason:'shop not found' };
-    if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
+    if (betaProtectedShop(db, shop.id)) return { handled:false, ignored:true, reason:'complimentary beta shop protected', shopId:shop.id };
     if (type === 'invoice.payment_failed') {
       db.prepare(`UPDATE shops SET subscription_status='past_due' WHERE id=?`).run(shop.id);
       return { handled:true, shopId:shop.id, status:'past_due' };
