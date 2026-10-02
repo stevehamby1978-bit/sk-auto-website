@@ -64,13 +64,16 @@ function handleGaravexSubscriptionEvent(db, event) {
     if (!shop) return { handled:false, reason:'shop not found' };
     const planKey = String(object.metadata?.garavex_plan || '').toLowerCase();
     const plan = GARAVEX_PLANS[planKey] ? planKey : 'starter';
-    db.prepare(`UPDATE shops SET subscription_plan=?,subscription_status='active',stripe_customer_id=COALESCE(?,stripe_customer_id),stripe_subscription_id=COALESCE(?,stripe_subscription_id) WHERE id=?`).run(
+    // Checkout completion confirms the selected plan and Stripe identifiers,
+    // but it does not prove the subscription is active. The authoritative
+    // customer.subscription.created/updated webhook sets subscription_status.
+    db.prepare(`UPDATE shops SET subscription_plan=?,stripe_customer_id=COALESCE(?,stripe_customer_id),stripe_subscription_id=COALESCE(?,stripe_subscription_id) WHERE id=?`).run(
       plan,
       typeof object.customer === 'string' ? object.customer : null,
       typeof object.subscription === 'string' ? object.subscription : null,
       shop.id
     );
-    return { handled:true, shopId:shop.id, plan, status:'active' };
+    return { handled:true, shopId:shop.id, plan, status:'pending_subscription_event' };
   }
 
   if (type === 'invoice.payment_failed' || type === 'invoice.paid') {
