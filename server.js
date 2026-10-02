@@ -7794,52 +7794,7 @@ function requestBaseUrl(req) {
   const protocol = forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol;
   return `${protocol}://${req.get('host')}`;
 }
-// ===== TEMPORARY: RESET STRIPE CONNECT FOR CURRENT SHOP =====
-app.post('/api/stripe-connect/reset', requireLoggedInOwner, (req, res) => {
-  try {
-    const shopId = req.session.employee.shop_id;
-
-    const shop = db.prepare(`
-      SELECT id, name, stripe_account_id
-      FROM shops
-      WHERE id = ?
-    `).get(shopId);
-
-    if (!shop) {
-      return res.status(404).json({
-        success: false,
-        error: 'Shop not found.'
-      });
-    }
-
-    console.log(
-      `Resetting Stripe Connect for shop ${shop.id} (${shop.name}). Old account:`,
-      shop.stripe_account_id
-    );
-
-    db.prepare(`
-      UPDATE shops
-      SET stripe_account_id = NULL,
-          stripe_connected_at = NULL
-      WHERE id = ?
-    `).run(shopId);
-
-    return res.json({
-      success: true,
-      message: 'Stripe connection reset.',
-      shopId: shop.id,
-      shopName: shop.name
-    });
-
-  } catch (err) {
-    console.error('Stripe Connect reset error:', err);
-
-    return res.status(500).json({
-      success: false,
-      error: err.message || 'Unable to reset Stripe connection.'
-    });
-  }
-});
+// Stripe Connect reset endpoint removed before production. Re-linking must not be exposed as a destructive public app route.
 app.get('/api/stripe-connect/status', requireLoggedInOwner, async (req, res) => {
   try {
     const shopId = req.session.employee.shop_id;
