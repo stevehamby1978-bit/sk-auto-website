@@ -2652,7 +2652,7 @@ try {
     const promoteBetaShop = db.prepare(`
       UPDATE shops
       SET subscription_plan = 'elite',
-          subscription_status = 'active',
+          subscription_status = 'beta',
           trial_ends_at = NULL
       WHERE id = ?
     `);
