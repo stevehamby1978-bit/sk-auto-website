@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node garavex-start.js",
     "start:legacy": "node server.js",
-    "validate:v2": "node v2-startup-validation.js",
+    "validate:v2": "node v2-startup-validation.js && node scripts/test-subscription-isolation.js",
+    "test:subscription-isolation": "node scripts/test-subscription-isolation.js",
     "view-bookings": "node view-bookings.js",
     "export-bookings": "node export-bookings.js"
   },

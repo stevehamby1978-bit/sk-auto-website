@@ -42,6 +42,9 @@ const {installV2CustomerRequests}=require('./v2-customer-requests');
 const {installV2ShopHandoff}=require('./v2-shop-handoff');
 const {installV2WorkflowSummary}=require('./v2-workflow-summary');
 const {installV2Preflight}=require('./v2-preflight');
+const {installV2Subscriptions}=require('./v2-subscriptions');
+const {installV2SubscriptionEnforcement}=require('./v2-subscription-enforcement');
+const {installV2FeatureGates}=require('./v2-feature-gates');
 
 const installedApps=new WeakSet();
 const installingApps=new WeakSet();
@@ -51,11 +54,14 @@ function installGaravexV2(app,db,deps){
  if(!deps?.requireLogin||!deps?.requireOwner)throw new Error('Garavex V2 requires authentication middleware.');
  if(installedApps.has(app)){console.warn('Garavex V2 bootstrap already installed for this app; duplicate installation skipped.');return false;}
  if(installingApps.has(app))throw new Error('Garavex V2 bootstrap installation is already in progress for this app.');
-
  installingApps.add(app);
  try{
   installV2Schema(db);
   installV2SchedulingSchema(db);
+  installV2Subscriptions(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner,stripe:deps.stripe});
+  installV2SubscriptionEnforcement(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  // Gates must be registered before feature routers so URL access cannot bypass plan entitlements.
+  installV2FeatureGates(app,db,{requireLogin:deps.requireLogin});
   installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});
@@ -100,11 +106,6 @@ function installGaravexV2(app,db,deps){
   installedApps.add(app);
   console.log('Garavex V2 modules installed.');
   return true;
- }catch(err){
-  console.error('Garavex V2 bootstrap failed:',err?.stack||err);
-  throw err;
- }finally{
-  installingApps.delete(app);
- }
+ }catch(err){console.error('Garavex V2 bootstrap failed:',err?.stack||err);throw err;}finally{installingApps.delete(app);}
 }
 module.exports={installGaravexV2};
