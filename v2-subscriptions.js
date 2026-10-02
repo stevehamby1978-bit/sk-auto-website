@@ -4,7 +4,9 @@ const { GARAVEX_PLANS, shopPlan } = require('./garavex-subscription-tiers');
 
 const SUBSCRIPTION_COLUMNS = [
   ['subscription_plan', "TEXT NOT NULL DEFAULT 'starter'"],
-  ['subscription_status', "TEXT NOT NULL DEFAULT 'active'"],
+  ['subscription_status', "TEXT NOT NULL DEFAULT 'trialing'"],
+  ['trial_started_at', 'TEXT'],
+  ['trial_ends_at', 'TEXT'],
   ['stripe_customer_id', 'TEXT'],
   ['stripe_subscription_id', 'TEXT'],
   ['stripe_price_id', 'TEXT'],
@@ -32,7 +34,7 @@ function installSubscriptionSchema(db) {
 }
 
 function getShop(db, shopId) {
-  return db.prepare(`SELECT id,name,email,subscription_plan,subscription_status,stripe_customer_id,stripe_subscription_id,stripe_price_id,subscription_current_period_end,subscription_cancel_at_period_end,founding_offer_reserved_until FROM shops WHERE id=? LIMIT 1`).get(shopId);
+  return db.prepare(`SELECT id,name,email,subscription_plan,subscription_status,stripe_customer_id,stripe_subscription_id,stripe_price_id,subscription_current_period_end,subscription_cancel_at_period_end,founding_offer_reserved_until,trial_started_at,trial_ends_at FROM shops WHERE id=? LIMIT 1`).get(shopId);
 }
 
 function publicPlan(plan) {
@@ -170,7 +172,7 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
     if (!shop) return res.status(404).json({ error: 'Shop not found.' });
     const plan = shopPlan(shop);
     const employeeCount = db.prepare('SELECT COUNT(*) AS count FROM employees WHERE shop_id=? AND active=1').get(shopId)?.count || 0;
-    res.json({ shopId, shopName: shop.name, plan: publicPlan(plan), status: shop.subscription_status, currentPeriodEnd: shop.subscription_current_period_end || null, cancelAtPeriodEnd: Boolean(shop.subscription_cancel_at_period_end), employeeCount: Number(employeeCount), billingConfigured: Boolean(shop.stripe_customer_id && shop.stripe_subscription_id), ownerTestPlan: isOwnerTestShop(shopId), starterOffer: starterOffer(db) });
+    res.json({ shopId, shopName: shop.name, plan: publicPlan(plan), status: shop.subscription_status, trialEndsAt: shop.trial_ends_at || null, currentPeriodEnd: shop.subscription_current_period_end || null, cancelAtPeriodEnd: Boolean(shop.subscription_cancel_at_period_end), employeeCount: Number(employeeCount), billingConfigured: Boolean(shop.stripe_customer_id && shop.stripe_subscription_id), ownerTestPlan: isOwnerTestShop(shopId), starterOffer: starterOffer(db) });
   });
 
   app.post('/api/v2/subscription/checkout', requireLogin, requireOwner, async (req, res) => {
