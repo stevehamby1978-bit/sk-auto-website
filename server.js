@@ -7095,9 +7095,9 @@ app.post("/api/repair-orders/:id/payments", (req, res) => {
 
     const transaction = db.transaction(() => {
       const result = db.prepare(`
-        INSERT INTO repair_order_payments (repair_order_id, amount, payment_method)
-        VALUES (?, ?, ?)
-      `).run(repairOrderId, amount, paymentMethod);
+        INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, shop_id)
+        VALUES (?, ?, ?, ?)
+      `).run(repairOrderId, amount, paymentMethod, shopId);
 
       db.prepare(`
         UPDATE repair_orders
