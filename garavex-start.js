@@ -21,6 +21,15 @@ if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) {
   console.log('[V2 STARTUP] S&K owner verification finished');
 }
 
+if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) {
+  console.log('[V2 STARTUP] verifying Zwickl Repair owner');
+  execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'v2-zwickl-login-repair.js')], {
+    stdio: 'inherit',
+    env: process.env
+  });
+  console.log('[V2 STARTUP] Zwickl Repair owner verification finished');
+}
+
 require('./v2-auth-preload');
 require('./v2-scheduling-preload');
 require('./v2-recommendations-preload');
