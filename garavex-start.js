@@ -34,6 +34,51 @@ function runReadOnlyOwnershipAudit() {
   }
 }
 
+// Inline S&K Auto duplicate owner cleanup to unblock repair.
+// Never reads/logs passwords or hashes. Safe to run repeatedly.
+function cleanupSKDuplicateOwners() {
+  try {
+    const dbPath = path.join(dataDir, 'bookings.db');
+    if (!fs.existsSync(dbPath)) return;
+
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath);
+    try {
+      const owners = db.prepare(
+        "SELECT id,active FROM employees WHERE shop_id=1 AND LOWER(TRIM(role))='owner' ORDER BY id"
+      ).all();
+
+      if (owners.length <= 1) return; // 0 or 1 is OK, nothing to cleanup
+
+      const inactive = owners.filter(o => !o.active);
+      if (inactive.length > 0) {
+        db.transaction(() => {
+          for (const owner of inactive) {
+            db.prepare(
+              "DELETE FROM employees WHERE id=? AND shop_id=1 AND LOWER(TRIM(role))='owner' AND COALESCE(active,0)<>1"
+            ).run(owner.id);
+          }
+        })();
+        console.log('[V2] Cleaned up ' + inactive.length + ' inactive S&K owner(s)');
+      }
+
+      const remaining = db.prepare(
+        "SELECT COUNT(*) n FROM employees WHERE shop_id=1 AND LOWER(TRIM(role))='owner' AND COALESCE(active,0)=1"
+      ).get();
+      if (Number(remaining.n) > 1) {
+        console.error('[V2] WARNING: ' + remaining.n + ' active S&K owners remain; manual repair may be needed');
+      }
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    console.error('[V2] S&K owner cleanup failed:', err && err.message ? err.message : err);
+  }
+}
+
+// Run cleanup before repair attempts
+cleanupSKDuplicateOwners();
+
 if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
 if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
 runReadOnlyOwnershipAudit();
