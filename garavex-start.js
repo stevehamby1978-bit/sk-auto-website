@@ -34,6 +34,7 @@ function runReadOnlyOwnershipAudit() {
   }
 }
 
+runOptionalOwnerRepair('S&K duplicate cleanup', 'v2-fix-sk-duplicate-owners.js');
 if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
 if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
 runReadOnlyOwnershipAudit();
