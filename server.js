@@ -2706,6 +2706,10 @@ app.get("/api/employees", (req, res) => {
 // ===== S&K AUTO - ADD EMPLOYEE =====
 app.post("/api/employees", async (req, res) => {
   try {
+    const currentEmployee = req.session?.employee;
+    if (!currentEmployee?.shop_id) return res.status(401).json({ error: "Not authorized." });
+    if (currentEmployee.role !== "owner") return res.status(403).json({ error: "Only an owner can add employees." });
+
     const {
       name,
       email,
