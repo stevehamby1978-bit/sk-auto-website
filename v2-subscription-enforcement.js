@@ -1,11 +1,25 @@
 'use strict';
 
-const { shopPlan } = require('./garavex-subscription-tiers');
+const { shopPlan, shopAccessActive } = require('./garavex-subscription-tiers');
 
 function installV2SubscriptionEnforcement(app, db, { requireLogin, requireOwner }) {
   if (!app || !db) throw new Error('Subscription enforcement requires app and db.');
   const shopFor = req => Number(req.session?.employee?.shop_id || 0);
-  const subscriptionForShop = shopId => db.prepare(`SELECT id,subscription_plan,subscription_status,stripe_subscription_id,subscription_current_period_end FROM shops WHERE id=? LIMIT 1`).get(shopId);
+  const subscriptionForShop = shopId => db.prepare(`SELECT id,subscription_plan,subscription_status,stripe_subscription_id,subscription_current_period_end,trial_ends_at FROM shops WHERE id=? LIMIT 1`).get(shopId);
+
+  function requireActiveSubscription(req,res,next){
+    const shopId=shopFor(req); if(!shopId)return res.status(401).json({error:'Login required.'});
+    const shop=subscriptionForShop(shopId); if(!shop)return res.status(404).json({error:'Shop not found.'});
+    if(!shopAccessActive(shop))return res.status(402).json({error:'Your Garavex trial has ended or the subscription is inactive. Choose a plan to continue.',code:'SUBSCRIPTION_REQUIRED'});
+    req.garavexPlan=shopPlan(shop); next();
+  }
+
+  // Billing endpoints remain reachable so an expired shop can subscribe.
+  // Protect all V2 operational APIs registered after this middleware.
+  app.use('/api/v2', (req,res,next)=>{
+    if(req.path==='/plans'||req.path.startsWith('/subscription'))return next();
+    return requireActiveSubscription(req,res,next);
+  });
 
   function requireEmployeeCapacity(req,res,next){
     const shopId=shopFor(req); if(!shopId)return res.status(401).json({error:'Login required.'});
