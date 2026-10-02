@@ -42,6 +42,7 @@ require('./v2-auth-preload');
 require('./v2-scheduling-preload');
 require('./v2-recommendations-preload');
 require('./v2-communications-preload');
+require('./v2-estimates-preload');
 
 const serverFilename = path.join(__dirname, 'server.js');
 const listenerNeedle = '\napp.listen(PORT, () => {';
