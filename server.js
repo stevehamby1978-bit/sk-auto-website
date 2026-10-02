@@ -2712,14 +2712,16 @@ app.post("/api/employees", async (req, res) => {
   password_hash,
   role,
   active,
-  must_change_password
+  must_change_password,
+  shop_id
 )
-VALUES (?, ?, ?, ?, 1, 1)
+VALUES (?, ?, ?, ?, 1, 1, ?)
     `).run(
       name.trim(),
       cleanEmail,
       passwordHash,
-      employeeRole
+      employeeRole,
+      req.session.employee.shop_id
     );
 
     res.status(201).json({
