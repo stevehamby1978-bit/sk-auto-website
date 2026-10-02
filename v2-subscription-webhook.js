@@ -1,6 +1,6 @@
 'use strict';
 
-const { GARAVEX_PLANS } = require('./garavex-subscription-tiers');
+const { GARAVEX_PLANS, ownerTestShop } = require('./garavex-subscription-tiers');
 
 function isoFromUnix(value) {
   const n = Number(value || 0);
@@ -31,9 +31,15 @@ function findShop(db, object) {
   return null;
 }
 
+function betaProtectedShop(db, shopId) {
+  const shop = db.prepare(`SELECT id,subscription_plan,subscription_status,stripe_subscription_id,trial_ends_at FROM shops WHERE id=? LIMIT 1`).get(shopId);
+  return Boolean(shop && ownerTestShop(shop));
+}
+
 function applySubscription(db, sub) {
   const shop = findShop(db, sub);
   if (!shop) return { handled:false, reason:'shop not found' };
+  if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
   const priceId = sub?.items?.data?.[0]?.price?.id || '';
   const metadataPlan = String(sub?.metadata?.garavex_plan || '').toLowerCase();
   const plan = GARAVEX_PLANS[metadataPlan] ? metadataPlan : (planFromPrice(priceId) || 'starter');
@@ -62,6 +68,7 @@ function handleGaravexSubscriptionEvent(db, event) {
   if (type === 'checkout.session.completed' && object.mode === 'subscription') {
     const shop = findShop(db, object);
     if (!shop) return { handled:false, reason:'shop not found' };
+    if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
     const planKey = String(object.metadata?.garavex_plan || '').toLowerCase();
     const plan = GARAVEX_PLANS[planKey] ? planKey : 'starter';
     // Checkout completion confirms the selected plan and Stripe identifiers,
@@ -79,6 +86,7 @@ function handleGaravexSubscriptionEvent(db, event) {
   if (type === 'invoice.payment_failed' || type === 'invoice.paid') {
     const shop = findShop(db, object);
     if (!shop) return { handled:false, reason:'shop not found' };
+    if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
     if (type === 'invoice.payment_failed') {
       db.prepare(`UPDATE shops SET subscription_status='past_due' WHERE id=?`).run(shop.id);
       return { handled:true, shopId:shop.id, status:'past_due' };
