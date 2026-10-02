@@ -35,9 +35,10 @@ function applySubscription(db, sub) {
   const priceId = sub?.items?.data?.[0]?.price?.id || '';
   const metadataPlan = String(sub?.metadata?.garavex_plan || '').toLowerCase();
   const plan = GARAVEX_PLANS[metadataPlan] ? metadataPlan : (planFromPrice(priceId) || 'starter');
+  const status = String(sub.status || 'inactive').toLowerCase();
   db.prepare(`UPDATE shops SET subscription_plan=?,subscription_status=?,stripe_customer_id=COALESCE(?,stripe_customer_id),stripe_subscription_id=?,stripe_price_id=?,subscription_current_period_end=?,subscription_cancel_at_period_end=? WHERE id=?`).run(
     plan,
-    String(sub.status || 'inactive'),
+    status,
     typeof sub.customer === 'string' ? sub.customer : null,
     String(sub.id || ''),
     priceId || null,
@@ -45,7 +46,7 @@ function applySubscription(db, sub) {
     sub.cancel_at_period_end ? 1 : 0,
     shop.id
   );
-  return { handled:true, shopId:shop.id, plan, status:String(sub.status || '') };
+  return { handled:true, shopId:shop.id, plan, status };
 }
 
 function handleGaravexSubscriptionEvent(db, event) {
@@ -61,6 +62,8 @@ function handleGaravexSubscriptionEvent(db, event) {
     if (!shop) return { handled:false, reason:'shop not found' };
     const planKey = String(object.metadata?.garavex_plan || '').toLowerCase();
     const plan = GARAVEX_PLANS[planKey] ? planKey : 'starter';
+    // Checkout completion records the relationship, but the subscription webhook
+    // remains authoritative for ongoing status, renewal and cancellation state.
     db.prepare(`UPDATE shops SET subscription_plan=?,subscription_status='active',stripe_customer_id=COALESCE(?,stripe_customer_id),stripe_subscription_id=COALESCE(?,stripe_subscription_id) WHERE id=?`).run(
       plan,
       typeof object.customer === 'string' ? object.customer : null,
@@ -73,9 +76,15 @@ function handleGaravexSubscriptionEvent(db, event) {
   if (type === 'invoice.payment_failed' || type === 'invoice.paid') {
     const shop = findShop(db, object);
     if (!shop) return { handled:false, reason:'shop not found' };
-    if (type === 'invoice.payment_failed') db.prepare(`UPDATE shops SET subscription_status='past_due' WHERE id=?`).run(shop.id);
-    // invoice.paid does not force a plan; subscription.updated is authoritative.
-    return { handled:true, shopId:shop.id, status:type === 'invoice.payment_failed' ? 'past_due' : 'paid' };
+    if (type === 'invoice.payment_failed') {
+      // Immediately remove paid-tier entitlements. shopPlan() falls back to Starter
+      // whenever a Stripe-linked shop is not active/trialing.
+      db.prepare(`UPDATE shops SET subscription_status='past_due' WHERE id=?`).run(shop.id);
+      return { handled:true, shopId:shop.id, status:'past_due' };
+    }
+    // Do not force 'active' from an invoice event. customer.subscription.updated
+    // is authoritative and prevents a paid invoice from reviving a cancelled plan.
+    return { handled:true, shopId:shop.id, status:'paid' };
   }
 
   return { handled:false, reason:'not a Garavex subscription event' };
