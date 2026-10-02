@@ -54,7 +54,7 @@ const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 const { installGaravexV2 } = require('./v2-bootstrap');
 const { installV2AuthDiagnostic } = require('./v2-auth-diagnostic');
-installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend });
+installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend, stripe });
 installV2AuthDiagnostic(app, db, { requireOwner });
 // ===== END GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 `;
