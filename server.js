@@ -2462,7 +2462,7 @@ app.get("/api/current-employee", (req, res) => {
   const liveEmployee = db.prepare(`
     SELECT id, name, email, role, shop_id, must_change_password
     FROM employees
-    WHERE id = ? AND shop_id = ?
+    WHERE id = ? AND shop_id = ? AND active = 1
     LIMIT 1
   `).get(employeeId, shopId);
 
