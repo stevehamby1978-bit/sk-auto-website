@@ -46,6 +46,7 @@ const {installV2Subscriptions}=require('./v2-subscriptions');
 const {installV2SubscriptionEnforcement}=require('./v2-subscription-enforcement');
 const {installV2FeatureGates}=require('./v2-feature-gates');
 const {installV2RecommendationSafety}=require('./v2-recommendations-preload');
+const {installV2ReopenRepairOrder}=require('./v2-reopen-repair-order');
 
 const installedApps=new WeakSet();
 const installingApps=new WeakSet();
@@ -62,6 +63,7 @@ function installGaravexV2(app,db,deps){
   // Premium gates must be registered before their feature routers so direct API access cannot bypass plan entitlements.
   installV2FeatureGates(app,db,{requireLogin:deps.requireLogin});
   installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2ReopenRepairOrder(app,db,{requireLogin:deps.requireLogin});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});installV2Dvi(app,db,{requireLogin:deps.requireLogin});
   installV2Inventory(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2CustomerPortal(app,db,{requireLogin:deps.requireLogin});
