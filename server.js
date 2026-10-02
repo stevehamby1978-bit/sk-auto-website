@@ -5514,12 +5514,16 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
         c.email AS customer_email,
         v.year AS vehicle_year,
         v.make AS vehicle_make,
-        v.model AS vehicle_model
+        v.model AS vehicle_model,
+        s.name AS shop_name,
+        s.phone AS shop_phone
       FROM repair_orders r
       LEFT JOIN customers c
         ON r.customer_id = c.id
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
+      LEFT JOIN shops s
+        ON r.shop_id = s.id
       WHERE r.id = ? AND r.shop_id = ?
     `).get(repairOrderId, shopId);
 
@@ -5619,7 +5623,7 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
     await resend.emails.send({
       from: "S&K Auto <appointments@skautohutch.com>",
       to: [repairOrder.customer_email],
-      subject: `S&K Auto Payment Receipt ${receiptNumber}`,
+      subject: `${repairOrder.shop_name || "Your repair shop"} Payment Receipt ${receiptNumber}`,
       html: `
         <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
           <div style="max-width:650px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;">
@@ -5645,7 +5649,7 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
               </p>
 
               <p>
-                We received your payment to S&K Auto.
+                We received your payment to ${repairOrder.shop_name || "your repair shop"}.
               </p>
 
               <table style="width:100%;border-collapse:collapse;margin-top:20px;">
@@ -5732,7 +5736,7 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
               </table>
 
               <p style="margin-top:25px;color:#666;">
-                Thank you for choosing S&K Auto.
+                Thank you for choosing ${repairOrder.shop_name || "us"}.
               </p>
 
               <p style="color:#666;">
