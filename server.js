@@ -7515,10 +7515,11 @@ app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/te
 
     const rec = db.prepare(`
       SELECT rr.id, rr.description, rr.parts, rr.labor, rr.authorization_token, rr.status,
-             r.customer_id, c.name AS customer_name, c.phone AS customer_phone
+             r.customer_id, c.name AS customer_name, c.phone AS customer_phone, s.name AS shop_name
       FROM repair_order_recommendations rr
       JOIN repair_orders r ON r.id = rr.repair_order_id
       JOIN customers c ON c.id = r.customer_id
+      JOIN shops s ON s.id = r.shop_id
       WHERE rr.id = ? AND rr.repair_order_id = ? AND r.shop_id = ?
     `).get(recommendationId, repairOrderId, shopId);
     if (!rec) return res.status(404).json({ error: 'Recommended repair not found.' });
@@ -7527,9 +7528,9 @@ app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/te
     if (!phone) return res.status(400).json({ error: 'Customer phone number is missing or invalid.' });
 
     const total = Number(rec.parts || 0) + Number(rec.labor || 0);
-    const url = `https://skautohutch.com/repair-authorization.html?order=${encodeURIComponent(repairOrderId)}&repair=${encodeURIComponent(recommendationId)}&token=${encodeURIComponent(rec.authorization_token)}`;
+    const url = `${requestBaseUrl(req)}/repair-authorization.html?order=${encodeURIComponent(repairOrderId)}&repair=${encodeURIComponent(recommendationId)}&token=${encodeURIComponent(rec.authorization_token)}`;
     const firstName = String(rec.customer_name || '').trim().split(/\s+/)[0];
-    const body = `S&K Auto: ${firstName ? firstName + ', ' : ''}we recommend: ${rec.description}. Total: $${total.toFixed(2)}. Review and approve or decline here: ${url}`;
+    const body = `${rec.shop_name || 'Your repair shop'}: ${firstName ? firstName + ', ' : ''}we recommend: ${rec.description}. Total: $${total.toFixed(2)}. Review and approve or decline here: ${url}`;
     const message = await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: phone });
     recordCustomerCommunication({ shopId, repairOrderId, customerId: rec.customer_id, recommendationId, channel: 'sms', type: 'repair_authorization', destination: rec.customer_phone, providerMessageId: message.sid });
     res.json({ success: true, message: 'Authorization text sent successfully.' });
