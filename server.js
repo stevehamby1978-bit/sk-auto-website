@@ -7466,9 +7466,10 @@ app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
 
     const order = db.prepare(`
       SELECT r.id, r.customer_id, r.amount_paid, r.invoice_token,
-             c.name AS customer_name, c.phone AS customer_phone
+             c.name AS customer_name, c.phone AS customer_phone, s.name AS shop_name
       FROM repair_orders r
       JOIN customers c ON c.id = r.customer_id
+      JOIN shops s ON s.id = r.shop_id
       WHERE r.id = ? AND r.shop_id = ?
     `).get(repairOrderId, shopId);
     if (!order) return res.status(404).json({ error: 'Repair order not found.' });
@@ -7489,12 +7490,12 @@ app.post('/api/repair-orders/:id/text-invoice', async (req, res) => {
     const total = Math.round((subtotal * 1.075) * 100) / 100;
     const amountPaid = Math.round(Number(order.amount_paid || 0) * 100) / 100;
     const balance = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
-    const invoiceUrl = `https://skautohutch.com/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
+    const invoiceUrl = `${requestBaseUrl(req)}/invoice.html?id=${encodeURIComponent(repairOrderId)}&token=${encodeURIComponent(invoiceToken)}`;
     const firstName = String(order.customer_name || '').trim().split(/\s+/)[0];
 
     const body = balance <= 0.009
-      ? `S&K Auto: ${firstName ? firstName + ', ' : ''}payment received - thank you! Invoice #${repairOrderId} is paid in full. View invoice: ${invoiceUrl}`
-      : `S&K Auto: ${firstName ? firstName + ', ' : ''}your invoice #${repairOrderId} is ready. Total: $${total.toFixed(2)}. Balance due: $${balance.toFixed(2)}. View/pay: ${invoiceUrl}`;
+      ? `${order.shop_name || 'Your repair shop'}: ${firstName ? firstName + ', ' : ''}payment received - thank you! Invoice #${repairOrderId} is paid in full. View invoice: ${invoiceUrl}`
+      : `${order.shop_name || 'Your repair shop'}: ${firstName ? firstName + ', ' : ''}your invoice #${repairOrderId} is ready. Total: $${total.toFixed(2)}. Balance due: $${balance.toFixed(2)}. View/pay: ${invoiceUrl}`;
 
     const message = await twilioClient.messages.create({ body, from: process.env.TWILIO_PHONE_NUMBER, to: phone });
     recordCustomerCommunication({ shopId, repairOrderId, customerId: order.customer_id, channel: 'sms', type: 'invoice', destination: order.customer_phone, providerMessageId: message.sid, details: `Balance due: $${balance.toFixed(2)}` });
