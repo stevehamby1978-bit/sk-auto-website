@@ -3095,6 +3095,8 @@ if (duplicateCustomer) {
 // ===== S&K AUTO - GET ALL CUSTOMERS =====
 app.get("/api/customers", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const customers = db.prepare(`
       SELECT
         c.id,
@@ -3106,8 +3108,10 @@ app.get("/api/customers", (req, res) => {
       FROM customers c
       LEFT JOIN vehicles v
         ON v.customer_id = c.id
+       AND v.shop_id = c.shop_id
       LEFT JOIN repair_orders r
         ON r.customer_id = c.id
+       AND r.shop_id = c.shop_id
         WHERE c.shop_id = ?
       GROUP BY
         c.id,
@@ -3115,7 +3119,7 @@ app.get("/api/customers", (req, res) => {
         c.phone,
         c.email
       ORDER BY c.name ASC
-    `).all(req.session.employee.shop_id);
+    `).all(shopId);
 
     res.json(customers);
 
