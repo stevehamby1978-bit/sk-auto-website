@@ -2182,9 +2182,13 @@ app.post("/api/register-shop", async (req, res) => {
           address,
           city,
           state,
-          zip
+          zip,
+          subscription_plan,
+          subscription_status,
+          trial_started_at,
+          trial_ends_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'starter', 'trialing', datetime('now'), datetime('now','+30 days'))
       `).run(
         shopName.trim(),
         slug,
