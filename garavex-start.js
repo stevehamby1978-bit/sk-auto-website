@@ -12,22 +12,26 @@ process.env.DATA_Dir = dataDir;
 fs.mkdirSync(dataDir, { recursive: true });
 console.log(`[V2 STARTUP] database=${path.join(dataDir, 'bookings.db')}`);
 
+function runOptionalOwnerRepair(label, scriptName) {
+  try {
+    console.log(`[V2 STARTUP] verifying ${label}`);
+    execFileSync(process.execPath, [path.join(__dirname, 'scripts', scriptName)], {
+      stdio: 'inherit',
+      env: process.env
+    });
+    console.log(`[V2 STARTUP] ${label} verification finished`);
+  } catch (err) {
+    console.error(`[V2 STARTUP] WARNING: ${label} verification failed; continuing startup without modifying application availability.`);
+    console.error(err && err.message ? err.message : err);
+  }
+}
+
 if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) {
-  console.log('[V2 STARTUP] verifying S&K owner');
-  execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'v2-login-repair.js')], {
-    stdio: 'inherit',
-    env: process.env
-  });
-  console.log('[V2 STARTUP] S&K owner verification finished');
+  runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
 }
 
 if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) {
-  console.log('[V2 STARTUP] verifying Zwickl Repair owner');
-  execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'v2-zwickl-login-repair.js')], {
-    stdio: 'inherit',
-    env: process.env
-  });
-  console.log('[V2 STARTUP] Zwickl Repair owner verification finished');
+  runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
 }
 
 require('./v2-auth-preload');
