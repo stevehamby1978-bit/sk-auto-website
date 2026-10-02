@@ -1,6 +1,12 @@
 'use strict';
 
-/* Garavex V2 recommendation tenant-safety preload. */
+/* Garavex V2 recommendation tenant-safety preload.
+ * IMPORTANT: this preload only blocks the legacy recommendation routes while
+ * server.js is being registered. The V2 routes themselves are installed later
+ * by garavex-start.js, after express-session middleware exists. Registering
+ * them from the preload would put them before session middleware, making every
+ * request look unauthenticated even for a signed-in shop user.
+ */
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
@@ -53,14 +59,6 @@ function install(app) {
       if (order.status === 'completed' || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: 'Completed or paid repair orders cannot be edited.' });
       const token = crypto.randomBytes(32).toString('hex');
       const result = db.prepare(`INSERT INTO repair_order_recommendations(repair_order_id,description,parts,labor,status,authorization_token) VALUES(?,?,?,?, 'pending',?)`).run(orderId, description, parts, labor, token);
-      try {
-        const twilioClient = global.twilioClient;
-        if (twilioClient && order.customer_phone && String(order.shop_slug || '').toLowerCase() === 'sk-auto') {
-          const base = process.env.REPAIR_AUTHORIZATION_BASE_URL || 'https://skautohutch.com/repair-authorization.html';
-          const url = `${base}?order=${encodeURIComponent(orderId)}&repair=${encodeURIComponent(result.lastInsertRowid)}&token=${encodeURIComponent(token)}`;
-          await twilioClient.messages.create({ body: `${order.shop_name}: Hi ${order.customer_name}, we have recommended an additional repair for your vehicle: ${description}. Parts: $${parts.toFixed(2)}, Labor: $${labor.toFixed(2)}, Total: $${(parts + labor).toFixed(2)}. Please approve or decline the repair here: ${url}`, from: process.env.TWILIO_PHONE_NUMBER, to: order.customer_phone });
-        }
-      } catch (notifyErr) { console.error('V2 recommendation notification error:', notifyErr); }
       res.status(201).json({ success: true, id: Number(result.lastInsertRowid), authorization_token: token });
     } catch (err) { console.error('V2 add recommended repair error:', err); res.status(500).json({ error: 'Unable to add recommended repair.' }); }
   });
@@ -150,7 +148,6 @@ function install(app) {
 
 function intercept(method, original) {
   express.application[method] = function(route, ...handlers) {
-    if (!installed.has(this)) install(this);
     const key = `${method.toUpperCase()} ${route}`;
     if (protectedRoutes.has(key)) return this;
     return original.call(this, route, ...handlers);
