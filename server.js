@@ -2082,21 +2082,6 @@ if (!employeeShopColumns.includes("shop_id")) {
     ADD COLUMN shop_id INTEGER
   `).run();
 }
-// ===== S&K AUTO SaaS - ASSIGN EXISTING EMPLOYEES =====
-const primaryShop = db.prepare(`
-  SELECT id
-  FROM shops
-  WHERE slug = ?
-  LIMIT 1
-`).get('sk-auto');
-
-if (primaryShop) {
-  db.prepare(`
-    UPDATE employees
-    SET shop_id = ?
-    WHERE shop_id IS NULL
-  `).run(primaryShop.id);
-}
 // ===== S&K AUTO SaaS - CUSTOMER SHOP MIGRATION =====
 const customerShopColumns = db.prepare(`
   PRAGMA table_info(customers)
@@ -2108,16 +2093,6 @@ if (!customerShopColumns.includes("shop_id")) {
     ADD COLUMN shop_id INTEGER
   `).run();
 }
-
-// ===== S&K AUTO SaaS - ASSIGN EXISTING CUSTOMERS =====
-if (primaryShop) {
-  db.prepare(`
-    UPDATE customers
-    SET shop_id = ?
-    WHERE shop_id IS NULL
-  `).run(primaryShop.id);
-}
-
 
 // ===== S&K AUTO SaaS - VEHICLE SHOP MIGRATION =====
 const vehicleShopColumns = db.prepare(`
@@ -2131,15 +2106,6 @@ if (!vehicleShopColumns.includes("shop_id")) {
   `).run();
 }
 
-// ===== S&K AUTO SaaS - ASSIGN EXISTING VEHICLES =====
-if (primaryShop) {
-  db.prepare(`
-    UPDATE vehicles
-    SET shop_id = ?
-    WHERE shop_id IS NULL
-  `).run(primaryShop.id);
-}
-
 // ===== S&K AUTO SaaS - REPAIR ORDER SHOP MIGRATION =====
 const repairOrderShopColumns = db.prepare(`
   PRAGMA table_info(repair_orders)
@@ -2150,20 +2116,6 @@ if (!repairOrderShopColumns.includes("shop_id")) {
     ALTER TABLE repair_orders
     ADD COLUMN shop_id INTEGER
   `).run();
-}
-
-// ===== S&K AUTO SaaS - ASSIGN EXISTING REPAIR ORDERS =====
-if (primaryShop) {
-  db.prepare(`
-    UPDATE repair_orders
-    SET shop_id = ?
-    WHERE shop_id IS NULL
-  `).run(primaryShop.id);
-}
-// Assign legacy scheduling blocks to the original/primary shop.
-if (primaryShop) {
-  db.prepare("UPDATE blocked_dates SET shop_id = ? WHERE shop_id IS NULL").run(primaryShop.id);
-  db.prepare("UPDATE blocked_times SET shop_id = ? WHERE shop_id IS NULL").run(primaryShop.id);
 }
 
 // ===== GARAVEX - COMPOSITE TENANT KEYS FOR SCHEDULING BLOCKS =====
@@ -2230,14 +2182,6 @@ if (!bookingShopColumns.includes("shop_id")) {
   `).run();
 }
 
-// ===== S&K AUTO SaaS - ASSIGN EXISTING BOOKINGS =====
-if (primaryShop) {
-  db.prepare(`
-    UPDATE bookings
-    SET shop_id = ?
-    WHERE shop_id IS NULL
-  `).run(primaryShop.id);
-}
 // ===== GARAVEX - TENANT-SCOPED BOOKING SLOT UNIQUENESS =====
 if (primaryShop) {
   const bookingSqlRow = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'").get();
@@ -2293,15 +2237,6 @@ if (!estimateShopColumns.includes("shop_id")) {
     ALTER TABLE estimates
     ADD COLUMN shop_id INTEGER
   `).run();
-}
-
-// ===== S&K AUTO SaaS - ASSIGN EXISTING ESTIMATES =====
-if (primaryShop) {
-  db.prepare(`
-    UPDATE estimates
-    SET shop_id = ?
-    WHERE shop_id IS NULL
-  `).run(primaryShop.id);
 }
 
 // ===== S&K AUTO SaaS - REGISTER NEW SHOP =====
