@@ -846,7 +846,7 @@ app.get('/api/availability', (req, res) => {
   if (!isValidDateString(date) || !isWeekday(date)) {
     return res.status(400).json({error: 'Choose a Monday-Friday date.'});
   }
-if (isBlockedDate(date)) {
+if (isBlockedDate(date, primaryShop?.id)) {
   return res.json({
     date,
     available: [],
@@ -3950,13 +3950,15 @@ res.json({
 // ===== S&K AUTO - GET ALL APPOINTMENTS =====
 app.get("/api/appointments", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
 
     const appointments = db.prepare(`
       SELECT *
       FROM bookings
       WHERE shop_id = ?
       ORDER BY date ASC, time ASC
-    `).all(req.session.employee.shop_id);
+    `).all(shopId);
 
     res.json(appointments);
 
@@ -3973,12 +3975,14 @@ app.get("/api/appointments", (req, res) => {
 // ===== S&K AUTO - DELETE APPOINTMENT =====
 app.delete("/api/appointments/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const appointment = db.prepare(`
       SELECT id
       FROM bookings
       WHERE id = ?
         AND shop_id = ?
-    `).get(req.params.id, req.session.employee.shop_id);
+    `).get(req.params.id, shopId);
 
     if (!appointment) {
       return res.status(404).json({
@@ -3990,7 +3994,7 @@ app.delete("/api/appointments/:id", (req, res) => {
       DELETE FROM bookings
       WHERE id = ?
         AND shop_id = ?
-    `).run(req.params.id, req.session.employee.shop_id);
+    `).run(req.params.id, shopId);
 
     res.json({
       success: true,
