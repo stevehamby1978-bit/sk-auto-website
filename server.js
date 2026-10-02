@@ -6251,12 +6251,17 @@ app.patch("/api/repair-orders/:repairOrderId/items/:itemId", (req, res) => {
 // ===== S&K AUTO - GET RECOMMENDED REPAIRS =====
 app.get("/api/repair-orders/:id/recommendations", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
+    const repairOrder = db.prepare(`SELECT id FROM repair_orders WHERE id = ? AND shop_id = ?`).get(req.params.id, shopId);
+    if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
     const recommendations = db.prepare(`
-      SELECT id, repair_order_id, description, parts, labor, status, created_at
-      FROM repair_order_recommendations
-      WHERE repair_order_id = ?
-      ORDER BY id ASC
-    `).all(req.params.id);
+      SELECT rr.id, rr.repair_order_id, rr.description, rr.parts, rr.labor, rr.status, rr.created_at
+      FROM repair_order_recommendations rr
+      JOIN repair_orders ro ON ro.id = rr.repair_order_id
+      WHERE rr.repair_order_id = ? AND ro.shop_id = ?
+      ORDER BY rr.id ASC
+    `).all(req.params.id, shopId);
 
     res.json(recommendations);
 
@@ -6272,15 +6277,14 @@ app.get("/api/repair-orders/:id/recommendations", (req, res) => {
 // ===== S&K AUTO - DELETE RECOMMENDED REPAIR =====
 app.delete("/api/repair-orders/:repairOrderId/recommendations/:recommendationId", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const recommendation = db.prepare(`
-      SELECT id
-      FROM repair_order_recommendations
-      WHERE id = ?
-        AND repair_order_id = ?
-    `).get(
-      req.params.recommendationId,
-      req.params.repairOrderId
-    );
+      SELECT rr.id
+      FROM repair_order_recommendations rr
+      JOIN repair_orders ro ON ro.id = rr.repair_order_id
+      WHERE rr.id = ? AND rr.repair_order_id = ? AND ro.shop_id = ?
+    `).get(req.params.recommendationId, req.params.repairOrderId, shopId);
 
     if (!recommendation) {
       return res.status(404).json({
@@ -6318,11 +6322,13 @@ app.patch(
       const recommendationId = req.params.recommendationId;
 
       // Make sure the repair order exists
+      const shopId = req.session?.employee?.shop_id;
+      if (!shopId) return res.status(401).json({ error: "Not authorized." });
       const repairOrder = db.prepare(`
         SELECT id
         FROM repair_orders
-        WHERE id = ?
-      `).get(repairOrderId);
+        WHERE id = ? AND shop_id = ?
+      `).get(repairOrderId, shopId);
 
       if (!repairOrder) {
         return res.status(404).json({
@@ -6404,16 +6410,14 @@ app.patch(
     try {
       const repairOrderId = req.params.repairOrderId;
       const recommendationId = req.params.recommendationId;
-
+      const shopId = req.session?.employee?.shop_id;
+      if (!shopId) return res.status(401).json({ error: "Not authorized." });
       const recommendation = db.prepare(`
-        SELECT id
-        FROM repair_order_recommendations
-        WHERE id = ?
-          AND repair_order_id = ?
-      `).get(
-        recommendationId,
-        repairOrderId
-      );
+        SELECT rr.id
+        FROM repair_order_recommendations rr
+        JOIN repair_orders ro ON ro.id = rr.repair_order_id
+        WHERE rr.id = ? AND rr.repair_order_id = ? AND ro.shop_id = ?
+      `).get(recommendationId, repairOrderId, shopId);
 
       if (!recommendation) {
         return res.status(404).json({
