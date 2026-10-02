@@ -1188,7 +1188,7 @@ app.post('/api/admin/blocked-dates', (req, res) => {
   db.prepare(`
     INSERT INTO blocked_dates (date, reason, shop_id)
     VALUES (?, ?, ?)
-    ON CONFLICT(date) DO UPDATE SET reason = excluded.reason, shop_id = excluded.shop_id
+    ON CONFLICT(shop_id, date) DO UPDATE SET reason = excluded.reason
   `).run(date, reason, shopId);
 
   res.json({ ok: true, date, reason });
@@ -1235,7 +1235,7 @@ app.post('/api/admin/blocked-times', (req, res) => {
   db.prepare(`
     INSERT INTO blocked_times (date, time, reason, shop_id)
     VALUES (?, ?, ?, ?)
-    ON CONFLICT(date, time) DO UPDATE SET reason = excluded.reason, shop_id = excluded.shop_id
+    ON CONFLICT(shop_id, date, time) DO UPDATE SET reason = excluded.reason
   `).run(date, time, reason, shopId);
 
   res.json({ ok: true, date, time, reason });
@@ -2138,6 +2138,58 @@ if (primaryShop) {
 if (primaryShop) {
   db.prepare("UPDATE blocked_dates SET shop_id = ? WHERE shop_id IS NULL").run(primaryShop.id);
   db.prepare("UPDATE blocked_times SET shop_id = ? WHERE shop_id IS NULL").run(primaryShop.id);
+}
+
+// ===== GARAVEX - COMPOSITE TENANT KEYS FOR SCHEDULING BLOCKS =====
+if (primaryShop) {
+  const blockedDatePk = db.prepare("PRAGMA table_info(blocked_dates)").all()
+    .filter(column => column.pk > 0)
+    .sort((a, b) => a.pk - b.pk)
+    .map(column => column.name);
+  if (blockedDatePk.join(",") !== "shop_id,date") {
+    db.transaction(() => {
+      db.exec("DROP TABLE IF EXISTS blocked_dates_v2");
+      db.exec(`
+        CREATE TABLE blocked_dates_v2 (
+          shop_id INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          reason TEXT DEFAULT '',
+          PRIMARY KEY (shop_id, date)
+        )
+      `);
+      db.exec(`
+        INSERT OR REPLACE INTO blocked_dates_v2 (shop_id, date, reason)
+        SELECT shop_id, date, reason FROM blocked_dates WHERE shop_id IS NOT NULL
+      `);
+      db.exec("DROP TABLE blocked_dates");
+      db.exec("ALTER TABLE blocked_dates_v2 RENAME TO blocked_dates");
+    })();
+  }
+
+  const blockedTimePk = db.prepare("PRAGMA table_info(blocked_times)").all()
+    .filter(column => column.pk > 0)
+    .sort((a, b) => a.pk - b.pk)
+    .map(column => column.name);
+  if (blockedTimePk.join(",") !== "shop_id,date,time") {
+    db.transaction(() => {
+      db.exec("DROP TABLE IF EXISTS blocked_times_v2");
+      db.exec(`
+        CREATE TABLE blocked_times_v2 (
+          shop_id INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          time TEXT NOT NULL,
+          reason TEXT DEFAULT '',
+          PRIMARY KEY (shop_id, date, time)
+        )
+      `);
+      db.exec(`
+        INSERT OR REPLACE INTO blocked_times_v2 (shop_id, date, time, reason)
+        SELECT shop_id, date, time, reason FROM blocked_times WHERE shop_id IS NOT NULL
+      `);
+      db.exec("DROP TABLE blocked_times");
+      db.exec("ALTER TABLE blocked_times_v2 RENAME TO blocked_times");
+    })();
+  }
 }
 
 // ===== S&K AUTO SaaS - BOOKING SHOP MIGRATION =====
