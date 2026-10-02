@@ -182,6 +182,13 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
       if (!GARAVEX_PLANS[planKey]) return res.status(400).json({ error: 'Invalid Garavex plan.' });
       const shop = getShop(db, shopId);
       if (!shop) return res.status(404).json({ error: 'Shop not found.' });
+      if (isOwnerTestShop(shopId)) {
+        return res.status(409).json({
+          error: 'Owner test shop uses plan preview and is not billed through Stripe.',
+          ownerTestPlan: true,
+          usePreviewPlan: true
+        });
+      }
       if (shop.stripe_subscription_id) return res.status(409).json({ error: 'This shop already has a subscription. Use Manage Billing to change plans.' });
 
       let price = configuredPrice(planKey);
