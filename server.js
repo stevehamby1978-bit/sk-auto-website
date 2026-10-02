@@ -5256,14 +5256,18 @@ app.post("/api/repair-orders/:id/email-invoice", async (req, res) => {
         v.make AS vehicle_make,
         v.model AS vehicle_model,
         v.vin AS vehicle_vin,
-        v.mileage AS vehicle_mileage
+        v.mileage AS vehicle_mileage,
+        s.name AS shop_name,
+        s.phone AS shop_phone
       FROM repair_orders r
       LEFT JOIN customers c
         ON r.customer_id = c.id
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
-      WHERE r.id = ?
-    `).get(req.params.id);
+      LEFT JOIN shops s
+        ON r.shop_id = s.id
+      WHERE r.id = ? AND r.shop_id = ?
+    `).get(req.params.id, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -5350,7 +5354,7 @@ const paymentStatusText =
     await resend.emails.send({
       from: "S&K Auto <appointments@skautohutch.com>",
       to: [repairOrder.customer_email],
-      subject: `S&K Auto Invoice #${repairOrder.id}`,
+      subject: `${repairOrder.shop_name || "Your repair shop"} Invoice #${repairOrder.id}`,
       html: `
         <div style="font-family:Arial,sans-serif;background:#f4f4f4;padding:30px;">
           <div style="max-width:700px;margin:auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #dddddd;">
@@ -5376,7 +5380,7 @@ const paymentStatusText =
               </p>
 
               <p>
-                Below is your invoice from S&K Auto.
+                Below is your invoice from ${repairOrder.shop_name || "your repair shop"}.
               </p>
 <div style="text-align:center;margin:25px 0;">
     <a
@@ -5448,10 +5452,10 @@ const paymentStatusText =
               </div>
 
               <div style="margin-top:30px;border-top:1px solid #dddddd;padding-top:20px;">
-                <strong>S&K Auto</strong><br>
+                <strong>${repairOrder.shop_name || "Your repair shop"}</strong><br>
                 3107 Homestead<br>
                 Hutchinson, KS 67502<br>
-                (620) 899-0425
+                ${repairOrder.shop_phone || ""}
               </div>
 
               <p style="margin-top:25px;font-size:13px;color:#777777;">
