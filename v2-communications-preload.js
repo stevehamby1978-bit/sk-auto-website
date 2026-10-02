@@ -8,7 +8,8 @@ const express = require('express');
 const path = require('path');
 const Database = require('better-sqlite3');
 
-const dbPath = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'appointments.db');
+// Use the same database as server.js and every other V2 tenant route.
+const dbPath = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'bookings.db');
 const db = new Database(dbPath);
 const originalPost = express.application.post;
 const originalPatch = express.application.patch;
@@ -62,12 +63,9 @@ function install(app) {
     next();
   });
 
-  // Legacy estimate creation immediately sends S&K-branded Twilio messages and
-  // builds skautohutch.com customer links, so it must never run for another tenant.
-  originalPost.call(app, '/api/estimates', (req, res, next) => {
-    const shopId = requireSk(req, res); if (!shopId) return;
-    next();
-  });
+  // Estimate creation is handled by the tenant-safe V2 route injected by
+  // garavex-start.js. Do NOT register the old S&K-only /api/estimates guard here:
+  // Express would place it ahead of the V2 creator and block other tenants.
 
   // Public estimate response is token-authorized. Replace the legacy handler so an
   // approved estimate carries its tenant into the repair order and non-S&K tenants
@@ -109,8 +107,6 @@ function install(app) {
         }
       })();
 
-      // Preserve S&K's owner notification only for S&K. Failure to notify must not
-      // roll back the customer's estimate decision.
       if (isSkAuto(Number(estimate.shop_id))) {
         try {
           const twilioClient = global.twilioClient;
@@ -131,7 +127,6 @@ function install(app) {
     }
   });
 
-  // All legacy Twilio endpoints below use S&K's account/branding and therefore stay S&K-only.
   for (const route of [
     '/api/repair-orders/:id/text-invoice',
     '/api/repair-orders/:repairOrderId/recommendations/:recommendationId/text-authorization',
@@ -146,7 +141,6 @@ function install(app) {
     });
   }
 
-  // Replace legacy authorization mutation because it updates by repair-order ID alone.
   protectedRoutes.add('PATCH /api/repair-orders/:id/authorization');
   originalPatch.call(app, '/api/repair-orders/:id/authorization', (req, res) => {
     try {
@@ -170,9 +164,6 @@ function install(app) {
     }
   });
 
-  // Completion itself remains available to every tenant. For non-S&K shops we perform
-  // the tenant-safe completion here and intentionally do not fall through to the legacy
-  // handler, because that handler sends S&K's automatic vehicle-ready Twilio message.
   originalPatch.call(app, '/api/repair-orders/:id/complete', (req, res, next) => {
     try {
       const shopId = sid(req);
