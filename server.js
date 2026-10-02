@@ -4609,10 +4609,10 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
     const lastPayment = db.prepare(`
       SELECT amount, payment_method, paid_at
       FROM repair_order_payments
-      WHERE repair_order_id = ?
+      WHERE repair_order_id = ? AND shop_id = ?
       ORDER BY id DESC
       LIMIT 1
-    `).get(req.params.id);
+    `).get(req.params.id, shopId);
 
     const paymentAmount = lastPayment
       ? Number(lastPayment.amount || 0)
@@ -4758,7 +4758,8 @@ app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, 
       FROM repair_order_payments
       WHERE id = ?
         AND repair_order_id = ?
-    `).get(paymentId, repairOrderId);
+        AND shop_id = ?
+    `).get(paymentId, repairOrderId, shopId);
 
     if (!payment) {
       return res.status(404).json({
@@ -5744,7 +5745,8 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
       FROM repair_order_payments
       WHERE id = ?
         AND repair_order_id = ?
-    `).get(paymentId, repairOrderId);
+        AND shop_id = ?
+    `).get(paymentId, repairOrderId, shopId);
 
     if (!payment) {
       return res.status(404).json({
@@ -5784,9 +5786,10 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
       SELECT amount
       FROM repair_order_payments
       WHERE repair_order_id = ?
+        AND shop_id = ?
         AND voided = 0
         AND id < ?
-    `).all(repairOrderId, paymentId);
+    `).all(repairOrderId, shopId, paymentId);
 
     const paidBefore = previousPayments.reduce(
       (sum, p) => sum + Number(p.amount || 0),
@@ -7032,8 +7035,8 @@ app.delete("/api/repair-orders/:id", (req, res) => {
 
     // Normal production protection remains unchanged for every other customer.
     const paymentCount = db.prepare(`
-      SELECT COUNT(*) AS count FROM repair_order_payments WHERE repair_order_id = ?
-    `).get(repairOrderId);
+      SELECT COUNT(*) AS count FROM repair_order_payments WHERE repair_order_id = ? AND shop_id = ?
+    `).get(repairOrderId, shopId);
 
     if (repairOrder.status === "completed" || Number(repairOrder.amount_paid || 0) > 0 || Number(paymentCount?.count || 0) > 0) {
       return res.status(409).json({
@@ -7045,7 +7048,7 @@ app.delete("/api/repair-orders/:id", (req, res) => {
       db.prepare(`DELETE FROM customer_communication_history WHERE repair_order_id = ?`).run(repairOrderId);
       db.prepare(`DELETE FROM invoice_email_history WHERE repair_order_id = ?`).run(repairOrderId);
       db.prepare(`DELETE FROM repair_order_recommendations WHERE repair_order_id = ?`).run(repairOrderId);
-      db.prepare(`DELETE FROM repair_order_payments WHERE repair_order_id = ?`).run(repairOrderId);
+      db.prepare(`DELETE FROM repair_order_payments WHERE repair_order_id = ? AND shop_id = ?`).run(repairOrderId, shopId);
       db.prepare(`DELETE FROM repair_order_items WHERE repair_order_id = ?`).run(repairOrderId);
       const result = db.prepare(`DELETE FROM repair_orders WHERE id = ? AND shop_id = ?`).run(repairOrderId, shopId);
       if (result.changes !== 1) throw new Error("Repair order was not deleted.");
