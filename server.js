@@ -3130,14 +3130,16 @@ const duplicateCustomer = db.prepare(`
         UPDATE estimates
         SET customer_id = ?
         WHERE customer_id = ?
-      `).run(keepCustomerId, duplicateCustomerId);
+          AND shop_id = ?
+      `).run(keepCustomerId, duplicateCustomerId, req.session.employee.shop_id);
 
       // Move repair orders to the customer being kept
       db.prepare(`
         UPDATE repair_orders
         SET customer_id = ?
         WHERE customer_id = ?
-      `).run(keepCustomerId, duplicateCustomerId);
+          AND shop_id = ?
+      `).run(keepCustomerId, duplicateCustomerId, req.session.employee.shop_id);
 
       db.prepare(`
     DELETE FROM customers
@@ -3176,7 +3178,8 @@ app.delete("/api/customers/:id", (req, res) => {
       SELECT id
       FROM customers
       WHERE id = ?
-    `).get(customerId);
+        AND shop_id = ?
+    `).get(customerId, req.session.employee.shop_id);
 
     if (!customer) {
       return res.status(404).json({
@@ -3189,8 +3192,9 @@ app.delete("/api/customers/:id", (req, res) => {
       SELECT id
       FROM repair_orders
       WHERE customer_id = ?
+        AND shop_id = ?
       LIMIT 1
-    `).get(customerId);
+    `).get(customerId, req.session.employee.shop_id);
 
     if (repairOrder) {
       return res.status(400).json({
