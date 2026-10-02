@@ -1166,14 +1166,18 @@ Confirmation: ${confirmation}`,
   }
 });
 app.get('/api/admin/blocked-dates', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const rows = db
-    .prepare('SELECT date, reason FROM blocked_dates ORDER BY date')
-    .all();
+    .prepare('SELECT date, reason FROM blocked_dates WHERE shop_id = ? ORDER BY date')
+    .all(shopId);
 
   res.json({ blockedDates: rows });
 });
 
 app.post('/api/admin/blocked-dates', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.body.date || '');
   const reason = String(req.body.reason || '').trim();
 
@@ -1182,34 +1186,40 @@ app.post('/api/admin/blocked-dates', (req, res) => {
   }
 
   db.prepare(`
-    INSERT INTO blocked_dates (date, reason)
-    VALUES (?, ?)
-    ON CONFLICT(date) DO UPDATE SET reason = excluded.reason
-  `).run(date, reason);
+    INSERT INTO blocked_dates (date, reason, shop_id)
+    VALUES (?, ?, ?)
+    ON CONFLICT(date) DO UPDATE SET reason = excluded.reason, shop_id = excluded.shop_id
+  `).run(date, reason, shopId);
 
   res.json({ ok: true, date, reason });
 });
 
 app.delete('/api/admin/blocked-dates/:date', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.params.date || '');
 
   if (!isValidDateString(date)) {
     return res.status(400).json({ error: 'Invalid date.' });
   }
 
-  db.prepare('DELETE FROM blocked_dates WHERE date = ?').run(date);
+  db.prepare('DELETE FROM blocked_dates WHERE date = ? AND shop_id = ?').run(date, shopId);
 
   res.json({ ok: true, date });
 });
 app.get('/api/admin/blocked-times', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const rows = db
-    .prepare('SELECT date, time, reason FROM blocked_times ORDER BY date, time')
-    .all();
+    .prepare('SELECT date, time, reason FROM blocked_times WHERE shop_id = ? ORDER BY date, time')
+    .all(shopId);
 
   res.json({ blockedTimes: rows });
 });
 
 app.post('/api/admin/blocked-times', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.body.date || '');
   const time = String(req.body.time || '');
   const reason = String(req.body.reason || '').trim();
@@ -1223,15 +1233,17 @@ app.post('/api/admin/blocked-times', (req, res) => {
   }
 
   db.prepare(`
-    INSERT INTO blocked_times (date, time, reason)
-    VALUES (?, ?, ?)
-    ON CONFLICT(date, time) DO UPDATE SET reason = excluded.reason
-  `).run(date, time, reason);
+    INSERT INTO blocked_times (date, time, reason, shop_id)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(date, time) DO UPDATE SET reason = excluded.reason, shop_id = excluded.shop_id
+  `).run(date, time, reason, shopId);
 
   res.json({ ok: true, date, time, reason });
 });
 
 app.delete('/api/admin/blocked-times/:date/:time', (req, res) => {
+  const shopId = req.session?.employee?.shop_id;
+  if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
   const date = String(req.params.date || '');
   const time = String(req.params.time || '');
 
@@ -1240,8 +1252,8 @@ app.delete('/api/admin/blocked-times/:date/:time', (req, res) => {
   }
 
   db.prepare(
-    'DELETE FROM blocked_times WHERE date = ? AND time = ?'
-  ).run(date, time);
+    'DELETE FROM blocked_times WHERE date = ? AND time = ? AND shop_id = ?'
+  ).run(date, time, shopId);
 
   res.json({ ok: true, date, time });
 });
