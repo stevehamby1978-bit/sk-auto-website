@@ -6955,9 +6955,15 @@ app.delete("/api/repair-orders/:id", (req, res) => {
 
     if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
 
-    // TEST CLEANUP: clicking Delete Test RO on a Steve Hamby test order removes
-    // Steve's entire local test dataset for this shop, including his vehicles.
-    if (String(repairOrder.customer_name || "").trim().toLowerCase() === "steve hamby") {
+    // TEST CLEANUP is intentionally restricted to explicitly configured beta
+    // shops. A real production customer named Steve Hamby must never trigger
+    // bulk deletion of that customer's history.
+    const cleanupShop = db.prepare(`
+      SELECT id, subscription_plan, subscription_status, stripe_subscription_id, trial_ends_at
+      FROM shops WHERE id = ? LIMIT 1
+    `).get(shopId);
+    const allowTestCleanup = ownerTestShop(cleanupShop);
+    if (allowTestCleanup && String(repairOrder.customer_name || "").trim().toLowerCase() === "steve hamby") {
       const customerId = Number(repairOrder.customer_id);
 
       const cleanupSteveTestData = db.transaction(() => {
