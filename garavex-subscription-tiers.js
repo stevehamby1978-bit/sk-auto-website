@@ -52,11 +52,21 @@ function subscriptionIsActive(status) {
   return ACTIVE_SUBSCRIPTION_STATUSES.has(String(status || '').trim().toLowerCase());
 }
 
+function ownerTestShop(shop) {
+  const enabled = String(process.env.GARAVEX_OWNER_TEST_PLAN_ENABLED || '').trim() === '1';
+  const testShopId = Number(process.env.GARAVEX_OWNER_TEST_SHOP_ID || 0);
+  return enabled && Number.isInteger(testShopId) && testShopId > 0 && Number(shop?.id || 0) === testShopId;
+}
+
 function shopPlan(shop) {
-  // Existing shops remain usable while billing is being introduced. Once a shop
-  // has a Stripe subscription ID, its subscription status becomes authoritative.
   if (!shop) return getPlan('starter');
-  if (shop.stripe_subscription_id && !subscriptionIsActive(shop.subscription_status)) {
+
+  // The single explicitly configured owner/beta shop may preview plans without Stripe.
+  if (ownerTestShop(shop)) return getPlan(shop.subscription_plan);
+
+  // Paid tiers are never granted to ordinary shops from a database plan value alone.
+  // A real Stripe subscription must exist and be in an active/trialing state.
+  if (!shop.stripe_subscription_id || !subscriptionIsActive(shop.subscription_status)) {
     return getPlan('starter');
   }
   return getPlan(shop.subscription_plan);
