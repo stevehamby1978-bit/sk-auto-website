@@ -2629,6 +2629,49 @@ app.get("/api/current-employee", (req, res) => {
   res.json({ employee: liveEmployee });
 });
 
+// ===== GARAVEX - OWNER/BETA SHOP BOOTSTRAP =====
+// Explicitly configured beta owner emails can be promoted safely at startup.
+// This does not grant access by email alone: the resulting shop ID must also be
+// present in GARAVEX_OWNER_TEST_SHOP_ID(S) for the subscription bypass.
+try {
+  const betaEmails = String(process.env.GARAVEX_OWNER_BETA_EMAILS || '')
+    .split(',')
+    .map(email => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (betaEmails.length) {
+    const findBetaShop = db.prepare(`
+      SELECT DISTINCT s.id
+      FROM employees e
+      JOIN shops s ON s.id = e.shop_id
+      WHERE LOWER(e.email) = ?
+        AND e.role = 'owner'
+        AND e.active = 1
+      LIMIT 1
+    `);
+    const promoteBetaShop = db.prepare(`
+      UPDATE shops
+      SET subscription_plan = 'elite',
+          subscription_status = 'active',
+          trial_ends_at = NULL
+      WHERE id = ?
+    `);
+
+    for (const email of betaEmails) {
+      const betaShop = findBetaShop.get(email);
+      if (!betaShop) {
+        console.warn(`GARAVEX beta owner not found: ${email}`);
+        continue;
+      }
+      promoteBetaShop.run(betaShop.id);
+      console.log(`GARAVEX beta shop promoted to permanent Elite: shop ${betaShop.id}`);
+    }
+  }
+} catch (err) {
+  console.error('GARAVEX beta shop bootstrap failed:', err);
+}
+// ===== END GARAVEX - OWNER/BETA SHOP BOOTSTRAP =====
+
 // ===== GARAVEX SUBSCRIPTION ACCESS GUARD FOR LEGACY SHOP APIs =====
 // Public booking, authentication, customer-facing token routes, Stripe webhooks,
 // and V2 billing routes are intentionally outside this guard.
