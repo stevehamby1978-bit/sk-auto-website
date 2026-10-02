@@ -11,10 +11,21 @@
 const fs = require('fs');
 const path = require('path');
 const Module = require('module');
+const { execFileSync } = require('child_process');
 
 // Safety preloads open the same SQLite file as server.js, so ensure the configured
 // data directory exists before they are required.
 fs.mkdirSync(process.env.DATA_DIR || path.join(__dirname, 'data'), { recursive: true });
+
+// Railway pre-deploy commands run before the persistent volume is mounted. Run the
+// narrowly-scoped owner repair here instead, after /app/data is mounted but before
+// authentication routes are installed. The repair script refuses ambiguous changes.
+if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) {
+  execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'v2-login-repair.js')], {
+    stdio: 'inherit',
+    env: process.env
+  });
+}
 
 // Register tenant-safe replacements before server.js defines the corresponding
 // legacy routes. Each preload intercepts only the endpoints it owns.
