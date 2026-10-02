@@ -6327,15 +6327,17 @@ app.patch(
 
       const recommendation = db.prepare(`
         SELECT
-          id,
-          description,
-          parts,
-          labor,
-          status
-        FROM repair_order_recommendations
-        WHERE id = ?
-          AND repair_order_id = ?
-          AND authorization_token = ?
+          rr.id,
+          rr.description,
+          rr.parts,
+          rr.labor,
+          rr.status,
+          ro.shop_id
+        FROM repair_order_recommendations rr
+        JOIN repair_orders ro ON ro.id = rr.repair_order_id
+        WHERE rr.id = ?
+          AND rr.repair_order_id = ?
+          AND rr.authorization_token = ?
       `).get(
         recommendationId,
         repairOrderId,
@@ -6390,7 +6392,7 @@ app.patch(
 
       const result = approveRepair();
 // ===== S&K AUTO - SHOP SMS WHEN CUSTOMER APPROVES REPAIR =====
-try {
+if (Number(recommendation.shop_id) === Number(primaryShop?.id) && process.env.SMS_TO_NUMBER) try {
   await twilioClient.messages.create({
     body:
       `S&K Auto - CUSTOMER APPROVED REPAIR\n\n` +
@@ -6450,11 +6452,12 @@ app.patch(
       }
 
       const recommendation = db.prepare(`
-        SELECT id, status
-        FROM repair_order_recommendations
-        WHERE id = ?
-          AND repair_order_id = ?
-          AND authorization_token = ?
+        SELECT rr.id, rr.status, ro.shop_id
+        FROM repair_order_recommendations rr
+        JOIN repair_orders ro ON ro.id = rr.repair_order_id
+        WHERE rr.id = ?
+          AND rr.repair_order_id = ?
+          AND rr.authorization_token = ?
       `).get(
         recommendationId,
         repairOrderId,
@@ -6487,7 +6490,7 @@ app.patch(
         repairOrderId
       );
 // ===== S&K AUTO - SHOP SMS WHEN CUSTOMER DECLINES REPAIR =====
-try {
+if (Number(recommendation.shop_id) === Number(primaryShop?.id) && process.env.SMS_TO_NUMBER) try {
   await twilioClient.messages.create({
     body:
       `S&K Auto - CUSTOMER DECLINED REPAIR\n\n` +
