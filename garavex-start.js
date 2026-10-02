@@ -34,8 +34,9 @@ function runReadOnlyOwnershipAudit() {
   }
 }
 
-if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
-if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
+// Emergency owner-repair scripts are intentionally not run during normal startup.
+// They mutate login credentials and were only needed during staging recovery.
+// Keep the scripts available for an explicit one-off repair if ever required.
 runReadOnlyOwnershipAudit();
 
 require('./v2-auth-preload');
