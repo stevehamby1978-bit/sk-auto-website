@@ -1,6 +1,6 @@
 'use strict';
 
-const { GARAVEX_PLANS, shopPlan } = require('./garavex-subscription-tiers');
+const { GARAVEX_PLANS, shopPlan, ownerTestShop } = require('./garavex-subscription-tiers');
 
 const SUBSCRIPTION_COLUMNS = [
   ['subscription_plan', "TEXT NOT NULL DEFAULT 'starter'"],
@@ -157,6 +157,11 @@ function isOwnerTestShop(shopId) {
   return ownerTestPlanEnabled() && ownerTestShopId() === Number(shopId);
 }
 
+function isComplimentaryBetaShop(db, shopId) {
+  const shop = getShop(db, Number(shopId));
+  return Boolean(shop && ownerTestShop(shop));
+}
+
 function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe }) {
   if (!app || !db) throw new Error('V2 subscriptions require app and db.');
   installSubscriptionSchema(db);
@@ -172,7 +177,7 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
     if (!shop) return res.status(404).json({ error: 'Shop not found.' });
     const plan = shopPlan(shop);
     const employeeCount = db.prepare('SELECT COUNT(*) AS count FROM employees WHERE shop_id=? AND active=1').get(shopId)?.count || 0;
-    res.json({ shopId, shopName: shop.name, plan: publicPlan(plan), status: shop.subscription_status, trialEndsAt: shop.trial_ends_at || null, currentPeriodEnd: shop.subscription_current_period_end || null, cancelAtPeriodEnd: Boolean(shop.subscription_cancel_at_period_end), employeeCount: Number(employeeCount), billingConfigured: Boolean(shop.stripe_customer_id && shop.stripe_subscription_id), ownerTestPlan: isOwnerTestShop(shopId), starterOffer: starterOffer(db) });
+    res.json({ shopId, shopName: shop.name, plan: publicPlan(plan), status: shop.subscription_status, trialEndsAt: shop.trial_ends_at || null, currentPeriodEnd: shop.subscription_current_period_end || null, cancelAtPeriodEnd: Boolean(shop.subscription_cancel_at_period_end), employeeCount: Number(employeeCount), billingConfigured: Boolean(shop.stripe_customer_id && shop.stripe_subscription_id), ownerTestPlan: isOwnerTestShop(shopId), complimentaryBeta: isComplimentaryBetaShop(db, shopId), starterOffer: starterOffer(db) });
   });
 
   app.post('/api/v2/subscription/checkout', requireLogin, requireOwner, async (req, res) => {
@@ -184,11 +189,10 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
       if (!GARAVEX_PLANS[planKey]) return res.status(400).json({ error: 'Invalid Garavex plan.' });
       const shop = getShop(db, shopId);
       if (!shop) return res.status(404).json({ error: 'Shop not found.' });
-      if (isOwnerTestShop(shopId)) {
+      if (isComplimentaryBetaShop(db, shopId)) {
         return res.status(409).json({
-          error: 'Owner test shop uses plan preview and is not billed through Stripe.',
-          ownerTestPlan: true,
-          usePreviewPlan: true
+          error: 'This complimentary Garavex beta shop has permanent Elite access and is not billed through Stripe.',
+          complimentaryBeta: true
         });
       }
       if (shop.stripe_subscription_id) return res.status(409).json({ error: 'This shop already has a subscription. Use Manage Billing to change plans.' });
