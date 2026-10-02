@@ -57,7 +57,7 @@ function installGaravexV2(app,db,deps){
  try{
   installV2Schema(db);
   installV2SchedulingSchema(db);
-  installV2Subscriptions(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
+  installV2Subscriptions(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner,stripe:deps.stripe});
   installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});
