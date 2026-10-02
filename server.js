@@ -7099,7 +7099,8 @@ if (status === "approved") {
     SELECT id
     FROM repair_orders
     WHERE estimate_id = ?
-  `).get(estimate.id);
+      AND shop_id = ?
+  `).get(estimate.id, estimate.shop_id);
 
   if (!existingRepairOrder) {
     const repairOrderResult = db.prepare(`
