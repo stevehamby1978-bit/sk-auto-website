@@ -3722,6 +3722,8 @@ app.put("/api/vehicles/:id", (req, res) => {
 // ===== S&K AUTO - DELETE VEHICLE =====
 app.delete("/api/vehicles/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const vehicleId = req.params.id;
 
     const vehicle = db.prepare(`
@@ -3731,7 +3733,7 @@ app.delete("/api/vehicles/:id", (req, res) => {
       AND shop_id = ?
 `).get(
     vehicleId,
-    req.session.employee.shop_id
+    shopId
 );
 
     if (!vehicle) {
@@ -3746,7 +3748,7 @@ app.delete("/api/vehicles/:id", (req, res) => {
       WHERE vehicle_id = ?
         AND shop_id = ?
       LIMIT 1
-    `).get(vehicleId, req.session.employee.shop_id);
+    `).get(vehicleId, shopId);
 
     if (repairOrder) {
       return res.status(400).json({
@@ -3760,7 +3762,7 @@ db.prepare(`
   SET vehicle_id = NULL
   WHERE vehicle_id = ?
     AND shop_id = ?
-`).run(vehicleId, req.session.employee.shop_id);
+`).run(vehicleId, shopId);
 
 // Delete the vehicle
 db.prepare(`
@@ -3769,7 +3771,7 @@ db.prepare(`
       AND shop_id = ?
 `).run(
     vehicleId,
-    req.session.employee.shop_id
+    shopId
 );
 
     res.json({
@@ -3827,8 +3829,8 @@ app.get('/api/dashboard/reporting', (req, res) => {
       SELECT r.id, r.status, r.completed_at, r.created_at, r.amount_paid, r.payment_status,
              c.name AS customer_name, v.year AS vehicle_year, v.make AS vehicle_make, v.model AS vehicle_model
       FROM repair_orders r
-      LEFT JOIN customers c ON r.customer_id = c.id
-      LEFT JOIN vehicles v ON r.vehicle_id = v.id
+      LEFT JOIN customers c ON r.customer_id = c.id AND c.shop_id = r.shop_id
+      LEFT JOIN vehicles v ON r.vehicle_id = v.id AND v.shop_id = r.shop_id
       WHERE r.shop_id = ?
       ORDER BY r.id DESC
     `).all(shopId);
