@@ -2560,7 +2560,19 @@ app.post("/api/change-password", async (req, res) => {
       });
     }
 
-    const employeeId = req.session.employee.id;
+    const employeeId = Number(req.session.employee.id || 0);
+    const shopId = Number(req.session.employee.shop_id || 0);
+    const liveEmployee = db.prepare(`
+      SELECT id FROM employees
+      WHERE id = ? AND shop_id = ? AND active = 1
+      LIMIT 1
+    `).get(employeeId, shopId);
+    if (!liveEmployee) {
+      return req.session.destroy(() => {
+        res.clearCookie('skauto_session');
+        res.status(401).json({ error: "Employee session is no longer valid." });
+      });
+    }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
@@ -2574,7 +2586,7 @@ app.post("/api/change-password", async (req, res) => {
 `).run(
     passwordHash,
     employeeId,
-    req.session.employee.shop_id
+    shopId
 );
     if (result.changes === 0) {
       return res.status(404).json({
