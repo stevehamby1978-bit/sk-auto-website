@@ -38,6 +38,10 @@ function runReadOnlyOwnershipAudit() {
 // They mutate login credentials and were only needed during staging recovery.
 // Keep the scripts available for an explicit one-off repair if ever required.
 runReadOnlyOwnershipAudit();
+if (process.env.GARAVEX_ZWICKL_TEST_CLEANUP === '1') {
+  console.log('[V2 STARTUP] running explicitly approved Zwickl test-data cleanup');
+  execFileSync(process.execPath, [path.join(__dirname, 'scripts', 'cleanup-zwickl-test-data.js')], { stdio: 'inherit', env: process.env });
+}
 
 require('./v2-auth-preload');
 require('./v2-scheduling-preload');
