@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const express = require('express');
 
-const dbPath = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'appointments.db');
+const dbPath = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'bookings.db');
 const db = new Database(dbPath);
 const originalGet = express.application.get;
 const originalPost = express.application.post;
@@ -17,22 +17,23 @@ const protectedRoutes = new Set([
   'GET /api/repair-orders/:id/recommendations',
   'DELETE /api/repair-orders/:repairOrderId/recommendations/:recommendationId',
   'PATCH /api/repair-orders/:repairOrderId/recommendations/:recommendationId/approve',
-  'PATCH /api/repair-orders/:repairOrderId/recommendations/:recommendationId/decline'
+  'PATCH /api/repair-orders/:repairOrderId/recommendations/:recommendationId/decline',
+  'PATCH /api/customer-repair-authorization/:repairOrderId/:recommendationId/approve',
+  'PATCH /api/customer-repair-authorization/:repairOrderId/:recommendationId/decline'
 ]);
 const installed = new WeakSet();
 
 function shopId(req) { return Number(req.session?.employee?.shop_id || 0); }
 function positiveId(value) { const n = Number(value); return Number.isInteger(n) && n > 0 ? n : 0; }
-function ownedOrder(id, sid) {
-  return db.prepare('SELECT id, status, amount_paid FROM repair_orders WHERE id=? AND shop_id=?').get(id, sid);
-}
+function ownedOrder(id, sid) { return db.prepare('SELECT id,status,amount_paid FROM repair_orders WHERE id=? AND shop_id=?').get(id, sid); }
 function ownedRecommendation(orderId, recommendationId, sid) {
   return db.prepare(`SELECT rr.id,rr.repair_order_id,rr.description,rr.parts,rr.labor,rr.status,rr.created_at FROM repair_order_recommendations rr JOIN repair_orders r ON r.id=rr.repair_order_id WHERE rr.id=? AND rr.repair_order_id=? AND r.shop_id=?`).get(recommendationId, orderId, sid);
 }
-function auth(req, res) {
-  const sid = shopId(req);
-  if (!sid) { res.status(401).json({ error: 'Not authorized.' }); return 0; }
-  return sid;
+function auth(req, res) { const sid = shopId(req); if (!sid) { res.status(401).json({ error: 'Not authorized.' }); return 0; } return sid; }
+function customerToken(req) { return String(req.body?.token || '').trim(); }
+function tokenRecommendation(orderId, recommendationId, token) {
+  if (!orderId || !recommendationId || !token) return null;
+  return db.prepare(`SELECT rr.id,rr.repair_order_id,rr.description,rr.parts,rr.labor,rr.status,r.shop_id,r.status AS order_status,r.amount_paid FROM repair_order_recommendations rr JOIN repair_orders r ON r.id=rr.repair_order_id WHERE rr.id=? AND rr.repair_order_id=? AND rr.authorization_token=?`).get(recommendationId, orderId, token);
 }
 
 function install(app) {
@@ -44,46 +45,24 @@ function install(app) {
       const sid = auth(req, res); if (!sid) return;
       const orderId = positiveId(req.params.id);
       const description = String(req.body?.description || '').trim();
-      const parts = Number(req.body?.parts) || 0;
-      const labor = Number(req.body?.labor) || 0;
+      const parts = Number(req.body?.parts) || 0, labor = Number(req.body?.labor) || 0;
       if (!description) return res.status(400).json({ error: 'Recommended repair description is required.' });
       if (parts < 0 || labor < 0) return res.status(400).json({ error: 'Parts and labor cannot be negative.' });
-
-      const order = db.prepare(`
-        SELECT r.id,r.status,r.amount_paid,c.name AS customer_name,c.phone AS customer_phone,s.name AS shop_name,s.slug AS shop_slug
-        FROM repair_orders r
-        JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
-        JOIN shops s ON s.id=r.shop_id
-        WHERE r.id=? AND r.shop_id=?
-      `).get(orderId, sid);
+      const order = db.prepare(`SELECT r.id,r.status,r.amount_paid,c.name AS customer_name,c.phone AS customer_phone,s.name AS shop_name,s.slug AS shop_slug FROM repair_orders r JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id JOIN shops s ON s.id=r.shop_id WHERE r.id=? AND r.shop_id=?`).get(orderId, sid);
       if (!order) return res.status(404).json({ error: 'Repair order not found.' });
       if (order.status === 'completed' || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: 'Completed or paid repair orders cannot be edited.' });
-
       const token = crypto.randomBytes(32).toString('hex');
       const result = db.prepare(`INSERT INTO repair_order_recommendations(repair_order_id,description,parts,labor,status,authorization_token) VALUES(?,?,?,?, 'pending',?)`).run(orderId, description, parts, labor, token);
-
-      // The shared Twilio account belongs to S&K Auto. Other Garavex tenants must not
-      // inherit S&K's SMS provider or S&K's public authorization URL.
       try {
         const twilioClient = global.twilioClient;
         if (twilioClient && order.customer_phone && String(order.shop_slug || '').toLowerCase() === 'sk-auto') {
           const base = process.env.REPAIR_AUTHORIZATION_BASE_URL || 'https://skautohutch.com/repair-authorization.html';
           const url = `${base}?order=${encodeURIComponent(orderId)}&repair=${encodeURIComponent(result.lastInsertRowid)}&token=${encodeURIComponent(token)}`;
-          await twilioClient.messages.create({
-            body: `${order.shop_name}: Hi ${order.customer_name}, we have recommended an additional repair for your vehicle: ${description}. Parts: $${parts.toFixed(2)}, Labor: $${labor.toFixed(2)}, Total: $${(parts + labor).toFixed(2)}. Please approve or decline the repair here: ${url}`,
-            from: process.env.TWILIO_PHONE_NUMBER,
-            to: order.customer_phone
-          });
+          await twilioClient.messages.create({ body: `${order.shop_name}: Hi ${order.customer_name}, we have recommended an additional repair for your vehicle: ${description}. Parts: $${parts.toFixed(2)}, Labor: $${labor.toFixed(2)}, Total: $${(parts + labor).toFixed(2)}. Please approve or decline the repair here: ${url}`, from: process.env.TWILIO_PHONE_NUMBER, to: order.customer_phone });
         }
-      } catch (notifyErr) {
-        console.error('V2 recommendation notification error:', notifyErr);
-      }
-
+      } catch (notifyErr) { console.error('V2 recommendation notification error:', notifyErr); }
       res.status(201).json({ success: true, id: Number(result.lastInsertRowid), authorization_token: token });
-    } catch (err) {
-      console.error('V2 add recommended repair error:', err);
-      res.status(500).json({ error: 'Unable to add recommended repair.' });
-    }
+    } catch (err) { console.error('V2 add recommended repair error:', err); res.status(500).json({ error: 'Unable to add recommended repair.' }); }
   });
 
   originalGet.call(app, '/api/repair-orders/:id/recommendations', (req, res) => {
@@ -91,8 +70,7 @@ function install(app) {
       const sid = auth(req, res); if (!sid) return;
       const orderId = positiveId(req.params.id);
       if (!orderId || !ownedOrder(orderId, sid)) return res.status(404).json({ error: 'Repair order not found.' });
-      const rows = db.prepare(`SELECT rr.id,rr.repair_order_id,rr.description,rr.parts,rr.labor,rr.status,rr.created_at FROM repair_order_recommendations rr JOIN repair_orders r ON r.id=rr.repair_order_id WHERE rr.repair_order_id=? AND r.shop_id=? ORDER BY rr.id ASC`).all(orderId, sid);
-      res.json(rows);
+      res.json(db.prepare(`SELECT rr.id,rr.repair_order_id,rr.description,rr.parts,rr.labor,rr.status,rr.created_at FROM repair_order_recommendations rr JOIN repair_orders r ON r.id=rr.repair_order_id WHERE rr.repair_order_id=? AND r.shop_id=? ORDER BY rr.id ASC`).all(orderId, sid));
     } catch (err) { console.error('V2 get recommended repairs error:', err); res.status(500).json({ error: 'Unable to load recommended repairs.' }); }
   });
 
@@ -100,7 +78,7 @@ function install(app) {
     try {
       const sid = auth(req, res); if (!sid) return;
       const orderId = positiveId(req.params.repairOrderId), recommendationId = positiveId(req.params.recommendationId);
-      if (!orderId || !recommendationId || !ownedRecommendation(orderId, recommendationId, sid)) return res.status(404).json({ error: 'Recommended repair not found.' });
+      if (!ownedRecommendation(orderId, recommendationId, sid)) return res.status(404).json({ error: 'Recommended repair not found.' });
       const result = db.prepare('DELETE FROM repair_order_recommendations WHERE id=? AND repair_order_id=?').run(recommendationId, orderId);
       if (result.changes !== 1) return res.status(404).json({ error: 'Recommended repair not found.' });
       res.json({ success: true });
@@ -110,20 +88,18 @@ function install(app) {
   originalPatch.call(app, '/api/repair-orders/:repairOrderId/recommendations/:recommendationId/approve', (req, res) => {
     try {
       const sid = auth(req, res); if (!sid) return;
-      const orderId = positiveId(req.params.repairOrderId), recommendationId = positiveId(req.params.recommendationId);
-      const order = orderId && ownedOrder(orderId, sid);
+      const orderId = positiveId(req.params.repairOrderId), recommendationId = positiveId(req.params.recommendationId), order = ownedOrder(orderId, sid);
       if (!order) return res.status(404).json({ error: 'Repair order not found.' });
       if (order.status === 'completed' || Number(order.amount_paid || 0) > 0) return res.status(409).json({ error: 'Completed or paid repair orders cannot be edited.' });
       const recommendation = ownedRecommendation(orderId, recommendationId, sid);
       if (!recommendation) return res.status(404).json({ error: 'Recommended repair not found.' });
       if (String(recommendation.status || '').toLowerCase() !== 'pending') return res.status(409).json({ error: 'This recommended repair has already been processed.' });
-      const result = db.transaction(() => {
-        const item = db.prepare('INSERT INTO repair_order_items(repair_order_id,description,parts,labor) VALUES(?,?,?,?)').run(orderId, recommendation.description, Number(recommendation.parts)||0, Number(recommendation.labor)||0);
+      const itemId = db.transaction(() => {
         const changed = db.prepare("UPDATE repair_order_recommendations SET status='approved' WHERE id=? AND repair_order_id=? AND status='pending'").run(recommendationId, orderId);
         if (changed.changes !== 1) throw new Error('Recommendation status changed before approval completed.');
-        return item.lastInsertRowid;
+        return db.prepare('INSERT INTO repair_order_items(repair_order_id,description,parts,labor) VALUES(?,?,?,?)').run(orderId, recommendation.description, Number(recommendation.parts)||0, Number(recommendation.labor)||0).lastInsertRowid;
       })();
-      res.json({ success: true, message: 'Recommended repair approved and added to repair order.', itemId: result });
+      res.json({ success: true, message: 'Recommended repair approved and added to repair order.', itemId: Number(itemId) });
     } catch (err) { console.error('V2 approve recommended repair error:', err); res.status(500).json({ error: 'Unable to approve recommended repair.' }); }
   });
 
@@ -131,7 +107,7 @@ function install(app) {
     try {
       const sid = auth(req, res); if (!sid) return;
       const orderId = positiveId(req.params.repairOrderId), recommendationId = positiveId(req.params.recommendationId);
-      if (!orderId || !recommendationId || !ownedOrder(orderId, sid)) return res.status(404).json({ error: 'Repair order not found.' });
+      if (!ownedOrder(orderId, sid)) return res.status(404).json({ error: 'Repair order not found.' });
       const recommendation = ownedRecommendation(orderId, recommendationId, sid);
       if (!recommendation) return res.status(404).json({ error: 'Recommended repair not found.' });
       if (String(recommendation.status || '').toLowerCase() !== 'pending') return res.status(409).json({ error: 'This recommended repair has already been processed.' });
@@ -139,6 +115,36 @@ function install(app) {
       if (result.changes !== 1) return res.status(409).json({ error: 'This recommended repair has already been processed.' });
       res.json({ success: true, message: 'Recommended repair declined.' });
     } catch (err) { console.error('V2 decline recommended repair error:', err); res.status(500).json({ error: 'Unable to decline recommended repair.' }); }
+  });
+
+  originalPatch.call(app, '/api/customer-repair-authorization/:repairOrderId/:recommendationId/approve', (req, res) => {
+    try {
+      const orderId = positiveId(req.params.repairOrderId), recommendationId = positiveId(req.params.recommendationId), token = customerToken(req);
+      if (!token) return res.status(401).json({ error: 'Authorization token required.' });
+      const recommendation = tokenRecommendation(orderId, recommendationId, token);
+      if (!recommendation) return res.status(404).json({ error: 'Repair authorization link is invalid or expired.' });
+      if (recommendation.order_status === 'completed' || Number(recommendation.amount_paid || 0) > 0) return res.status(409).json({ error: 'This repair order can no longer be changed.' });
+      if (String(recommendation.status || '').toLowerCase() !== 'pending') return res.status(409).json({ error: 'This repair has already been approved or declined.' });
+      const itemId = db.transaction(() => {
+        const changed = db.prepare("UPDATE repair_order_recommendations SET status='approved' WHERE id=? AND repair_order_id=? AND authorization_token=? AND status='pending'").run(recommendationId, orderId, token);
+        if (changed.changes !== 1) throw new Error('Recommendation status changed before customer approval completed.');
+        return db.prepare('INSERT INTO repair_order_items(repair_order_id,description,parts,labor) VALUES(?,?,?,?)').run(orderId, recommendation.description, Number(recommendation.parts)||0, Number(recommendation.labor)||0).lastInsertRowid;
+      })();
+      res.json({ success: true, status: 'approved', message: 'Repair authorized successfully.', itemId: Number(itemId) });
+    } catch (err) { console.error('V2 customer approval error:', err); res.status(500).json({ error: 'Unable to authorize repair.' }); }
+  });
+
+  originalPatch.call(app, '/api/customer-repair-authorization/:repairOrderId/:recommendationId/decline', (req, res) => {
+    try {
+      const orderId = positiveId(req.params.repairOrderId), recommendationId = positiveId(req.params.recommendationId), token = customerToken(req);
+      if (!token) return res.status(401).json({ error: 'Authorization token required.' });
+      const recommendation = tokenRecommendation(orderId, recommendationId, token);
+      if (!recommendation) return res.status(404).json({ error: 'Repair authorization link is invalid or expired.' });
+      if (String(recommendation.status || '').toLowerCase() !== 'pending') return res.status(409).json({ error: 'This repair has already been approved or declined.' });
+      const result = db.prepare("UPDATE repair_order_recommendations SET status='declined' WHERE id=? AND repair_order_id=? AND authorization_token=? AND status='pending'").run(recommendationId, orderId, token);
+      if (result.changes !== 1) return res.status(409).json({ error: 'This repair has already been approved or declined.' });
+      res.json({ success: true, status: 'declined', message: 'Repair declined.' });
+    } catch (err) { console.error('V2 customer decline error:', err); res.status(500).json({ error: 'Unable to decline repair.' }); }
   });
 }
 
