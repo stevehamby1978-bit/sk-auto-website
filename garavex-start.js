@@ -26,6 +26,20 @@ function runOptionalOwnerRepair(label, scriptName) {
   }
 }
 
+function runReadOnlyOwnershipAudit() {
+  try {
+    console.log('[V2 STARTUP] running read-only tenant ownership audit');
+    execFileSync(process.execPath, [path.join(__dirname, 'v2-data-ownership-audit.js')], {
+      stdio: 'inherit',
+      env: process.env
+    });
+    console.log('[V2 STARTUP] read-only tenant ownership audit finished');
+  } catch (err) {
+    console.error('[V2 STARTUP] WARNING: read-only ownership audit failed; continuing normal V2 startup.');
+    console.error(err && err.message ? err.message : err);
+  }
+}
+
 if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) {
   runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
 }
@@ -33,6 +47,8 @@ if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) {
 if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) {
   runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
 }
+
+runReadOnlyOwnershipAudit();
 
 require('./v2-auth-preload');
 require('./v2-scheduling-preload');
