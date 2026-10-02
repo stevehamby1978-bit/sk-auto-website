@@ -83,7 +83,11 @@ function handleGaravexSubscriptionEvent(db, event) {
       db.prepare(`UPDATE shops SET subscription_status='past_due' WHERE id=?`).run(shop.id);
       return { handled:true, shopId:shop.id, status:'past_due' };
     }
-    return { handled:true, shopId:shop.id, status:'paid' };
+    // A successful recurring invoice means the subscription is paid again.
+    // Stripe subscription lifecycle events remain authoritative for plan/period data,
+    // but restoring active here prevents an account from staying locked after recovery.
+    db.prepare(`UPDATE shops SET subscription_status='active' WHERE id=? AND stripe_subscription_id IS NOT NULL`).run(shop.id);
+    return { handled:true, shopId:shop.id, status:'active' };
   }
 
   return { handled:false, reason:'not a Garavex subscription event' };
