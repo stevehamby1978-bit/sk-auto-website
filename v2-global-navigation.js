@@ -9,21 +9,22 @@
 
   async function reopen(orderId,btn){if(!confirm('Reopen this repair order and return it to In Progress? Existing invoice and payment records will remain unchanged.'))return;btn.disabled=true;btn.textContent='Reopening...';try{const r=await fetch(`/api/repair-orders/${orderId}/reopen`,{method:'PATCH',credentials:'same-origin',headers:{Accept:'application/json'}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Unable to reopen repair order.');alert('Repair order reopened and returned to In Progress.');location.reload()}catch(e){alert(e.message||'Unable to reopen repair order.');btn.disabled=false;btn.textContent='↻ Reopen Repair Order'}}
 
-  function renderRO(orderId,order){
-    const completed=String(order?.status||'').toLowerCase()==='completed';
+  function renderFromPage(orderId){
+    const status=document.getElementById('status');if(!status)return false;
+    const completed=String(status.textContent||'').trim().toLowerCase()==='completed';
     const select=document.getElementById('statusSelect'),update=document.getElementById('updateStatusBtn'),complete=document.getElementById('completeRepairBtn');
-    if(select){select.innerHTML='<option value="">Change Status</option><option value="waiting">Waiting</option><option value="in_progress">In Progress</option><option value="cancelled">Cancelled</option>';select.disabled=completed;if(!completed)select.value=String(order?.status||'waiting')}
-    if(update){update.style.display=completed?'none':'';update.onclick=async()=>{const next=select?.value;if(!next)return alert('Choose a status first.');update.disabled=true;try{const r=await fetch(`/api/repair-orders/${orderId}/status`,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({status:next})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Unable to update repair order status.');location.reload()}catch(e){alert(e.message);update.disabled=false}}}
-    let reopenBtn=document.getElementById('garavexReopenRepairBtn');
+    if(select)select.disabled=completed;
+    if(update)update.style.display=completed?'none':'';
+    let btn=document.getElementById('garavexReopenRepairBtn');
     if(completed){
       if(complete)complete.style.display='none';
-      if(!reopenBtn){reopenBtn=document.createElement('button');reopenBtn.id='garavexReopenRepairBtn';reopenBtn.type='button';reopenBtn.className='btn btn-amber';reopenBtn.textContent='↻ Reopen Repair Order';const box=document.querySelector('.completion-box');if(box)box.appendChild(reopenBtn);else(document.getElementById('repairOrder')||document.body).appendChild(reopenBtn)}
-      reopenBtn.onclick=()=>reopen(orderId,reopenBtn);
-    }else if(reopenBtn)reopenBtn.remove();
+      if(!btn){btn=document.createElement('button');btn.id='garavexReopenRepairBtn';btn.type='button';btn.className='btn btn-amber';btn.textContent='↻ Reopen Repair Order';const box=document.querySelector('.completion-box');if(box)box.appendChild(btn);else{const controls=document.querySelector('.status-controls');if(controls)controls.appendChild(btn);else(document.getElementById('repairOrder')||document.body).appendChild(btn)}}
+      btn.onclick=()=>reopen(orderId,btn);
+    }else if(btn)btn.remove();
+    return true;
   }
 
-  async function repairOrderControls(){if(path!=='/repair-order.html')return;const orderId=Number(new URLSearchParams(location.search).get('id'));if(!Number.isInteger(orderId)||orderId<=0)return;try{const r=await fetch(`/api/repair-orders/${orderId}`,{credentials:'same-origin',headers:{Accept:'application/json'}});if(!r.ok)return;const order=await r.json();renderRO(orderId,order)}catch(e){console.error('[GARAVEX NAV] repair-order controls:',e)}}
-
-  function install(){addStyles();dashboard();setTimeout(repairOrderControls,500);setTimeout(repairOrderControls,1500);setTimeout(repairOrderControls,3000)}
+  function repairOrderControls(){if(path!=='/repair-order.html')return;const orderId=Number(new URLSearchParams(location.search).get('id'));if(!Number.isInteger(orderId)||orderId<=0)return;let count=0;const timer=setInterval(()=>{renderFromPage(orderId);if(++count>=80)clearInterval(timer)},250);renderFromPage(orderId)}
+  function install(){addStyles();dashboard();repairOrderControls()}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
