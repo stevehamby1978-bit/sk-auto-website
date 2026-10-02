@@ -2184,7 +2184,8 @@ if (!bookingShopColumns.includes("shop_id")) {
 }
 
 // ===== GARAVEX - TENANT-SCOPED BOOKING SLOT UNIQUENESS =====
-if (primaryShop) {
+// Schema conversion is tenant-neutral; only already-owned bookings are migrated.
+{
   const bookingSqlRow = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'").get();
   const bookingSql = String(bookingSqlRow?.sql || "");
   const hasTenantSlotUnique = /UNIQUE\s*\(\s*shop_id\s*,\s*date\s*,\s*time\s*\)/i.test(bookingSql);
