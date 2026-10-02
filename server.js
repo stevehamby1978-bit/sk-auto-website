@@ -3559,8 +3559,9 @@ app.delete("/api/vehicles/:id", (req, res) => {
       SELECT id
       FROM repair_orders
       WHERE vehicle_id = ?
+        AND shop_id = ?
       LIMIT 1
-    `).get(vehicleId);
+    `).get(vehicleId, req.session.employee.shop_id);
 
     if (repairOrder) {
       return res.status(400).json({
@@ -3573,7 +3574,8 @@ db.prepare(`
   UPDATE estimates
   SET vehicle_id = NULL
   WHERE vehicle_id = ?
-`).run(vehicleId);
+    AND shop_id = ?
+`).run(vehicleId, req.session.employee.shop_id);
 
 // Delete the vehicle
 db.prepare(`
