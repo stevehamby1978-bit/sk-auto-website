@@ -132,8 +132,6 @@ source = source.replace(completeMarker, `${v2CompleteRoute}\n${completeMarker}`)
 // Recommendation authorization is installed by the dedicated V2 recommendation preload/bootstrap.
 // Do not inject another copy into server.js here; keeping one implementation avoids startup syntax conflicts.
 
-const globalNavTag = '<script src="/v2-global-navigation.js" defer></script>';
-
 const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 const { installGaravexV2 } = require('./v2-bootstrap');
@@ -147,7 +145,7 @@ app.use((req, res, next) => {
     if (!String(filePath || '').toLowerCase().endsWith('.html')) return originalSendFile(filePath, options, callback);
     try {
       let html = fs.readFileSync(filePath, 'utf8');
-      if (!html.includes('/v2-global-navigation.js')) html = html.replace(new RegExp('</body>', 'i'), globalNavTag + '\n</body>');
+      if (!html.includes('/v2-global-navigation.js')) html = html.replace(new RegExp('</body>', 'i'), '<script src="/v2-global-navigation.js" defer></script>\\n</body>');
       return res.type('html').send(html);
     } catch (err) {
       return originalSendFile(filePath, options, callback);
