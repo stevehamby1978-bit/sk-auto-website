@@ -18,8 +18,8 @@ const GARAVEX_PLANS = Object.freeze({
     features: Object.freeze([
       'customers', 'vehicles', 'appointments', 'estimates',
       'repair_orders', 'invoices', 'payments', 'service_history',
-      'dvi', 'inventory', 'technician_workflow', 'recommended_repairs',
-      'customer_approvals', 'sms', 'reports', 'deferred_services'
+      'dvi', 'inventory', 'recommended_repairs',
+      'sms', 'reports', 'deferred_services'
     ])
   }),
   elite: Object.freeze({
@@ -29,10 +29,10 @@ const GARAVEX_PLANS = Object.freeze({
     features: Object.freeze([
       'customers', 'vehicles', 'appointments', 'estimates',
       'repair_orders', 'invoices', 'payments', 'service_history',
-      'dvi', 'inventory', 'technician_workflow', 'recommended_repairs',
-      'customer_approvals', 'sms', 'reports', 'deferred_services',
+      'dvi', 'inventory', 'recommended_repairs',
+      'sms', 'reports', 'deferred_services',
       'loaners', 'advanced_reporting', 'profitability',
-      'advanced_workflow', 'warranty_comebacks', 'automation'
+      'advanced_workflow', 'warranty_comebacks'
     ])
   })
 });
