@@ -51,6 +51,14 @@ if (!source.includes(listenerNeedle)) throw new Error('Garavex startup aborted: 
 if (source.includes(bootstrapMarker)) throw new Error('Garavex startup aborted: V2 bootstrap is already wired directly into server.js.');
 source = source.replace(/\nsendAppointmentReminders\(\);\s*\n\s*setInterval\(sendAppointmentReminders,\s*15\s*\*\s*60\s*\*\s*1000\);/, '\n// Legacy appointment reminder scheduler disabled by Garavex V2.');
 
+// Extend the existing signature-verified Stripe webhook for Garavex subscriptions.
+// This insertion happens after server.js has verified the Stripe-Signature against
+// the raw request body, so subscription events never bypass webhook verification.
+const subscriptionNeedle = `    // Direct charges created on a connected account produce an event.account.\n    // payment_intent.succeeded is the primary event configured for Garavex.\n    if (event.type !== 'payment_intent.succeeded') {\n      return res.json({ received: true, type: event.type });\n    }`;
+const subscriptionReplacement = `    // Garavex platform subscription lifecycle events. Signature verification above\n    // is shared with the existing connected-account payment webhook.\n    const { handleGaravexSubscriptionEvent } = require('./v2-subscription-webhook');\n    const subscriptionResult = handleGaravexSubscriptionEvent(db, event);\n    if (subscriptionResult.handled) {\n      console.log('[V2 SUBSCRIPTIONS] webhook', event.type, subscriptionResult);\n      return res.json({ received: true, subscription: true });\n    }\n\n    // Direct charges created on a connected account produce an event.account.\n    // payment_intent.succeeded remains the repair-order payment event.\n    if (event.type !== 'payment_intent.succeeded') {\n      return res.json({ received: true, type: event.type });\n    }`;
+if (!source.includes(subscriptionNeedle)) throw new Error('Garavex startup aborted: Stripe webhook insertion point was not found.');
+source = source.replace(subscriptionNeedle, subscriptionReplacement);
+
 const legacyEstimateMarker = '// ===== S&K AUTO - CREATE ESTIMATE =====';
 if (!source.includes(legacyEstimateMarker)) throw new Error('Garavex startup aborted: legacy estimate marker was not found.');
 const v2EstimateRoute = `
@@ -136,7 +144,7 @@ const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 const { installGaravexV2 } = require('./v2-bootstrap');
 const { installV2AuthDiagnostic } = require('./v2-auth-diagnostic');
-installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend });
+installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend, stripe });
 installV2AuthDiagnostic(app, db, { requireOwner });
 app.use((req, res, next) => {
   if (!req.session?.employee) return next();
