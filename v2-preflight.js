@@ -17,7 +17,9 @@ function installV2Preflight(app,db,{requireLogin,requireOwner}){
    const missingShopScope=scopedTables.filter(name=>table(name)&&!column(name,'shop_id'));
    const shop=db.prepare(`SELECT id,name,stripe_account_id,stripe_connected_at FROM shops WHERE id=? LIMIT 1`).get(shopId);
    const stripeServerConfigured=Boolean(String(process.env.STRIPE_SECRET_KEY||'').trim());
-   const stripeWebhookConfigured=Boolean(String(process.env.STRIPE_WEBHOOK_SECRET||'').trim());
+   const stripeWebhookConfigured=Boolean(String(process.env.STRIPE_WEBHOOK_SECRETS||process.env.STRIPE_WEBHOOK_SECRET||'').trim());
+   const sessionSecret=String(process.env.SESSION_SECRET||'');
+   const sessionSecretConfigured=sessionSecret.trim().length>=32;
    const checks={
     shop:Boolean(shop),
     schema:missingTables.length===0,
@@ -25,10 +27,11 @@ function installV2Preflight(app,db,{requireLogin,requireOwner}){
     sessionShopMatches:Boolean(db.prepare(`SELECT id FROM employees WHERE id=? AND shop_id=? AND active=1`).get(employeeId,shopId)),
     stripeServerConfigured,
     stripeWebhookConfigured,
+    sessionSecretConfigured,
     stripeAccountConfigured:Boolean(shop?.stripe_account_id),
     stripeConnected:Boolean(shop?.stripe_connected_at)
    };
-   const critical=['shop','schema','shopScoping','sessionShopMatches','stripeServerConfigured','stripeWebhookConfigured','stripeAccountConfigured','stripeConnected'];
+   const critical=['shop','schema','shopScoping','sessionShopMatches','stripeServerConfigured','stripeWebhookConfigured','sessionSecretConfigured','stripeAccountConfigured','stripeConnected'];
    const blockers=critical.filter(key=>!checks[key]);
    const ready=blockers.length===0;
    req.v2Employee=employee;req.v2ShopId=shopId;
