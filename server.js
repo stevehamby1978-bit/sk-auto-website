@@ -5502,6 +5502,8 @@ recordCustomerCommunication({
 // ===== S&K AUTO - EMAIL PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrderId = Number(req.params.id);
     const paymentId = Number(req.params.paymentId);
 
@@ -5518,8 +5520,8 @@ app.post("/api/repair-orders/:id/payments/:paymentId/email-receipt", async (req,
         ON r.customer_id = c.id
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
-      WHERE r.id = ?
-    `).get(repairOrderId);
+      WHERE r.id = ? AND r.shop_id = ?
+    `).get(repairOrderId, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
