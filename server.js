@@ -3780,8 +3780,9 @@ app.get("/api/appointments", (req, res) => {
     const appointments = db.prepare(`
       SELECT *
       FROM bookings
+      WHERE shop_id = ?
       ORDER BY date ASC, time ASC
-    `).all();
+    `).all(req.session.employee.shop_id);
 
     res.json(appointments);
 
@@ -3802,7 +3803,8 @@ app.delete("/api/appointments/:id", (req, res) => {
       SELECT id
       FROM bookings
       WHERE id = ?
-    `).get(req.params.id);
+        AND shop_id = ?
+    `).get(req.params.id, req.session.employee.shop_id);
 
     if (!appointment) {
       return res.status(404).json({
@@ -3813,7 +3815,8 @@ app.delete("/api/appointments/:id", (req, res) => {
     db.prepare(`
       DELETE FROM bookings
       WHERE id = ?
-    `).run(req.params.id);
+        AND shop_id = ?
+    `).run(req.params.id, req.session.employee.shop_id);
 
     res.json({
       success: true,
@@ -3893,7 +3896,8 @@ app.patch("/api/appointments/:id", (req, res) => {
       WHERE date = ?
         AND time = ?
         AND id != ?
-    `).get(date, time, id);
+        AND shop_id = ?
+    `).get(date, time, id, req.session.employee.shop_id);
 
     if (existingBooking) {
       return res.status(409).json({
@@ -3905,7 +3909,8 @@ app.patch("/api/appointments/:id", (req, res) => {
       SELECT id
       FROM bookings
       WHERE id = ?
-    `).get(id);
+        AND shop_id = ?
+    `).get(id, req.session.employee.shop_id);
 
     if (!appointment) {
       return res.status(404).json({
@@ -3924,6 +3929,7 @@ app.patch("/api/appointments/:id", (req, res) => {
           service = ?,
           notes = ?
       WHERE id = ?
+        AND shop_id = ?
     `).run(
       date,
       time,
@@ -3933,7 +3939,8 @@ app.patch("/api/appointments/:id", (req, res) => {
       vehicle.trim(),
       service.trim(),
       (notes || "").trim(),
-      id
+      id,
+      req.session.employee.shop_id
     );
 
     res.json({
@@ -3985,7 +3992,8 @@ app.patch("/api/appointments/:id/status", (req, res) => {
       UPDATE bookings
       SET status = ?
       WHERE id = ?
-    `).run(status, req.params.id);
+        AND shop_id = ?
+    `).run(status, req.params.id, req.session.employee.shop_id);
 
     res.json({
       success: true,
