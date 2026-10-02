@@ -2692,7 +2692,7 @@ try {
 // ===== GARAVEX SUBSCRIPTION ACCESS GUARD FOR LEGACY SHOP APIs =====
 // Public booking, authentication, customer-facing token routes, Stripe webhooks,
 // and V2 billing routes are intentionally outside this guard.
-const { shopAccessActive: garavexShopAccessActive } = require('./garavex-subscription-tiers');
+const { shopAccessActive: garavexShopAccessActive, ownerTestShop } = require('./garavex-subscription-tiers');
 const garavexProtectedLegacyApiPrefixes = [
   '/api/shop-profile',
   '/api/employees',
