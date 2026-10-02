@@ -2119,7 +2119,8 @@ if (!repairOrderShopColumns.includes("shop_id")) {
 }
 
 // ===== GARAVEX - COMPOSITE TENANT KEYS FOR SCHEDULING BLOCKS =====
-if (primaryShop) {
+// This schema migration no longer depends on assigning legacy NULL records to S&K.
+{
   const blockedDatePk = db.prepare("PRAGMA table_info(blocked_dates)").all()
     .filter(column => column.pk > 0)
     .sort((a, b) => a.pk - b.pk)
