@@ -97,7 +97,6 @@ app.post('/api/estimates', (req, res) => {
 `;
 source = source.replace(legacyEstimateMarker, `${v2EstimateRoute}\n${legacyEstimateMarker}`);
 
-// Install V2 repair-order write routes directly before their legacy S&K handlers.
 const completeMarker = '// ===== S&K AUTO - MARK REPAIR ORDER COMPLETED =====';
 if (!source.includes(completeMarker)) throw new Error('Garavex startup aborted: repair completion marker was not found.');
 const v2CompleteRoute = `
@@ -130,52 +129,10 @@ app.patch('/api/repair-orders/:id/complete', (req, res) => {
 `;
 source = source.replace(completeMarker, `${v2CompleteRoute}\n${completeMarker}`);
 
-const textAuthMarker = "app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/text-authorization'";
-if (!source.includes(textAuthMarker)) throw new Error('Garavex startup aborted: recommendation text authorization route was not found.');
-const v2TextAuthRoute = `
-// ===== GARAVEX V2 TENANT-SAFE RECOMMENDATION NOTIFICATION =====
-app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/text-authorization', async (req, res) => {
-  try {
-    const shopId = Number(req.session?.employee?.shop_id || 0);
-    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
-    const orderId = Number(req.params.repairOrderId);
-    const recommendationId = Number(req.params.recommendationId);
-    const row = db.prepare(\`
-      SELECT rr.id,rr.description,rr.parts,rr.labor,rr.authorization_token,
-             c.name AS customer_name,c.phone AS customer_phone,
-             s.name AS shop_name,s.slug AS shop_slug
-      FROM repair_order_recommendations rr
-      JOIN repair_orders r ON r.id=rr.repair_order_id
-      JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
-      JOIN shops s ON s.id=r.shop_id
-      WHERE rr.id=? AND rr.repair_order_id=? AND r.shop_id=?
-    \`).get(recommendationId, orderId, shopId);
-    if (!row) return res.status(404).json({ error: 'Recommended repair not found.' });
-    const isSk = String(row.shop_slug || '').toLowerCase() === 'sk-auto';
-    if (!isSk) return res.json({ success: true, notification_skipped: true, reason: 'SMS authorization is not configured for this shop.' });
-    if (!row.customer_phone) return res.status(400).json({ error: 'Customer phone number is required to text authorization.' });
-    const base = process.env.REPAIR_AUTHORIZATION_BASE_URL || 'https://skautohutch.com/repair-authorization.html';
-    const url = base + '?order=' + encodeURIComponent(orderId) + '&repair=' + encodeURIComponent(recommendationId) + '&token=' + encodeURIComponent(row.authorization_token || '');
-    const total = Number(row.parts || 0) + Number(row.labor || 0);
-    await twilioClient.messages.create({
-      body: (row.shop_name || 'S&K Auto') + ': Hi ' + (row.customer_name || 'Customer') + ', we recommended: ' + row.description + '. Total: $' + total.toFixed(2) + '. Approve or decline: ' + url,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: row.customer_phone
-    });
-    return res.json({ success: true, notification_sent: true });
-  } catch (err) {
-    console.error('[V2 RECOMMENDATION SMS] failed:', err);
-    return res.status(500).json({ error: 'Unable to process repair authorization notification.' });
-  }
-});
-// ===== END GARAVEX V2 TENANT-SAFE RECOMMENDATION NOTIFICATION =====
-`;
-source = source.replace(textAuthMarker, `${v2TextAuthRoute}\n${textAuthMarker}`);
+// Recommendation authorization is installed by the dedicated V2 recommendation preload/bootstrap.
+// Do not inject another copy into server.js here; keeping one implementation avoids startup syntax conflicts.
 
-// Add one consistent Dashboard button to authenticated Garavex HTML screens.
-// The browser script excludes login/public/customer-facing pages and the dashboard itself.
 const globalNavTag = '<script src="/v2-global-navigation.js" defer></script>';
-source = source.replace(/res\.sendFile\(path\.join\(__dirname, '([^']+\.html)'\)\);/g, (match, file) => match);
 
 const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
@@ -183,7 +140,6 @@ const { installGaravexV2 } = require('./v2-bootstrap');
 const { installV2AuthDiagnostic } = require('./v2-auth-diagnostic');
 installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend });
 installV2AuthDiagnostic(app, db, { requireOwner });
-// Inject persistent Dashboard navigation into authenticated HTML responses.
 app.use((req, res, next) => {
   if (!req.session?.employee) return next();
   const originalSendFile = res.sendFile.bind(res);
