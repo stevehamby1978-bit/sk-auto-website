@@ -2646,6 +2646,30 @@ app.get("/api/current-employee", (req, res) => {
   res.json({ employee: liveEmployee });
 });
 
+// ===== GARAVEX - PERMANENT COMPLIMENTARY ELITE SHOPS =====
+// S&K Auto (1) and Zwickl Repair (245) are permanent complimentary Elite shops.
+// Reassert this durable DB state on startup so trials, billing events, or deploys
+// cannot expire or downgrade these two owner-approved accounts.
+try {
+  const permanentEliteShopIds = [1, 245];
+  const promotePermanentElite = db.prepare(`
+    UPDATE shops
+    SET subscription_plan = 'elite',
+        subscription_status = 'beta',
+        trial_ends_at = NULL,
+        subscription_current_period_end = NULL,
+        subscription_cancel_at_period_end = 0
+    WHERE id = ? AND active = 1
+  `);
+  for (const shopId of permanentEliteShopIds) {
+    const result = promotePermanentElite.run(shopId);
+    if (result.changes) console.log(`GARAVEX permanent complimentary Elite verified: shop ${shopId}`);
+  }
+} catch (err) {
+  console.error('GARAVEX permanent Elite bootstrap failed:', err);
+}
+// ===== END GARAVEX - PERMANENT COMPLIMENTARY ELITE SHOPS =====
+
 // ===== GARAVEX - OWNER/BETA SHOP BOOTSTRAP =====
 // Explicitly configured beta owner emails can be promoted safely at startup.
 // This does not grant access by email alone: the resulting shop ID must also be
