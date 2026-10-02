@@ -382,6 +382,17 @@ db.exec(`
   );
 `);
 
+// ===== GARAVEX - TENANT-SCOPED SCHEDULING BLOCKS =====
+// Legacy S&K rows are assigned to the primary shop. New installs include shop_id.
+const blockedDateColumns = db.prepare("PRAGMA table_info(blocked_dates)").all().map(column => column.name);
+if (!blockedDateColumns.includes("shop_id")) {
+  db.exec("ALTER TABLE blocked_dates ADD COLUMN shop_id INTEGER");
+}
+const blockedTimeColumns = db.prepare("PRAGMA table_info(blocked_times)").all().map(column => column.name);
+if (!blockedTimeColumns.includes("shop_id")) {
+  db.exec("ALTER TABLE blocked_times ADD COLUMN shop_id INTEGER");
+}
+
 // ===== S&K AUTO ESTIMATE SYSTEM =====
 
 db.exec(`
@@ -2108,6 +2119,12 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// Assign legacy scheduling blocks to the original/primary shop.
+if (primaryShop) {
+  db.prepare("UPDATE blocked_dates SET shop_id = ? WHERE shop_id IS NULL").run(primaryShop.id);
+  db.prepare("UPDATE blocked_times SET shop_id = ? WHERE shop_id IS NULL").run(primaryShop.id);
+}
+
 // ===== S&K AUTO SaaS - BOOKING SHOP MIGRATION =====
 const bookingShopColumns = db.prepare(`
   PRAGMA table_info(bookings)
