@@ -824,10 +824,11 @@ const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
 ];
-function isBlockedDate(date) {
+function isBlockedDate(date, shopId = primaryShop?.id) {
+  if (!shopId) return false;
   return db
-    .prepare('SELECT 1 FROM blocked_dates WHERE date = ?')
-    .get(date) !== undefined;
+    .prepare('SELECT 1 FROM blocked_dates WHERE date = ? AND shop_id = ?')
+    .get(date, shopId) !== undefined;
 }
 function isWeekday(dateString) {
   const d = new Date(`${dateString}T12:00:00`);
@@ -854,12 +855,12 @@ if (isBlockedDate(date)) {
   });
 }
 const rows = db
-  .prepare('SELECT time FROM bookings WHERE date = ?')
-  .all(date);
+  .prepare('SELECT time FROM bookings WHERE date = ? AND shop_id = ?')
+  .all(date, primaryShop.id);
 
 const blockedRows = db
-  .prepare('SELECT time FROM blocked_times WHERE date = ?')
-  .all(date);
+  .prepare('SELECT time FROM blocked_times WHERE date = ? AND shop_id = ?')
+  .all(date, primaryShop.id);
 
 const booked = new Set(rows.map(r => r.time));
 const blocked = new Set(blockedRows.map(r => r.time));
@@ -890,8 +891,8 @@ app.post('/api/book', upload.array('photos', 3), (req, res) => {
   });
 }
   const blockedTime = db
-  .prepare('SELECT 1 FROM blocked_times WHERE date = ? AND time = ?')
-  .get(date, time);
+  .prepare('SELECT 1 FROM blocked_times WHERE date = ? AND time = ? AND shop_id = ?')
+  .get(date, time, publicShopId);
 
 if (blockedTime) {
   return res.status(400).json({
