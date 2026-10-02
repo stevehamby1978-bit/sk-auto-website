@@ -7063,6 +7063,7 @@ app.post("/api/estimates/:token/respond", (req, res) => {
 e.id,
 e.customer_id,
 e.vehicle_id,
+e.shop_id,
 e.status,
 c.name AS customer_name,
     v.year AS vehicle_year,
@@ -7103,12 +7104,13 @@ if (status === "approved") {
   if (!existingRepairOrder) {
     const repairOrderResult = db.prepare(`
       INSERT INTO repair_orders
-      (estimate_id, customer_id, vehicle_id, status)
-      VALUES (?, ?, ?, 'waiting')
+      (estimate_id, customer_id, vehicle_id, status, shop_id)
+      VALUES (?, ?, ?, 'waiting', ?)
     `).run(
       estimate.id,
       estimate.customer_id,
-      estimate.vehicle_id
+      estimate.vehicle_id,
+      estimate.shop_id
     );
 
     const repairOrderId = Number(repairOrderResult.lastInsertRowid);
