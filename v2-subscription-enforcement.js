@@ -41,7 +41,7 @@ function installV2SubscriptionEnforcement(app, db, { requireLogin, requireOwner 
       const bcrypt=require('bcryptjs'),shopId=shopFor(req),name=String(req.body?.name||'').trim(),email=String(req.body?.email||'').trim().toLowerCase(),password=String(req.body?.password||'');
       const allowedRoles=new Set(['owner','manager','service_writer','technician']); const role=allowedRoles.has(req.body?.role)?req.body.role:'technician';
       if(!name)return res.status(400).json({error:'Employee name is required.'}); if(!email)return res.status(400).json({error:'Employee email is required.'}); if(password.length<8)return res.status(400).json({error:'Password must be at least 8 characters.'});
-      if(db.prepare('SELECT id FROM employees WHERE LOWER(email)=? AND shop_id=? LIMIT 1').get(email,shopId))return res.status(409).json({error:'An employee with this email already exists in this shop.'});
+      if(db.prepare('SELECT id FROM employees WHERE LOWER(email)=? LIMIT 1').get(email))return res.status(409).json({error:'An employee with this email already exists.'});
       const passwordHash=await bcrypt.hash(password,12); const result=db.prepare(`INSERT INTO employees(name,email,password_hash,role,active,must_change_password,shop_id) VALUES(?,?,?,?,1,1,?)`).run(name,email,passwordHash,role,shopId);
       res.status(201).json({success:true,employee:{id:Number(result.lastInsertRowid),name,email,role,active:1,shop_id:shopId}});
     }catch(err){console.error('[V2 SUBSCRIPTIONS] employee create error:',err);res.status(500).json({error:'Unable to add employee.'});}
