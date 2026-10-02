@@ -7559,170 +7559,17 @@ app.get('/api/repair-orders/:id/communication-history', (req, res) => {
 });
 
 // ===== S&K AUTO - TEXT INVOICE =====
-app.post('/api/text-invoice', async (req, res) => {
-  try {
-    const {
-      phone,
-      customerName,
-      invoiceNumber,
-      total,
-      balanceDue,
-      invoiceUrl
-    } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({
-        error: 'Customer phone number is required.'
-      });
-    }
-
-    // Convert customer phone number to +1XXXXXXXXXX format
-    const digits = String(phone).replace(/\D/g, '');
-    const customerPhone =
-      digits.length === 10 ? '+1' + digits :
-      digits.length === 11 && digits.startsWith('1') ? '+' + digits :
-      null;
-
-    if (!customerPhone) {
-      return res.status(400).json({
-        error: 'Customer phone number is invalid.'
-      });
-    }
-
-    const balance = Number(balanceDue || 0);
-    const invoiceTotal = Number(total || 0);
-
-    let messageBody;
-
-    if (balance <= 0) {
-      messageBody =
-`S&K Auto
-Payment received - thank you${customerName ? ', ' + customerName : ''}!
-
-Invoice: ${invoiceNumber || ''}
-Total: $${invoiceTotal.toFixed(2)}
-Balance Due: $0.00
-
-View Invoice:
-${invoiceUrl}
-
-Thank you for choosing S&K Auto!
-(620) 899-0425`;
-    } else {
-      messageBody =
-`S&K Auto
-Your invoice is ready${customerName ? ', ' + customerName : ''}.
-
-Invoice: ${invoiceNumber || ''}
-Total: $${invoiceTotal.toFixed(2)}
-Balance Due: $${balance.toFixed(2)}
-
-View Invoice:
-${invoiceUrl}
-
-Questions? Call (620) 899-0425`;
-    }
-
-    const message = await twilioClient.messages.create({
-      body: messageBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: customerPhone
-    });
-
-    console.log('Invoice SMS sent:', message.sid);
-
-    res.json({
-      success: true,
-      message: 'Invoice text sent successfully.'
-    });
-
-  } catch (err) {
-    console.error('Invoice SMS failed:', err);
-
-    res.status(500).json({
-      error: 'Unable to send invoice text.'
-    });
-  }
+app.post('/api/text-invoice', (req, res) => {
+  return res.status(410).json({
+    error: 'This legacy communication endpoint has been retired. Use the repair-order scoped Garavex communication route.'
+  });
 });
 
 // ===== S&K AUTO - TEXT REPAIR AUTHORIZATION =====
-app.post('/api/text-authorization', async (req, res) => {
-  try {
-    const {
-      phone,
-      customerName,
-      description,
-      parts,
-      labor,
-      authorizationUrl
-    } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({
-        error: 'Customer phone number is required.'
-      });
-    }
-
-    if (!authorizationUrl) {
-      return res.status(400).json({
-        error: 'Authorization link is required.'
-      });
-    }
-
-    // Convert customer phone number to +1XXXXXXXXXX format
-    const digits = String(phone).replace(/\D/g, '');
-    const customerPhone =
-      digits.length === 10 ? '+1' + digits :
-      digits.length === 11 && digits.startsWith('1') ? '+' + digits :
-      null;
-
-    if (!customerPhone) {
-      return res.status(400).json({
-        error: 'Customer phone number is invalid.'
-      });
-    }
-
-    const partsAmount = Number(parts || 0);
-    const laborAmount = Number(labor || 0);
-    const total = partsAmount + laborAmount;
-
-    const messageBody =
-`S&K Auto
-
-${customerName ? customerName + ', ' : ''}we have a recommended repair that requires your authorization.
-
-Recommended Repair:
-${description || 'Additional repair'}
-
-Parts: $${partsAmount.toFixed(2)}
-Labor: $${laborAmount.toFixed(2)}
-Total: $${total.toFixed(2)}
-
-Review and approve or decline here:
-${authorizationUrl}
-
-Questions? Call (620) 899-0425`;
-
-    const message = await twilioClient.messages.create({
-      body: messageBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: customerPhone
-    });
-
-    console.log('Authorization SMS sent:', message.sid);
-
-    res.json({
-      success: true,
-      message: 'Authorization text sent successfully.'
-    });
-
-  } catch (err) {
-    console.error('Authorization SMS failed:', err);
-
-    res.status(500).json({
-      error: 'Unable to send authorization text.'
-    });
-  }
+app.post('/api/text-authorization', (req, res) => {
+  return res.status(410).json({
+    error: 'This legacy communication endpoint has been retired. Use the repair-order scoped Garavex communication route.'
+  });
 });
 
 
