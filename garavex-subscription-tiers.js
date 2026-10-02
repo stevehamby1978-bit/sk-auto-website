@@ -71,7 +71,12 @@ function ownerTestShop(shop) {
     .map(value => Number(String(value || '').trim()))
     .filter(id => Number.isInteger(id) && id > 0);
 
-  return configuredIds.includes(Number(shop?.id || 0));
+  if (configuredIds.includes(Number(shop?.id || 0))) return true;
+
+  // Beta shops promoted by the startup bootstrap are intentionally permanent
+  // Elite accounts. Ordinary paid shops still require a Stripe subscription.
+  return String(shop?.subscription_status || '').trim().toLowerCase() === 'beta'
+    && normalizePlan(shop?.subscription_plan) === 'elite';
 }
 
 function shopPlan(shop) {
