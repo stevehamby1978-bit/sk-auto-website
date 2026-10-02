@@ -26,9 +26,10 @@ function installV2AuthDiagnostic(app, db, { requireOwner } = {}) {
           SUM(CASE WHEN e.role = 'owner' AND e.active = 1 AND e.password_hash IS NOT NULL AND LENGTH(e.password_hash) > 0 THEN 1 ELSE 0 END) AS active_owner_with_password_count
         FROM shops s
         LEFT JOIN employees e ON e.shop_id = s.id
+        WHERE s.id = ?
         GROUP BY s.id, s.name, s.email, s.active
         ORDER BY s.id
-      `).all();
+      `).all(Number(req.session?.employee?.shop_id || 0));
 
       const owners = db.prepare(`
         SELECT
@@ -44,9 +45,9 @@ function installV2AuthDiagnostic(app, db, { requireOwner } = {}) {
           CASE WHEN e.password_hash IS NOT NULL AND LENGTH(e.password_hash) > 0 THEN 1 ELSE 0 END AS has_password_hash
         FROM employees e
         JOIN shops s ON s.id = e.shop_id
-        WHERE e.role = 'owner'
+        WHERE e.role = 'owner' AND e.shop_id = ?
         ORDER BY e.shop_id, e.id
-      `).all();
+      `).all(Number(req.session?.employee?.shop_id || 0));
 
       res.set('Cache-Control', 'no-store, private, max-age=0');
       return res.json({
