@@ -4037,6 +4037,8 @@ app.patch("/api/appointments/:id", (req, res) => {
 // ===== S&K AUTO - UPDATE APPOINTMENT STATUS =====
 app.patch("/api/appointments/:id/status", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const { status } = req.body;
 
     const allowedStatuses = [
@@ -4056,8 +4058,8 @@ app.patch("/api/appointments/:id/status", (req, res) => {
     const appointment = db.prepare(`
       SELECT id
       FROM bookings
-      WHERE id = ?
-    `).get(req.params.id);
+      WHERE id = ? AND shop_id = ?
+    `).get(req.params.id, shopId);
 
     if (!appointment) {
       return res.status(404).json({
@@ -4070,7 +4072,7 @@ app.patch("/api/appointments/:id/status", (req, res) => {
       SET status = ?
       WHERE id = ?
         AND shop_id = ?
-    `).run(status, req.params.id, req.session.employee.shop_id);
+    `).run(status, req.params.id, shopId);
 
     res.json({
       success: true,
