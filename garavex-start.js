@@ -68,6 +68,11 @@ app.post('/api/estimates', (req, res) => {
   try {
     const shopId = Number(req.session?.employee?.shop_id || 0);
     if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const subscriptionShop = db.prepare('SELECT id, subscription_plan, subscription_status, stripe_subscription_id, subscription_current_period_end, trial_ends_at FROM shops WHERE id = ? LIMIT 1').get(shopId);
+    if (!subscriptionShop) return res.status(404).json({ error: 'Shop not found.' });
+    if (!require('./garavex-subscription-tiers').shopAccessActive(subscriptionShop)) {
+      return res.status(402).json({ error: 'Your Garavex trial has ended or the subscription is inactive. Choose a plan to continue.', code: 'SUBSCRIPTION_REQUIRED' });
+    }
     const { customer, vehicle, notes, items } = req.body || {};
     if (!customer?.name || !customer?.phone) return res.status(400).json({ error: 'Customer name and phone number are required.' });
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'At least one estimate item is required.' });
