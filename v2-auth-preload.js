@@ -2,6 +2,7 @@
 
 // Garavex V2 multi-shop login compatibility preload.
 // Owners may sign in with either their employee email or their shop account email.
+const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const express = require('express');
@@ -9,6 +10,26 @@ const bcrypt = require('bcryptjs');
 
 const db = new Database(path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'bookings.db'));
 const originalPost = express.application.post;
+const originalSendFile = express.response.sendFile;
+
+// Inject the shared V2 navigation/workflow controls into every HTML page served by Express.
+// The client script itself skips public/customer-facing pages.
+express.response.sendFile = function(filePath, options, callback) {
+  const target = String(filePath || '');
+  if (!target.toLowerCase().endsWith('.html')) {
+    return originalSendFile.call(this, filePath, options, callback);
+  }
+
+  try {
+    let html = fs.readFileSync(filePath, 'utf8');
+    if (!html.includes('/v2-global-navigation.js')) {
+      html = html.replace(/<\/body>/i, '<script src="/v2-global-navigation.js" defer></script>\n</body>');
+    }
+    return this.type('html').send(html);
+  } catch (err) {
+    return originalSendFile.call(this, filePath, options, callback);
+  }
+};
 
 async function multiShopLogin(req, res) {
   try {
