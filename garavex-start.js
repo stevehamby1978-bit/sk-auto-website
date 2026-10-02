@@ -98,8 +98,6 @@ app.post('/api/estimates', (req, res) => {
 source = source.replace(legacyEstimateMarker, `${v2EstimateRoute}\n${legacyEstimateMarker}`);
 
 // Install V2 repair-order write routes directly before their legacy S&K handlers.
-// This preserves shop_id isolation and prevents legacy auth/branding assumptions
-// from blocking non-S&K tenants such as Zwickl Repair.
 const completeMarker = '// ===== S&K AUTO - MARK REPAIR ORDER COMPLETED =====';
 if (!source.includes(completeMarker)) throw new Error('Garavex startup aborted: repair completion marker was not found.');
 const v2CompleteRoute = `
@@ -153,9 +151,6 @@ app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/te
       WHERE rr.id=? AND rr.repair_order_id=? AND r.shop_id=?
     \`).get(recommendationId, orderId, shopId);
     if (!row) return res.status(404).json({ error: 'Recommended repair not found.' });
-    // Only S&K currently has the configured Twilio sender. Other tenants still
-    // create the recommendation successfully and can use the authorization link
-    // without being blocked by an S&K-only SMS service.
     const isSk = String(row.shop_slug || '').toLowerCase() === 'sk-auto';
     if (!isSk) return res.json({ success: true, notification_skipped: true, reason: 'SMS authorization is not configured for this shop.' });
     if (!row.customer_phone) return res.status(400).json({ error: 'Customer phone number is required to text authorization.' });
@@ -177,12 +172,33 @@ app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/te
 `;
 source = source.replace(textAuthMarker, `${v2TextAuthRoute}\n${textAuthMarker}`);
 
+// Add one consistent Dashboard button to authenticated Garavex HTML screens.
+// The browser script excludes login/public/customer-facing pages and the dashboard itself.
+const globalNavTag = '<script src="/v2-global-navigation.js" defer></script>';
+source = source.replace(/res\.sendFile\(path\.join\(__dirname, '([^']+\.html)'\)\);/g, (match, file) => match);
+
 const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 const { installGaravexV2 } = require('./v2-bootstrap');
 const { installV2AuthDiagnostic } = require('./v2-auth-diagnostic');
 installGaravexV2(app, db, { requireLogin, requireOwner, twilioClient, resend });
 installV2AuthDiagnostic(app, db, { requireOwner });
+// Inject persistent Dashboard navigation into authenticated HTML responses.
+app.use((req, res, next) => {
+  if (!req.session?.employee) return next();
+  const originalSendFile = res.sendFile.bind(res);
+  res.sendFile = function(filePath, options, callback) {
+    if (!String(filePath || '').toLowerCase().endsWith('.html')) return originalSendFile(filePath, options, callback);
+    try {
+      let html = fs.readFileSync(filePath, 'utf8');
+      if (!html.includes('/v2-global-navigation.js')) html = html.replace(/<\/body>/i, globalNavTag + '\n</body>');
+      return res.type('html').send(html);
+    } catch (err) {
+      return originalSendFile(filePath, options, callback);
+    }
+  };
+  next();
+});
 // ===== END GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 `;
 source = source.replace(listenerNeedle, `${bootstrap}${listenerNeedle}`);
