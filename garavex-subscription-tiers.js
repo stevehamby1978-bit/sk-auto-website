@@ -82,7 +82,7 @@ function ownerTestShop(shop) {
 function shopPlan(shop) {
   if (!shop) return getPlan('starter');
 
-  // The single explicitly configured owner/beta shop may preview plans without Stripe.
+  // Explicitly configured owner/beta shops may use their assigned plan without Stripe.
   if (ownerTestShop(shop)) return getPlan(shop.subscription_plan);
 
   // A new ordinary shop receives Starter during its server-recorded 30-day trial.
