@@ -42,7 +42,9 @@ function applySubscription(db, sub) {
   if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
   const priceId = sub?.items?.data?.[0]?.price?.id || '';
   const metadataPlan = String(sub?.metadata?.garavex_plan || '').toLowerCase();
-  const plan = GARAVEX_PLANS[metadataPlan] ? metadataPlan : (planFromPrice(priceId) || 'starter');
+  const pricePlan = planFromPrice(priceId);
+  const plan = GARAVEX_PLANS[metadataPlan] ? metadataPlan : pricePlan;
+  if (!plan) return { handled:false, reason:'unknown Garavex subscription price', shopId:shop.id, priceId:priceId || null };
   const status = String(sub.status || 'inactive').toLowerCase();
   db.prepare(`UPDATE shops SET subscription_plan=?,subscription_status=?,stripe_customer_id=COALESCE(?,stripe_customer_id),stripe_subscription_id=?,stripe_price_id=?,subscription_current_period_end=?,subscription_cancel_at_period_end=? WHERE id=?`).run(
     plan,
@@ -70,7 +72,8 @@ function handleGaravexSubscriptionEvent(db, event) {
     if (!shop) return { handled:false, reason:'shop not found' };
     if (betaProtectedShop(db, shop.id)) return { handled:false, reason:'complimentary beta shop protected', shopId:shop.id };
     const planKey = String(object.metadata?.garavex_plan || '').toLowerCase();
-    const plan = GARAVEX_PLANS[planKey] ? planKey : 'starter';
+    if (!GARAVEX_PLANS[planKey]) return { handled:false, reason:'unknown Garavex checkout plan', shopId:shop.id };
+    const plan = planKey;
     // Checkout completion confirms the selected plan and Stripe identifiers,
     // but it does not prove the subscription is active. The authoritative
     // customer.subscription.created/updated webhook sets subscription_status.
