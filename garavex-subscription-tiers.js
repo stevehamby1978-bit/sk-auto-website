@@ -31,7 +31,7 @@ const GARAVEX_PLANS = Object.freeze({
       'repair_orders', 'invoices', 'payments', 'service_history',
       'dvi', 'inventory', 'recommended_repairs',
       'sms', 'reports', 'deferred_services',
-      'loaners', 'advanced_reporting', 'profitability',
+      'loaners', 'profitability',
       'advanced_workflow', 'warranty_comebacks'
     ])
   })
