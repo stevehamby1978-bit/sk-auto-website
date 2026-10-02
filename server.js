@@ -2444,6 +2444,34 @@ app.post("/api/register-shop", async (req, res) => {
   }
 });
 
+// ===== GARAVEX - LOGIN BRUTE-FORCE PROTECTION =====
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function loginAttemptKey(req, email) {
+  return `${String(req.ip || req.socket?.remoteAddress || 'unknown')}|${String(email || '').trim().toLowerCase()}`;
+}
+function loginRateLimited(key) {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || now - entry.startedAt >= LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 0, startedAt: now });
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_ATTEMPTS;
+}
+function recordFailedLogin(key) {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || now - entry.startedAt >= LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, startedAt: now });
+  } else {
+    entry.count += 1;
+  }
+}
+function clearLoginAttempts(key) { loginAttempts.delete(key); }
+// ===== END GARAVEX - LOGIN BRUTE-FORCE PROTECTION =====
+
 // ===== S&K AUTO - EMPLOYEE LOGIN =====
 app.post("/api/login", async (req, res) => {
   try {
@@ -2459,6 +2487,10 @@ app.post("/api/login", async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const attemptKey = loginAttemptKey(req, cleanEmail);
+    if (loginRateLimited(attemptKey)) {
+      return res.status(429).json({ error: "Too many login attempts. Please wait 15 minutes and try again." });
+    }
 
     const employee = db.prepare(`
       SELECT
@@ -2476,15 +2508,15 @@ active
     `).get(cleanEmail);
 
     if (!employee) {
+      recordFailedLogin(attemptKey);
       return res.status(401).json({
         error: "Invalid email or password."
       });
     }
 
     if (!employee.active) {
-      return res.status(403).json({
-        error: "This employee account is inactive."
-      });
+      recordFailedLogin(attemptKey);
+      return res.status(401).json({ error: "Invalid email or password." });
     }
 
     const passwordMatches =
@@ -2494,11 +2526,13 @@ active
       );
 
     if (!passwordMatches) {
+      recordFailedLogin(attemptKey);
       return res.status(401).json({
         error: "Invalid email or password."
       });
     }
 
+   clearLoginAttempts(attemptKey);
    req.session.regenerate(err => {
      if (err) {
        console.error("Session regeneration error:", err);
