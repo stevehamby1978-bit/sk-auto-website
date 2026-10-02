@@ -62,8 +62,16 @@ function trialIsActive(shop) {
 
 function ownerTestShop(shop) {
   const enabled = String(process.env.GARAVEX_OWNER_TEST_PLAN_ENABLED || '').trim() === '1';
-  const testShopId = Number(process.env.GARAVEX_OWNER_TEST_SHOP_ID || 0);
-  return enabled && Number.isInteger(testShopId) && testShopId > 0 && Number(shop?.id || 0) === testShopId;
+  if (!enabled) return false;
+
+  const configuredIds = [
+    process.env.GARAVEX_OWNER_TEST_SHOP_ID,
+    ...(String(process.env.GARAVEX_OWNER_TEST_SHOP_IDS || '').split(','))
+  ]
+    .map(value => Number(String(value || '').trim()))
+    .filter(id => Number.isInteger(id) && id > 0);
+
+  return configuredIds.includes(Number(shop?.id || 0));
 }
 
 function shopPlan(shop) {
