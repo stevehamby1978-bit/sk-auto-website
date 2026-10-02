@@ -860,6 +860,11 @@ const available = SHOP_SLOTS.filter(
 });
 
 app.post('/api/book', upload.array('photos', 3), (req, res) => {
+  const publicShopId = Number(primaryShop?.id || 0);
+  if (!publicShopId) {
+    return res.status(503).json({ error: 'Public scheduling is temporarily unavailable.' });
+  }
+
   const {service, vehicle, date, time, name, phone, email = '', notes = ''} = req.body || {};
 
   if (![service, vehicle, date, time, name, phone].every(v => typeof v === 'string' && v.trim())) {
@@ -892,8 +897,8 @@ if (blockedTime) {
   
      const bookingResult = db.prepare(`
   INSERT INTO bookings
-  (confirmation, service, vehicle, date, time, name, phone, email, notes)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (confirmation, service, vehicle, date, time, name, phone, email, notes, shop_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `).run(
       confirmation,
       service.trim(),
@@ -903,7 +908,8 @@ if (blockedTime) {
       name.trim(),
       phone.trim(),
       String(email).trim(),
-      String(notes).trim()
+      String(notes).trim(),
+      publicShopId
     );
 const bookingId = bookingResult.lastInsertRowid;
 
