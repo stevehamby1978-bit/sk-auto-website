@@ -242,7 +242,7 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
   app.patch('/api/v2/subscription/preview-plan', requireLogin, requireOwner, (req, res) => {
     const shopId = Number(req.session?.employee?.shop_id || 0);
     const ownerTest = isOwnerTestShop(shopId);
-    if (!ownerTest && process.env.GARAVEX_ALLOW_PLAN_PREVIEW !== '1') return res.status(403).json({ error: 'Plan preview changes are disabled.' });
+    if (!ownerTest) return res.status(403).json({ error: 'Plan preview is restricted to the configured Garavex owner test shop.' });
     const requested = String(req.body?.plan || '').trim().toLowerCase();
     if (!GARAVEX_PLANS[requested]) return res.status(400).json({ error: 'Invalid Garavex plan.' });
     db.prepare("UPDATE shops SET subscription_plan=?,subscription_status='active' WHERE id=?").run(requested, shopId);
