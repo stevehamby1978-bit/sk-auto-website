@@ -43,6 +43,32 @@ require('./v2-scheduling-preload');
 require('./v2-recommendations-preload');
 require('./v2-communications-preload');
 
+// Ensure each configured V2 shop has an owner account before the server starts.
+// Runs only when the V2 owner credentials are configured; never logs secrets.
+const ownerShopConfigs = [
+  {
+    shopName: 'S&K Auto',
+    ownerEmail: process.env.V2_REPAIR_OWNER_EMAIL,
+    ownerPassword: process.env.V2_REPAIR_OWNER_PASSWORD
+  },
+  {
+    shopName: 'Zwickl Repair',
+    ownerEmail: process.env.V2_ZWICKL_OWNER_EMAIL,
+    ownerPassword: process.env.V2_ZWICKL_OWNER_PASSWORD
+  }
+].filter(config => config.ownerEmail && config.ownerPassword);
+
+if (ownerShopConfigs.length > 0) {
+  try {
+    const { setupOwners } = require('./v2-owner-setup');
+    for (const r of setupOwners(ownerShopConfigs)) {
+      console.log(`V2 owner setup: shop "${r.shop}" ${r.shopStatus}; owner ${r.ownerStatus}; status ${r.status}`);
+    }
+  } catch (err) {
+    console.error('V2 owner setup failed:', err && err.message ? err.message : 'unknown error');
+  }
+}
+
 const serverFilename = path.join(__dirname, 'server.js');
 const listenerNeedle = '\napp.listen(PORT, () => {';
 const bootstrapMarker = 'installGaravexV2(app, db';
