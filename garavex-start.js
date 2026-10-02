@@ -34,6 +34,8 @@ function runReadOnlyOwnershipAudit() {
   }
 }
 
+// Remove duplicate inactive S&K owner rows before attempting the owner repair.
+runOptionalOwnerRepair('S&K owner dedup', 'v2-dedup-sk-auto-owners.js');
 if (process.env.V2_REPAIR_OWNER_EMAIL && process.env.V2_REPAIR_OWNER_PASSWORD) runOptionalOwnerRepair('S&K owner', 'v2-login-repair.js');
 if (process.env.V2_ZWICKL_OWNER_EMAIL && process.env.V2_ZWICKL_OWNER_PASSWORD) runOptionalOwnerRepair('Zwickl Repair owner', 'v2-zwickl-login-repair.js');
 runReadOnlyOwnershipAudit();
