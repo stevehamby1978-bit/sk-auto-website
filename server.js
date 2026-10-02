@@ -1875,7 +1875,27 @@ if (!isAutomaticReminderDay) {
 }
 
 // ===== S&K AUTO - GET ALL ESTIMATES =====
-app.get("/api/estimates", (req, res) => {
+app.get("/api/estimates", (req, res, next) => {
+  const shopId = Number(req.session?.employee?.shop_id || 0);
+  if (!shopId) return res.status(401).json({ error: "Login required." });
+
+  const shop = db.prepare(`
+    SELECT id, subscription_plan, subscription_status, stripe_subscription_id,
+           subscription_current_period_end, trial_ends_at
+    FROM shops
+    WHERE id = ?
+    LIMIT 1
+  `).get(shopId);
+
+  if (!shop) return res.status(404).json({ error: "Shop not found." });
+  if (!garavexShopAccessActive(shop)) {
+    return res.status(402).json({
+      error: "Your Garavex trial has ended or the subscription is inactive. Choose a plan to continue.",
+      code: "SUBSCRIPTION_REQUIRED"
+    });
+  }
+  next();
+}, (req, res) => {
   try {
     const estimates = db.prepare(`
       SELECT
