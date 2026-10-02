@@ -4500,9 +4500,9 @@ repairOrder.payments = db.prepare(`
         voided_at,
         void_reason
     FROM repair_order_payments
-    WHERE repair_order_id = ?
+    WHERE repair_order_id = ? AND shop_id = ?
     ORDER BY id ASC
-`).all(repairOrder.id);
+`).all(repairOrder.id, req.session.employee.shop_id);
 // amount_paid on repair_orders is authoritative.
 repairOrder.amount_paid = Math.round(Number(repairOrder.amount_paid || 0) * 100) / 100;
 repairOrder.local_amount_paid = Math.round(
@@ -5131,16 +5131,16 @@ app.post("/api/repair-orders/:id/payments/:paymentId/void", (req, res) => {
     const payment = db.prepare(`
       SELECT id, repair_order_id, amount, payment_method, paid_at, voided
       FROM repair_order_payments
-      WHERE id = ? AND repair_order_id = ?
-    `).get(paymentId, repairOrderId);
+      WHERE id = ? AND repair_order_id = ? AND shop_id = ?
+    `).get(paymentId, repairOrderId, shopId);
     if (!payment) return res.status(404).json({ error: "Payment not found." });
     if (payment.voided) return res.status(400).json({ error: "This payment has already been voided." });
 
     db.prepare(`
       UPDATE repair_order_payments
       SET voided = 1, voided_at = CURRENT_TIMESTAMP, void_reason = ?
-      WHERE id = ? AND repair_order_id = ?
-    `).run(reason, paymentId, repairOrderId);
+      WHERE id = ? AND repair_order_id = ? AND shop_id = ?
+    `).run(reason, paymentId, repairOrderId, shopId);
 
     const orderTotals = db.prepare(`
       SELECT COALESCE(SUM(parts), 0) AS parts_total,
