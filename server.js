@@ -7796,12 +7796,23 @@ app.post('/api/text-authorization', (req, res) => {
 
 // ===== GARAVEX - STRIPE CONNECT ACCOUNTS V2 =====
 function requireLoggedInOwner(req, res, next) {
-  if (!req.session || !req.session.employee) {
+  const sessionEmployee = req.session?.employee;
+  const employeeId = Number(sessionEmployee?.id || 0);
+  const shopId = Number(sessionEmployee?.shop_id || 0);
+  if (!employeeId || !shopId) {
     return res.status(401).json({ success: false, error: 'Not logged in.' });
   }
-  if (req.session.employee.role !== 'owner') {
+  const liveOwner = db.prepare(`
+    SELECT id, name, email, role, shop_id, must_change_password
+    FROM employees
+    WHERE id = ? AND shop_id = ? AND active = 1
+      AND LOWER(TRIM(COALESCE(role, ''))) = 'owner'
+    LIMIT 1
+  `).get(employeeId, shopId);
+  if (!liveOwner) {
     return res.status(403).json({ success: false, error: 'Owner access required.' });
   }
+  req.session.employee = liveOwner;
   next();
 }
 
