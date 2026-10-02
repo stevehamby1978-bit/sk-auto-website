@@ -245,19 +245,34 @@ app.use(session({
 
 // ===== S&K AUTO - REQUIRE EMPLOYEE LOGIN =====
 function requireLogin(req, res, next) {
-  if (req.session && req.session.employee) {
-    return next();
+  const sessionEmployee = req.session?.employee;
+  const employeeId = Number(sessionEmployee?.id || 0);
+  const shopId = Number(sessionEmployee?.shop_id || 0);
+
+  if (!employeeId || !shopId) {
+    return res.redirect('/login.html');
   }
 
-  return res.redirect('/login.html');
+  const liveEmployee = db.prepare(`
+    SELECT id, name, email, role, shop_id, must_change_password
+    FROM employees
+    WHERE id = ? AND shop_id = ? AND active = 1
+    LIMIT 1
+  `).get(employeeId, shopId);
+
+  if (!liveEmployee) {
+    return req.session.destroy(() => {
+      res.clearCookie('skauto_session');
+      res.redirect('/login.html');
+    });
+  }
+
+  req.session.employee = liveEmployee;
+  return next();
 }
 // ===== S&K AUTO - REQUIRE OWNER =====
 function requireOwner(req, res, next) {
-  if (
-    req.session &&
-    req.session.employee &&
-    req.session.employee.role === 'owner'
-  ) {
+  if (req.session?.employee?.role === 'owner') {
     return next();
   }
 
