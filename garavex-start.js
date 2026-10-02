@@ -97,6 +97,86 @@ app.post('/api/estimates', (req, res) => {
 `;
 source = source.replace(legacyEstimateMarker, `${v2EstimateRoute}\n${legacyEstimateMarker}`);
 
+// Install V2 repair-order write routes directly before their legacy S&K handlers.
+// This preserves shop_id isolation and prevents legacy auth/branding assumptions
+// from blocking non-S&K tenants such as Zwickl Repair.
+const completeMarker = '// ===== S&K AUTO - MARK REPAIR ORDER COMPLETED =====';
+if (!source.includes(completeMarker)) throw new Error('Garavex startup aborted: repair completion marker was not found.');
+const v2CompleteRoute = `
+// ===== GARAVEX V2 TENANT-SAFE COMPLETE REPAIR ORDER =====
+app.patch('/api/repair-orders/:id/complete', (req, res) => {
+  try {
+    const shopId = Number(req.session?.employee?.shop_id || 0);
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const orderId = Number(req.params.id);
+    if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ error: 'Invalid repair order ID.' });
+    const order = db.prepare('SELECT id,status,invoice_token FROM repair_orders WHERE id=? AND shop_id=?').get(orderId, shopId);
+    if (!order) return res.status(404).json({ error: 'Repair order not found.' });
+    if (order.status === 'completed') return res.status(409).json({ error: 'This repair order has already been completed.' });
+    let invoiceToken = order.invoice_token;
+    db.transaction(() => {
+      if (!invoiceToken) {
+        invoiceToken = crypto.randomBytes(32).toString('hex');
+        db.prepare('UPDATE repair_orders SET invoice_token=? WHERE id=? AND shop_id=?').run(invoiceToken, orderId, shopId);
+      }
+      db.prepare("UPDATE repair_orders SET status='completed', completed_at=CURRENT_TIMESTAMP WHERE id=? AND shop_id=?").run(orderId, shopId);
+    })();
+    console.log('[V2 COMPLETE] completed', { orderId, shopId });
+    return res.json({ success: true, id: orderId, status: 'completed', invoice_token: invoiceToken });
+  } catch (err) {
+    console.error('[V2 COMPLETE] failed:', err);
+    return res.status(500).json({ error: 'Unable to complete repair order.' });
+  }
+});
+// ===== END GARAVEX V2 TENANT-SAFE COMPLETE REPAIR ORDER =====
+`;
+source = source.replace(completeMarker, `${v2CompleteRoute}\n${completeMarker}`);
+
+const textAuthMarker = "app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/text-authorization'";
+if (!source.includes(textAuthMarker)) throw new Error('Garavex startup aborted: recommendation text authorization route was not found.');
+const v2TextAuthRoute = `
+// ===== GARAVEX V2 TENANT-SAFE RECOMMENDATION NOTIFICATION =====
+app.post('/api/repair-orders/:repairOrderId/recommendations/:recommendationId/text-authorization', async (req, res) => {
+  try {
+    const shopId = Number(req.session?.employee?.shop_id || 0);
+    if (!shopId) return res.status(401).json({ error: 'Not authorized.' });
+    const orderId = Number(req.params.repairOrderId);
+    const recommendationId = Number(req.params.recommendationId);
+    const row = db.prepare(\`
+      SELECT rr.id,rr.description,rr.parts,rr.labor,rr.authorization_token,
+             c.name AS customer_name,c.phone AS customer_phone,
+             s.name AS shop_name,s.slug AS shop_slug
+      FROM repair_order_recommendations rr
+      JOIN repair_orders r ON r.id=rr.repair_order_id
+      JOIN customers c ON c.id=r.customer_id AND c.shop_id=r.shop_id
+      JOIN shops s ON s.id=r.shop_id
+      WHERE rr.id=? AND rr.repair_order_id=? AND r.shop_id=?
+    \`).get(recommendationId, orderId, shopId);
+    if (!row) return res.status(404).json({ error: 'Recommended repair not found.' });
+    // Only S&K currently has the configured Twilio sender. Other tenants still
+    // create the recommendation successfully and can use the authorization link
+    // without being blocked by an S&K-only SMS service.
+    const isSk = String(row.shop_slug || '').toLowerCase() === 'sk-auto';
+    if (!isSk) return res.json({ success: true, notification_skipped: true, reason: 'SMS authorization is not configured for this shop.' });
+    if (!row.customer_phone) return res.status(400).json({ error: 'Customer phone number is required to text authorization.' });
+    const base = process.env.REPAIR_AUTHORIZATION_BASE_URL || 'https://skautohutch.com/repair-authorization.html';
+    const url = base + '?order=' + encodeURIComponent(orderId) + '&repair=' + encodeURIComponent(recommendationId) + '&token=' + encodeURIComponent(row.authorization_token || '');
+    const total = Number(row.parts || 0) + Number(row.labor || 0);
+    await twilioClient.messages.create({
+      body: (row.shop_name || 'S&K Auto') + ': Hi ' + (row.customer_name || 'Customer') + ', we recommended: ' + row.description + '. Total: $' + total.toFixed(2) + '. Approve or decline: ' + url,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: row.customer_phone
+    });
+    return res.json({ success: true, notification_sent: true });
+  } catch (err) {
+    console.error('[V2 RECOMMENDATION SMS] failed:', err);
+    return res.status(500).json({ error: 'Unable to process repair authorization notification.' });
+  }
+});
+// ===== END GARAVEX V2 TENANT-SAFE RECOMMENDATION NOTIFICATION =====
+`;
+source = source.replace(textAuthMarker, `${v2TextAuthRoute}\n${textAuthMarker}`);
+
 const bootstrap = `
 // ===== GARAVEX V2 CENTRALIZED BOOTSTRAP =====
 const { installGaravexV2 } = require('./v2-bootstrap');
