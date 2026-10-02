@@ -2888,11 +2888,10 @@ app.get("/api/employees", (req, res) => {
 });
 
 // ===== S&K AUTO - ADD EMPLOYEE =====
-app.post("/api/employees", async (req, res) => {
+app.post("/api/employees", requireLogin, requireOwner, async (req, res) => {
   try {
     const currentEmployee = req.session?.employee;
     if (!currentEmployee?.shop_id) return res.status(401).json({ error: "Not authorized." });
-    if (currentEmployee.role !== "owner") return res.status(403).json({ error: "Only an owner can add employees." });
 
     const {
       name,
@@ -2970,8 +2969,8 @@ app.post("/api/employees", async (req, res) => {
     const existingEmployee = db.prepare(`
       SELECT id
       FROM employees
-      WHERE LOWER(email) = ?
-    `).get(cleanEmail);
+      WHERE LOWER(email) = ? AND shop_id = ?
+    `).get(cleanEmail, currentEmployee.shop_id);
 
     if (existingEmployee) {
       return res.status(409).json({
@@ -3020,18 +3019,8 @@ VALUES (?, ?, ?, ?, 1, 1, ?)
   }
 });
 // ===== S&K AUTO - RESET EMPLOYEE PASSWORD =====
-app.post("/api/employees/:id/reset-password", async (req, res) => {
+app.post("/api/employees/:id/reset-password", requireLogin, requireOwner, async (req, res) => {
   try {
-    if (
-      !req.session ||
-      !req.session.employee ||
-      req.session.employee.role !== "owner"
-    ) {
-      return res.status(403).json({
-        error: "Only the owner can reset employee passwords."
-      });
-    }
-
     const employeeId = Number(req.params.id);
     const { temporaryPassword } = req.body;
 
