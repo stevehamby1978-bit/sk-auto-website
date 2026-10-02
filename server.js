@@ -885,7 +885,7 @@ app.post('/api/book', upload.array('photos', 3), (req, res) => {
   if (!isValidDateString(date) || !isWeekday(date)) {
     return res.status(400).json({error: 'Appointments are Monday-Friday only.'});
   }
-  if (isBlockedDate(date)) {
+  if (isBlockedDate(date, publicShopId)) {
   return res.status(400).json({
     error: 'S&K Auto is closed on this date. Please choose another day.'
   });
@@ -1158,7 +1158,7 @@ Confirmation: ${confirmation}`,
     
     res.status(201).json({ok: true, confirmation});
   } catch (err) {
-    if (String(err.message).includes('UNIQUE constraint failed: bookings.date, bookings.time')) {
+    if (String(err.message).includes('UNIQUE constraint failed: bookings.shop_id, bookings.date, bookings.time')) {
       return res.status(409).json({error: 'That appointment time is no longer available.'});
     }
     console.error(err);
@@ -2212,6 +2212,51 @@ if (primaryShop) {
     WHERE shop_id IS NULL
   `).run(primaryShop.id);
 }
+// ===== GARAVEX - TENANT-SCOPED BOOKING SLOT UNIQUENESS =====
+if (primaryShop) {
+  const bookingSqlRow = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'").get();
+  const bookingSql = String(bookingSqlRow?.sql || "");
+  const hasTenantSlotUnique = /UNIQUE\s*\(\s*shop_id\s*,\s*date\s*,\s*time\s*\)/i.test(bookingSql);
+  const hasLegacyGlobalSlotUnique = /UNIQUE\s*\(\s*date\s*,\s*time\s*\)/i.test(bookingSql);
+
+  if (!hasTenantSlotUnique || hasLegacyGlobalSlotUnique) {
+    db.transaction(() => {
+      db.exec("DROP TABLE IF EXISTS bookings_v2");
+      db.exec(`
+        CREATE TABLE bookings_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          confirmation TEXT NOT NULL UNIQUE,
+          service TEXT NOT NULL,
+          vehicle TEXT NOT NULL,
+          date TEXT NOT NULL,
+          time TEXT NOT NULL,
+          name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          email TEXT,
+          notes TEXT,
+          reminder_sent INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          status TEXT NOT NULL DEFAULT 'scheduled',
+          shop_id INTEGER NOT NULL,
+          UNIQUE(shop_id, date, time)
+        )
+      `);
+      db.exec(`
+        INSERT INTO bookings_v2
+          (id, confirmation, service, vehicle, date, time, name, phone, email, notes,
+           reminder_sent, created_at, status, shop_id)
+        SELECT
+          id, confirmation, service, vehicle, date, time, name, phone, email, notes,
+          reminder_sent, created_at, status, shop_id
+        FROM bookings
+        WHERE shop_id IS NOT NULL
+      `);
+      db.exec("DROP TABLE bookings");
+      db.exec("ALTER TABLE bookings_v2 RENAME TO bookings");
+    })();
+  }
+}
+
 // ===== S&K AUTO SaaS - ESTIMATE SHOP MIGRATION =====
 const estimateShopColumns = db.prepare(`
   PRAGMA table_info(estimates)
