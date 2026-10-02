@@ -42,6 +42,7 @@ const {installV2CustomerRequests}=require('./v2-customer-requests');
 const {installV2ShopHandoff}=require('./v2-shop-handoff');
 const {installV2WorkflowSummary}=require('./v2-workflow-summary');
 const {installV2Preflight}=require('./v2-preflight');
+const {installV2Subscriptions}=require('./v2-subscriptions');
 
 const installedApps=new WeakSet();
 const installingApps=new WeakSet();
@@ -56,6 +57,7 @@ function installGaravexV2(app,db,deps){
  try{
   installV2Schema(db);
   installV2SchedulingSchema(db);
+  installV2Subscriptions(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2CoreOperations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});
