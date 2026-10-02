@@ -2635,8 +2635,9 @@ app.get("/api/employees", (req, res) => {
         active,
         created_at
       FROM employees
+      WHERE shop_id = ?
       ORDER BY active DESC, name ASC
-    `).all();
+    `).all(req.session.employee.shop_id);
 
     res.json(employees);
 
@@ -2772,7 +2773,8 @@ app.post("/api/employees/:id/reset-password", async (req, res) => {
       SELECT id, name
       FROM employees
       WHERE id = ?
-    `).get(employeeId);
+        AND shop_id = ?
+    `).get(employeeId, req.session.employee.shop_id);
 
     if (!employee) {
       return res.status(404).json({
@@ -2791,9 +2793,11 @@ app.post("/api/employees/:id/reset-password", async (req, res) => {
         password_hash = ?,
         must_change_password = 1
       WHERE id = ?
+        AND shop_id = ?
     `).run(
       passwordHash,
-      employeeId
+      employeeId,
+      req.session.employee.shop_id
     );
 
     res.json({
