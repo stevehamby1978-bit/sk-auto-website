@@ -154,5 +154,6 @@ module.exports = {
   getEmployeeLimit,
   subscriptionIsActive,
   trialIsActive,
-  shopAccessActive
+  shopAccessActive,
+  ownerTestShop
 };
