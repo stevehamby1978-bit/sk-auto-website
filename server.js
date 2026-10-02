@@ -6272,17 +6272,19 @@ app.get(
 
       const recommendation = db.prepare(`
         SELECT
-          id,
-          repair_order_id,
-          description,
-          parts,
-          labor,
-          status,
-          authorized_at
-        FROM repair_order_recommendations
-        WHERE id = ?
-          AND repair_order_id = ?
-          AND authorization_token = ?
+          rr.id,
+          rr.repair_order_id,
+          rr.description,
+          rr.parts,
+          rr.labor,
+          rr.status,
+          rr.authorized_at,
+          ro.shop_id
+        FROM repair_order_recommendations rr
+        JOIN repair_orders ro ON ro.id = rr.repair_order_id
+        WHERE rr.id = ?
+          AND rr.repair_order_id = ?
+          AND rr.authorization_token = ?
       `).get(
         recommendationId,
         repairOrderId,
