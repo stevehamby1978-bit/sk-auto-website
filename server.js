@@ -846,6 +846,8 @@ if (!repairOrderColumns.includes("authorized_at")) {
     ADD COLUMN authorized_at TEXT
   `).run();
 }
+// Legacy public S&K scheduling/SMS routes intentionally target the original shop only.
+const primaryShop = db.prepare("SELECT id FROM shops WHERE slug = ? LIMIT 1").get('sk-auto');
 const SHOP_SLOTS = [
   '8:00 AM','9:00 AM','10:00 AM','11:00 AM',
   '12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM'
