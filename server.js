@@ -1310,7 +1310,8 @@ async function sendAppointmentReminders() {
   FROM bookings
   WHERE date = ?
     AND reminder_sent = 0
-`).all(chicagoDate);
+    AND shop_id = ?
+`).all(chicagoDate, primaryShop?.id);
 
     for (const appointment of appointments) {
       const appointmentMinutes = timeToMinutes(appointment.time);
@@ -1335,7 +1336,8 @@ if (
           UPDATE bookings
           SET reminder_sent = 1
           WHERE id = ?
-        `).run(appointment.id);
+            AND shop_id = ?
+        `).run(appointment.id, appointment.shop_id);
 
         console.log(`Reminder SMS sent for booking ${appointment.confirmation}`);
       } catch (err) {
