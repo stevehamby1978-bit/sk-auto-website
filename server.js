@@ -2437,9 +2437,26 @@ app.get("/api/current-employee", (req, res) => {
     });
   }
 
-  res.json({
-    employee: req.session.employee
-  });
+  const employeeId = Number(req.session.employee.id || 0);
+  const shopId = Number(req.session.employee.shop_id || 0);
+  const liveEmployee = db.prepare(`
+    SELECT id, name, email, role, shop_id, must_change_password
+    FROM employees
+    WHERE id = ? AND shop_id = ?
+    LIMIT 1
+  `).get(employeeId, shopId);
+
+  if (!liveEmployee) {
+    return req.session.destroy(() => {
+      res.clearCookie('skauto_session');
+      res.status(401).json({ error: "Your session is no longer valid. Please log in again." });
+    });
+  }
+
+  // Refresh session identity from the database so role/email/password-state changes
+  // take effect without trusting stale values stored in the session.
+  req.session.employee = liveEmployee;
+  res.json({ employee: liveEmployee });
 });
 
 // ===== GARAVEX SUBSCRIPTION ACCESS GUARD FOR LEGACY SHOP APIs =====
