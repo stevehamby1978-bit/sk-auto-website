@@ -2735,6 +2735,41 @@ app.post("/api/employees", async (req, res) => {
       });
     }
 
+    const shop = db.prepare(`
+      SELECT id, subscription_plan, subscription_status,
+             stripe_subscription_id, subscription_current_period_end, trial_ends_at
+      FROM shops
+      WHERE id = ?
+      LIMIT 1
+    `).get(currentEmployee.shop_id);
+
+    if (!shop) return res.status(404).json({ error: "Shop not found." });
+
+    const { shopAccessActive, getEmployeeLimit } = require("./garavex-subscription-tiers");
+    if (!shopAccessActive(shop)) {
+      return res.status(402).json({
+        error: "Your Garavex trial has ended or the subscription is inactive. Choose a plan to continue.",
+        code: "SUBSCRIPTION_REQUIRED"
+      });
+    }
+
+    const employeeLimit = getEmployeeLimit(shop);
+    if (employeeLimit !== null) {
+      const activeEmployeeCount = Number(db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM employees
+        WHERE shop_id = ? AND active = 1
+      `).get(currentEmployee.shop_id)?.count || 0);
+
+      if (activeEmployeeCount >= employeeLimit) {
+        return res.status(403).json({
+          error: "Your current Garavex plan has reached its employee limit.",
+          code: "EMPLOYEE_LIMIT_REACHED",
+          employee_limit: employeeLimit
+        });
+      }
+    }
+
     const cleanEmail = email.trim().toLowerCase();
 
     const allowedRoles = [
