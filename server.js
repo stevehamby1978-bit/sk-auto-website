@@ -201,8 +201,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req,
     const paymentStatus = newAmountPaid >= total - 0.009 ? 'paid' : 'partial';
 
     const tx = db.transaction(() => {
-      db.prepare(`INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_payment_intent_id) VALUES (?, ?, 'Stripe', ?)`)
-        .run(order.id, amount, pi.id);
+      db.prepare(`INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_payment_intent_id, shop_id) VALUES (?, ?, 'Stripe', ?, ?)`)
+        .run(order.id, amount, pi.id, order.shop_id);
       db.prepare(`UPDATE repair_orders SET amount_paid = ?, payment_status = ?, payment_method = 'Stripe', paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END WHERE id = ? AND shop_id = ?`)
         .run(newAmountPaid, paymentStatus, paymentStatus, order.id, order.shop_id);
     });
@@ -590,6 +590,23 @@ if (!paymentColumnNames.includes('void_reason')) {
         ADD COLUMN void_reason TEXT
     `).run();
 }
+// ===== GARAVEX V2 - TENANT OWNERSHIP FOR PAYMENT HISTORY =====
+if (!paymentColumnNames.includes('shop_id')) {
+    db.prepare(`
+        ALTER TABLE repair_order_payments
+        ADD COLUMN shop_id INTEGER
+    `).run();
+}
+db.prepare(`
+    UPDATE repair_order_payments
+    SET shop_id = (
+        SELECT r.shop_id
+        FROM repair_orders r
+        WHERE r.id = repair_order_payments.repair_order_id
+    )
+    WHERE shop_id IS NULL
+`).run();
+db.exec(`CREATE INDEX IF NOT EXISTS idx_repair_order_payments_shop_ro ON repair_order_payments(shop_id, repair_order_id);`);
 // ===== S&K AUTO - BALANCE REMINDER SUPPORT =====
 const balanceReminderColumns = db
     .prepare(`PRAGMA table_info(repair_orders)`)
@@ -4930,12 +4947,13 @@ db.prepare(`
 if (paymentAmount > 0 && method) {
   db.prepare(`
     INSERT INTO repair_order_payments
-    (repair_order_id, amount, payment_method)
-    VALUES (?, ?, ?)
+    (repair_order_id, amount, payment_method, shop_id)
+    VALUES (?, ?, ?, ?)
   `).run(
     req.params.id,
     paymentAmount,
-    method
+    method,
+    shopId
   );
 } 
    // ===== S&K AUTO - CALCULATE RECEIPT TOTALS =====
@@ -5257,8 +5275,8 @@ app.post('/api/stripe/confirm-checkout-session', async (req, res) => {
     const paymentStatus = newAmountPaid >= total - 0.009 ? 'paid' : 'partial';
 
     const tx = db.transaction(() => {
-      db.prepare(`INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_session_id, stripe_payment_intent_id) VALUES (?, ?, 'Stripe', ?, ?)`)
-        .run(order.id, amount, sessionId, session.payment_intent || null);
+      db.prepare(`INSERT INTO repair_order_payments (repair_order_id, amount, payment_method, stripe_session_id, stripe_payment_intent_id, shop_id) VALUES (?, ?, 'Stripe', ?, ?, ?)`)
+        .run(order.id, amount, sessionId, session.payment_intent || null, order.shop_id);
       db.prepare(`UPDATE repair_orders SET amount_paid = ?, payment_status = ?, payment_method = 'Stripe', paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE paid_at END WHERE id = ? AND shop_id = ?`)
         .run(newAmountPaid, paymentStatus, paymentStatus, order.id, order.shop_id);
     });
