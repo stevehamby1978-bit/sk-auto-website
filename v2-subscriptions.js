@@ -142,6 +142,19 @@ async function ensureStripeCustomer(stripe, db, shop, shopId) {
   }
 }
 
+function ownerTestPlanEnabled() {
+  return String(process.env.GARAVEX_OWNER_TEST_PLAN_ENABLED || '').trim() === '1';
+}
+
+function ownerTestShopId() {
+  const n = Number(process.env.GARAVEX_OWNER_TEST_SHOP_ID || 0);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+function isOwnerTestShop(shopId) {
+  return ownerTestPlanEnabled() && ownerTestShopId() === Number(shopId);
+}
+
 function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe }) {
   if (!app || !db) throw new Error('V2 subscriptions require app and db.');
   installSubscriptionSchema(db);
@@ -157,7 +170,7 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
     if (!shop) return res.status(404).json({ error: 'Shop not found.' });
     const plan = shopPlan(shop);
     const employeeCount = db.prepare('SELECT COUNT(*) AS count FROM employees WHERE shop_id=? AND active=1').get(shopId)?.count || 0;
-    res.json({ shopId, shopName: shop.name, plan: publicPlan(plan), status: shop.subscription_status, currentPeriodEnd: shop.subscription_current_period_end || null, cancelAtPeriodEnd: Boolean(shop.subscription_cancel_at_period_end), employeeCount: Number(employeeCount), billingConfigured: Boolean(shop.stripe_customer_id && shop.stripe_subscription_id), starterOffer: starterOffer(db) });
+    res.json({ shopId, shopName: shop.name, plan: publicPlan(plan), status: shop.subscription_status, currentPeriodEnd: shop.subscription_current_period_end || null, cancelAtPeriodEnd: Boolean(shop.subscription_cancel_at_period_end), employeeCount: Number(employeeCount), billingConfigured: Boolean(shop.stripe_customer_id && shop.stripe_subscription_id), ownerTestPlan: isOwnerTestShop(shopId), starterOffer: starterOffer(db) });
   });
 
   app.post('/api/v2/subscription/checkout', requireLogin, requireOwner, async (req, res) => {
@@ -220,12 +233,13 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
   });
 
   app.patch('/api/v2/subscription/preview-plan', requireLogin, requireOwner, (req, res) => {
-    if (process.env.GARAVEX_ALLOW_PLAN_PREVIEW !== '1') return res.status(403).json({ error: 'Plan preview changes are disabled.' });
     const shopId = Number(req.session?.employee?.shop_id || 0);
+    const ownerTest = isOwnerTestShop(shopId);
+    if (!ownerTest && process.env.GARAVEX_ALLOW_PLAN_PREVIEW !== '1') return res.status(403).json({ error: 'Plan preview changes are disabled.' });
     const requested = String(req.body?.plan || '').trim().toLowerCase();
     if (!GARAVEX_PLANS[requested]) return res.status(400).json({ error: 'Invalid Garavex plan.' });
     db.prepare("UPDATE shops SET subscription_plan=?,subscription_status='active' WHERE id=?").run(requested, shopId);
-    res.json({ success: true, plan: publicPlan(shopPlan(getShop(db, shopId))) });
+    res.json({ success: true, plan: publicPlan(shopPlan(getShop(db, shopId))), ownerTestPlan: ownerTest });
   });
 
   app.get('/api/v2/subscription/entitlement/:feature', requireLogin, (req, res) => {
