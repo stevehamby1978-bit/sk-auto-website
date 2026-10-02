@@ -3911,6 +3911,8 @@ app.delete("/api/appointments/:id", (req, res) => {
 // ===== S&K AUTO - UPDATE APPOINTMENT =====
 app.patch("/api/appointments/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const id = req.params.id;
 
     const {
@@ -3949,7 +3951,7 @@ app.patch("/api/appointments/:id", (req, res) => {
       });
     }
 
-    if (isBlockedDate(date)) {
+    if (isBlockedDate(date, shopId)) {
       return res.status(400).json({
         error: "S&K Auto is closed on this date."
       });
@@ -3958,8 +3960,8 @@ app.patch("/api/appointments/:id", (req, res) => {
     const blockedTime = db.prepare(`
       SELECT 1
       FROM blocked_times
-      WHERE date = ? AND time = ?
-    `).get(date, time);
+      WHERE date = ? AND time = ? AND shop_id = ?
+    `).get(date, time, shopId);
 
     if (blockedTime) {
       return res.status(400).json({
@@ -3974,7 +3976,7 @@ app.patch("/api/appointments/:id", (req, res) => {
         AND time = ?
         AND id != ?
         AND shop_id = ?
-    `).get(date, time, id, req.session.employee.shop_id);
+    `).get(date, time, id, shopId);
 
     if (existingBooking) {
       return res.status(409).json({
@@ -3987,7 +3989,7 @@ app.patch("/api/appointments/:id", (req, res) => {
       FROM bookings
       WHERE id = ?
         AND shop_id = ?
-    `).get(id, req.session.employee.shop_id);
+    `).get(id, shopId);
 
     if (!appointment) {
       return res.status(404).json({
@@ -4017,7 +4019,7 @@ app.patch("/api/appointments/:id", (req, res) => {
       service.trim(),
       (notes || "").trim(),
       id,
-      req.session.employee.shop_id
+      shopId
     );
 
     res.json({
