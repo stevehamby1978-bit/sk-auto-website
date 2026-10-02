@@ -6974,65 +6974,7 @@ app.delete("/api/repair-orders/:id", (req, res) => {
 
     if (!repairOrder) return res.status(404).json({ error: "Repair order not found." });
 
-    // TEST CLEANUP is intentionally restricted to explicitly configured beta
-    // shops. A real production customer named Steve Hamby must never trigger
-    // bulk deletion of that customer's history.
-    const cleanupShop = db.prepare(`
-      SELECT id, subscription_plan, subscription_status, stripe_subscription_id, trial_ends_at
-      FROM shops WHERE id = ? LIMIT 1
-    `).get(shopId);
-    const allowTestCleanup = ownerTestShop(cleanupShop);
-    if (allowTestCleanup && String(repairOrder.customer_name || "").trim().toLowerCase() === "steve hamby") {
-      const customerId = Number(repairOrder.customer_id);
-
-      const cleanupSteveTestData = db.transaction(() => {
-        const roIds = db.prepare(`
-          SELECT id FROM repair_orders
-          WHERE customer_id = ? AND shop_id = ?
-        `).all(customerId, shopId).map(row => Number(row.id));
-
-        const estimateIds = db.prepare(`
-          SELECT id FROM estimates
-          WHERE customer_id = ? AND shop_id = ?
-        `).all(customerId, shopId).map(row => Number(row.id));
-
-        for (const roId of roIds) {
-          db.prepare(`DELETE FROM customer_communication_history WHERE repair_order_id = ? OR customer_id = ?`).run(roId, customerId);
-          db.prepare(`DELETE FROM invoice_email_history WHERE repair_order_id = ?`).run(roId);
-          db.prepare(`DELETE FROM repair_order_recommendations WHERE repair_order_id = ?`).run(roId);
-          db.prepare(`DELETE FROM repair_order_payments WHERE repair_order_id = ?`).run(roId);
-          db.prepare(`DELETE FROM repair_order_items WHERE repair_order_id = ?`).run(roId);
-          db.prepare(`DELETE FROM repair_orders WHERE id = ? AND shop_id = ?`).run(roId, shopId);
-        }
-
-        // Remove any customer-only communication rows that were not tied to an RO.
-        db.prepare(`DELETE FROM customer_communication_history WHERE customer_id = ? AND shop_id = ?`).run(customerId, shopId);
-
-        for (const estimateId of estimateIds) {
-          db.prepare(`DELETE FROM estimate_items WHERE estimate_id = ?`).run(estimateId);
-        }
-        db.prepare(`DELETE FROM estimates WHERE customer_id = ? AND shop_id = ?`).run(customerId, shopId);
-        db.prepare(`DELETE FROM vehicles WHERE customer_id = ? AND shop_id = ?`).run(customerId, shopId);
-
-        const customerDelete = db.prepare(`
-          DELETE FROM customers WHERE id = ? AND shop_id = ?
-        `).run(customerId, shopId);
-
-        if (customerDelete.changes !== 1) throw new Error("Steve Hamby test customer was not deleted.");
-        return { repairOrdersDeleted: roIds.length, estimatesDeleted: estimateIds.length };
-      });
-
-      const result = cleanupSteveTestData();
-      console.log(`Deleted Steve Hamby test dataset from shop ${shopId}: ${result.repairOrdersDeleted} repair orders, ${result.estimatesDeleted} estimates.`);
-      return res.json({
-        success: true,
-        testCustomerDeleted: true,
-        repairOrdersDeleted: result.repairOrdersDeleted,
-        estimatesDeleted: result.estimatesDeleted,
-        message: "Steve Hamby test customer, vehicles, repair orders, payments, and related local test records were deleted."
-      });
-    }
-
+    // Production safety: deleting one repair order must never trigger customer-wide cleanup.
     // Normal production protection remains unchanged for every other customer.
     const paymentCount = db.prepare(`
       SELECT COUNT(*) AS count FROM repair_order_payments WHERE repair_order_id = ? AND shop_id = ?
