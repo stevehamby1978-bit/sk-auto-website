@@ -16,10 +16,10 @@
 @media(max-width:1100px){.quick-actions{grid-template-columns:repeat(3,1fr)}.stats{grid-template-columns:repeat(2,1fr)}.nav-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:760px){.header{position:static;padding:15px}.content{padding:16px}.employee{text-align:left}.quick-actions,.stats,.nav-grid,.work-grid{grid-template-columns:1fr}.filters{align-items:stretch}.filters input,.filters button{flex:1}.logo{width:68px}.topline h2{font-size:23px}.stat-number{font-size:25px}.bar-row{grid-template-columns:60px 1fr 80px}}
 </style>
 </head>
-<body><div class="dashboard">
+<body><script src="v2-navigation.js"></script><div class="dashboard">
 <header class="header">
   <div class="brand"><div class="garavex-mark" aria-hidden="true">G</div><div><h1>GARAVEX</h1><p>Automotive Shop Management</p></div></div>
-  <div class="header-actions"><div id="signedInEmployee" class="employee">Signed in as...</div><a href="index.html" class="website-btn">View Website</a><button class="website-btn" onclick="logoutEmployee()">Log Out</button></div>
+  <div class="header-actions"><div id="signedInEmployee" class="employee">Signed in as...</div><a href="v2-dashboard.html" class="website-btn">V2 Operations</a><button class="website-btn" onclick="logoutEmployee()">Log Out</button></div>
 </header>
 <main class="content">
   <div class="topline"><div><h2>Shop Dashboard</h2><p>What needs attention today, followed by business performance.</p></div><div id="reportRange" class="muted"></div></div>
