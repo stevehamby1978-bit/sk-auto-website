@@ -61,6 +61,13 @@ function trialIsActive(shop) {
 }
 
 function ownerTestShop(shop) {
+  // Shops explicitly promoted to permanent Elite beta access remain active
+  // independently of the optional owner-test environment flag.
+  if (String(shop?.subscription_status || '').trim().toLowerCase() === 'beta'
+      && normalizePlan(shop?.subscription_plan) === 'elite') {
+    return true;
+  }
+
   const enabled = String(process.env.GARAVEX_OWNER_TEST_PLAN_ENABLED || '').trim() === '1';
   if (!enabled) return false;
 
