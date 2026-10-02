@@ -6966,6 +6966,8 @@ app.patch("/api/repair-orders/:id/notes", (req, res) => {
 // ===== S&K AUTO - UPDATE CUSTOMER AUTHORIZATION =====
 app.patch("/api/repair-orders/:id/authorization", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
 
     const {
       authorized_by,
@@ -6996,7 +6998,8 @@ app.patch("/api/repair-orders/:id/authorization", (req, res) => {
       SELECT id
       FROM repair_orders
       WHERE id = ?
-    `).get(req.params.id);
+        AND shop_id = ?
+    `).get(req.params.id, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -7015,6 +7018,7 @@ app.patch("/api/repair-orders/:id/authorization", (req, res) => {
         authorization_notes = ?,
         authorized_at = ?
       WHERE id = ?
+        AND shop_id = ?
     `).run(
       authorized_by.trim(),
       authorization_method,
@@ -7022,7 +7026,8 @@ app.patch("/api/repair-orders/:id/authorization", (req, res) => {
         ? authorization_notes.trim()
         : "",
       authorizedAt,
-      req.params.id
+      req.params.id,
+      shopId
     );
 
     res.json({
