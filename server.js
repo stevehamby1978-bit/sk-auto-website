@@ -3424,6 +3424,8 @@ app.delete("/api/customers/:id", (req, res) => {
 // ===== S&K AUTO - GET ONE CUSTOMER =====
 app.get("/api/customers/:id", (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
 
     const customer = db.prepare(`
       SELECT
@@ -3436,7 +3438,7 @@ WHERE id = ?
   AND shop_id = ?
 `).get(
   req.params.id,
-  req.session.employee.shop_id
+  shopId
 );
 
     if (!customer) {
@@ -3461,7 +3463,7 @@ WHERE customer_id = ?
 ORDER BY year DESC, make ASC, model ASC
 `).all(
   customer.id,
-  req.session.employee.shop_id
+  shopId
 );
 
 
@@ -3484,12 +3486,13 @@ ORDER BY year DESC, make ASC, model ASC
       FROM repair_orders r
       LEFT JOIN vehicles v
         ON r.vehicle_id = v.id
+       AND v.shop_id = r.shop_id
     WHERE r.customer_id = ?
 AND r.shop_id = ?
 ORDER BY r.id DESC
 `).all(
     customer.id,
-    req.session.employee.shop_id
+    shopId
 );
 
     // Add repair items and totals to each repair order
