@@ -14,6 +14,6 @@ if(exists('bookings'))report.zwickl_test_records.bookings=db.prepare('SELECT id,
 if(exists('vehicles'))report.zwickl_test_records.vehicles=db.prepare('SELECT id,customer_id,year,make,model FROM vehicles WHERE shop_id=? ORDER BY id').all(zwickl);
 if(exists('estimates'))report.zwickl_test_records.estimates=db.prepare('SELECT id,customer_id,vehicle_id FROM estimates WHERE shop_id=? ORDER BY id').all(zwickl);
 if(exists('repair_orders'))report.zwickl_test_records.repair_orders=db.prepare('SELECT id,customer_id,vehicle_id,status FROM repair_orders WHERE shop_id=? ORDER BY id').all(zwickl);
-if(exists('inventory_items'))report.zwickl_test_records.inventory=db.prepare('SELECT id,sku,name,quantity FROM inventory_items WHERE shop_id=? ORDER BY id').all(zwickl);
+if(exists('inventory_items'))report.zwickl_test_records.inventory=db.prepare('SELECT id,sku,part_number,description,quantity FROM inventory_items WHERE shop_id=? ORDER BY id').all(zwickl);
 if(exists('v2_loaners'))report.zwickl_test_records.loaners=db.prepare('SELECT id,name,year,make,model,plate,vin,status,active FROM v2_loaners WHERE shop_id=? ORDER BY id').all(zwickl);
 console.log('GARAVEX_DATA_OWNERSHIP_AUDIT '+JSON.stringify(report));}catch(err){console.error('GARAVEX_DATA_OWNERSHIP_AUDIT_FAILED',err.message);process.exitCode=1;}finally{db.close();}
