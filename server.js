@@ -4523,6 +4523,8 @@ app.post("/api/repair-orders/:id/email-receipt", async (req, res) => {
 // ===== S&K AUTO - TEXT PAYMENT RECEIPT =====
 app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, res) => {
   try {
+    const shopId = req.session?.employee?.shop_id;
+    if (!shopId) return res.status(401).json({ error: "Not authorized." });
     const repairOrderId = Number(req.params.id);
     const paymentId = Number(req.params.paymentId);
 
@@ -4530,11 +4532,14 @@ app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, 
       SELECT
         r.id,
         c.name AS customer_name,
-        c.phone AS customer_phone
+        c.phone AS customer_phone,
+        s.name AS shop_name
       FROM repair_orders r
       LEFT JOIN customers c ON r.customer_id = c.id
+      LEFT JOIN shops s ON r.shop_id = s.id
       WHERE r.id = ?
-    `).get(repairOrderId);
+        AND r.shop_id = ?
+    `).get(repairOrderId, shopId);
 
     if (!repairOrder) {
       return res.status(404).json({
@@ -4588,11 +4593,11 @@ app.post("/api/repair-orders/:id/payments/:paymentId/text-receipt", async (req, 
     }
 
     const receiptUrl =
-      `https://skautohutch.com/receipt.html?orderId=${encodeURIComponent(repairOrderId)}` +
+      `${requestBaseUrl(req)}/receipt.html?orderId=${encodeURIComponent(repairOrderId)}` +
       `&paymentId=${encodeURIComponent(paymentId)}`;
 
     const messageBody =
-      `S&K Auto: Hi ${repairOrder.customer_name || "Customer"}, ` +
+      `${repairOrder.shop_name || "Your repair shop"}: Hi ${repairOrder.customer_name || "Customer"}, ` +
       `thank you for your payment of $${Number(payment.amount || 0).toFixed(2)}. ` +
       `Payment method: ${payment.payment_method || "Not listed"}. ` +
       `View your receipt: ${receiptUrl}`;
