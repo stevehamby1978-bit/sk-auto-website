@@ -62,8 +62,8 @@ function installV2SubscriptionEnforcement(app, db, { requireLogin, requireOwner 
     const shopId=shopFor(req),employeeId=Number(req.params.id),active=req.body?.active===true||req.body?.active===1?1:0;
     if(!Number.isInteger(employeeId)||employeeId<=0)return res.status(400).json({error:'Invalid employee.'});
     const current=db.prepare('SELECT id,role,active FROM employees WHERE id=? AND shop_id=? LIMIT 1').get(employeeId,shopId); if(!current)return res.status(404).json({error:'Employee not found for this shop.'});
-    if(!active&&current.active&&String(current.role||'').toLowerCase()==='owner'){
-      const activeOwners=Number(db.prepare("SELECT COUNT(*) AS count FROM employees WHERE shop_id=? AND active=1 AND LOWER(role)='owner'").get(shopId)?.count||0);
+    if(!active&&current.active&&String(current.role||'').trim().toLowerCase()==='owner'){
+      const activeOwners=Number(db.prepare("SELECT COUNT(*) AS count FROM employees WHERE shop_id=? AND active=1 AND LOWER(TRIM(COALESCE(role,'')))='owner'").get(shopId)?.count||0);
       if(activeOwners<=1)return res.status(409).json({error:'A shop must keep at least one active owner account.',code:'LAST_OWNER_REQUIRED'});
     }
     if(active&&!current.active){const shop=subscriptionForShop(shopId),plan=shopPlan(shop),count=Number(db.prepare('SELECT COUNT(*) AS count FROM employees WHERE shop_id=? AND active=1').get(shopId)?.count||0);if(plan.employeeLimit!=null&&count>=plan.employeeLimit)return res.status(403).json({error:`${plan.name} active employee limit has been reached.`,code:'EMPLOYEE_LIMIT_REACHED'});}
