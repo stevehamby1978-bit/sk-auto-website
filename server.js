@@ -2257,8 +2257,12 @@ app.post("/api/register-shop", async (req, res) => {
     address,
     city,
     state,
-    zip
+    zip,
+    plan
 } = req.body;
+    const selectedPlan = ['starter', 'professional', 'elite'].includes(String(plan || '').toLowerCase())
+      ? String(plan).toLowerCase()
+      : 'starter';
     // Required fields
    if (!shopName || !ownerName || !ownerEmail || !password) {
     return res.status(400).json({
@@ -2324,7 +2328,7 @@ app.post("/api/register-shop", async (req, res) => {
           trial_started_at,
           trial_ends_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'starter', 'trialing', datetime('now'), datetime('now','+30 days'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'trialing', datetime('now'), datetime('now','+30 days'))
       `).run(
         shopName.trim(),
         slug,
@@ -2333,7 +2337,8 @@ app.post("/api/register-shop", async (req, res) => {
         address ? address.trim() : "",
         city ? city.trim() : "",
         state ? state.trim() : "",
-        zip ? zip.trim() : ""
+        zip ? zip.trim() : "",
+        selectedPlan
       );
 
       const shopId = Number(shopResult.lastInsertRowid);
