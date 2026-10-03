@@ -66,6 +66,30 @@ function applyV2Schema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_vendors_shop ON vendors(shop_id,active,name);
 
+    CREATE TABLE IF NOT EXISTS supplier_integrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, provider TEXT NOT NULL, display_name TEXT NOT NULL,
+      connection_mode TEXT NOT NULL DEFAULT 'punchout', status TEXT NOT NULL DEFAULT 'awaiting_partner_credentials',
+      account_label TEXT, credentials_json TEXT, live_ordering_enabled INTEGER NOT NULL DEFAULT 0, last_verified_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(shop_id,provider)
+    );
+    CREATE INDEX IF NOT EXISTS idx_supplier_integrations_shop ON supplier_integrations(shop_id,provider);
+
+    CREATE TABLE IF NOT EXISTS supplier_order_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, provider TEXT NOT NULL, repair_order_id INTEGER NOT NULL,
+      purchase_order_id INTEGER, external_cart_id TEXT, external_order_id TEXT, status TEXT NOT NULL DEFAULT 'draft',
+      created_by INTEGER, ordered_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_supplier_drafts_shop_ro ON supplier_order_drafts(shop_id,repair_order_id,status);
+
+    CREATE TABLE IF NOT EXISTS supplier_order_draft_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, draft_id INTEGER NOT NULL, supplier_item_id TEXT, part_number TEXT,
+      description TEXT NOT NULL, quantity REAL NOT NULL DEFAULT 1, unit_cost REAL NOT NULL DEFAULT 0, sell_price REAL NOT NULL DEFAULT 0,
+      availability_json TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(draft_id) REFERENCES supplier_order_drafts(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_supplier_draft_items ON supplier_order_draft_items(shop_id,draft_id);
+
     CREATE TABLE IF NOT EXISTS inventory_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, vendor_id INTEGER, sku TEXT, part_number TEXT, description TEXT NOT NULL,
       quantity REAL NOT NULL DEFAULT 0, reorder_level REAL NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0, sell_price REAL NOT NULL DEFAULT 0,
