@@ -92,8 +92,9 @@ function shopPlan(shop) {
   // Explicitly configured owner/beta shops may use their assigned plan without Stripe.
   if (ownerTestShop(shop)) return getPlan(shop.subscription_plan);
 
-  // A new ordinary shop receives Starter during its server-recorded 30-day trial.
-  if (trialIsActive(shop)) return getPlan('starter');
+  // A new ordinary shop receives the plan it selected during its server-recorded 30-day trial.
+  // Registration validates the stored plan against GARAVEX_PLANS before saving it.
+  if (trialIsActive(shop)) return getPlan(shop.subscription_plan);
 
   // Paid tiers are never granted to ordinary shops from a database plan value alone.
   if (!shop.stripe_subscription_id || !subscriptionIsActive(shop.subscription_status)) return getPlan('starter');
