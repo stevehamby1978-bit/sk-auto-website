@@ -219,6 +219,7 @@ function installV2Subscriptions(app, db, { requireLogin, requireOwner, stripe })
         success_url: `${origin}/v2-plans.html?checkout=success`,
         cancel_url: `${origin}/v2-plans.html?checkout=cancelled`,
         client_reference_id: String(shopId),
+        payment_method_collection: 'always',
         subscription_data: { trial_period_days: 30, metadata },
         metadata
       });
