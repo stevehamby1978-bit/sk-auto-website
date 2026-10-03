@@ -429,7 +429,8 @@ const existingShopColumns = new Set(
 const shopProfileColumns = [
     ['tagline', 'TEXT'],
     ['website', 'TEXT'],
-    ['logo_filename', 'TEXT']
+    ['logo_filename', 'TEXT'],
+    ['labor_rate', 'REAL NOT NULL DEFAULT 0']
 ];
 
 shopProfileColumns.forEach(([name, type]) => {
@@ -2763,7 +2764,7 @@ app.get('/api/shop-profile', (req, res) => {
 
     const shop = db.prepare(`
       SELECT id, name, slug, phone, email, address, city, state, zip,
-             tagline, website, logo_filename, active, created_at
+             tagline, website, logo_filename, labor_rate, active, created_at
       FROM shops
       WHERE id = ?
       LIMIT 1
@@ -2786,7 +2787,11 @@ app.get('/api/shop-profile', (req, res) => {
 app.put('/api/shop-profile', requireOwner, (req, res) => {
   try {
     const shopId = req.session.employee.shop_id;
-    const { name, phone, email, address, city, state, zip, tagline, website } = req.body;
+    const { name, phone, email, address, city, state, zip, tagline, website, labor_rate } = req.body;
+    const laborRate = Number(labor_rate);
+    if (!Number.isFinite(laborRate) || laborRate < 0 || laborRate > 10000) {
+      return res.status(400).json({ error: 'Labor rate must be between $0 and $10,000 per hour.' });
+    }
 
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'Shop name is required.' });
@@ -2795,7 +2800,7 @@ app.put('/api/shop-profile', requireOwner, (req, res) => {
     db.prepare(`
       UPDATE shops
       SET name = ?, phone = ?, email = ?, address = ?, city = ?, state = ?,
-          zip = ?, tagline = ?, website = ?
+          zip = ?, tagline = ?, website = ?, labor_rate = ?
       WHERE id = ?
     `).run(
       String(name).trim(),
@@ -2807,6 +2812,7 @@ app.put('/api/shop-profile', requireOwner, (req, res) => {
       String(zip || '').trim(),
       String(tagline || '').trim(),
       String(website || '').trim(),
+      Math.round(laborRate * 100) / 100,
       shopId
     );
 
