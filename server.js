@@ -36,6 +36,7 @@ const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 // configured destination. This avoids a sandbox secret masking the live secret.
 const STRIPE_WEBHOOK_SECRETS = [
   process.env.STRIPE_WEBHOOK_SECRET,
+  process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
   process.env.STRIPE_SANDBOX_WEBHOOK_SECRET
 ].map(value => String(value || '').trim()).filter(Boolean);
 
