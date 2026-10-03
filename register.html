@@ -175,6 +175,8 @@ body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background
     const form = document.getElementById('registerForm');
     const message = document.getElementById('message');
     const submitButton = document.getElementById('submitButton');
+    const requestedPlan = new URLSearchParams(window.location.search).get('plan');
+    const selectedPlan = ['starter', 'professional', 'elite'].includes(requestedPlan) ? requestedPlan : 'starter';
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -229,7 +231,8 @@ body{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;background
         ownerEmail:
           document.getElementById('ownerEmail').value.trim().toLowerCase(),
 
-        password
+        password,
+        plan: selectedPlan
       };
 
       try {
