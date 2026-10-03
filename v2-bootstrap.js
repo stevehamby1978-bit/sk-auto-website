@@ -47,6 +47,7 @@ const {installV2SubscriptionEnforcement}=require('./v2-subscription-enforcement'
 const {installV2FeatureGates}=require('./v2-feature-gates');
 const {installV2RecommendationSafety}=require('./v2-recommendations-preload');
 const {installV2ReopenRepairOrder}=require('./v2-reopen-repair-order');
+const {installV2SupplierIntegrations}=require('./v2-supplier-integrations');
 
 const installedApps=new WeakSet();
 const installingApps=new WeakSet();
@@ -66,7 +67,7 @@ function installGaravexV2(app,db,deps){
   installV2ReopenRepairOrder(app,db,{requireLogin:deps.requireLogin});
   installV2Time(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installV2Deferred(app,db,{requireLogin:deps.requireLogin});installV2Dvi(app,db,{requireLogin:deps.requireLogin});
-  installV2Inventory(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2CustomerPortal(app,db,{requireLogin:deps.requireLogin});
+  installV2Inventory(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2SupplierIntegrations(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2CustomerPortal(app,db,{requireLogin:deps.requireLogin});
   installV2AdminApi(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});installV2PermissionsAdmin(app,db,{requireLogin:deps.requireLogin,requireOwner:deps.requireOwner});
   installVinApi(app,db,{requireLogin:deps.requireLogin});installV2Communications(app,db,{requireLogin:deps.requireLogin,twilioClient:deps.twilioClient,resend:deps.resend});
   installV2Followups(app,db,{requireLogin:deps.requireLogin,twilioClient:deps.twilioClient});installV2Checkin(app,db,{requireLogin:deps.requireLogin});installV2Quality(app,db,{requireLogin:deps.requireLogin});
